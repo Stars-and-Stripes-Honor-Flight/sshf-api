@@ -1,11 +1,11 @@
-const express = require('express');
-const { PoliciesClient } = require('@google-cloud/iam');
-const { GoogleAuth } = require('google-auth-library');
-
-const { Message } = require('./models/message');
+import 'dotenv/config';
+import express from 'express';
+import { PoliciesClient } from '@google-cloud/iam';
+import { GoogleAuth } from 'google-auth-library';
+import { Message } from './models/message.js';
 
 const app = express();
-const port = 3010;
+const port = 8080;
 
 // Initialize IAM client
 const iamClient = new PoliciesClient();
