@@ -13,7 +13,7 @@ const iamClient = new PoliciesClient();
 // Function to check if the user has a specific role
 async function checkUserRole(userEmail, requiredRole) {
     const request = {
-        resource: `projects/YOUR_PROJECT_ID`,
+        resource: `projects/sshf-api-dev`,
     };
 
     try {
