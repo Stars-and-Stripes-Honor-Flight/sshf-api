@@ -1,0 +1,4 @@
+This API will be hosted on Google Cloud using Cloud Run.
+It will provide user authentication using Google domain accounts and then interact with a CouchDB REST database.
+The API will receive requests with JSON payload and respond with JSON.
+Always use ES module style JavaScript syntax.
