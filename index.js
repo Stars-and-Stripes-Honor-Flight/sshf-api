@@ -3,6 +3,8 @@ import express from 'express';
 import { PoliciesClient } from '@google-cloud/iam';
 import { GoogleAuth } from 'google-auth-library';
 import { Message } from './models/message.js';
+import { SearchRequest } from './models/search_request.js';
+import { SearchResults } from './models/search_results.js';
 import fetch from 'node-fetch';
 
 const app = express();
@@ -78,12 +80,40 @@ app.get("/msg", async (req, res, next) => {
     });
 });
 
+app.get("/search", async (req, res, next) => {
+    const searchRequest = new SearchRequest(req.query);
+    const dbResult = await search(searchRequest);
+    res.json(dbResult);
+});
+
 app.use(express.json()); // for parsing application/json
 
 app.post("/msg", (req, res, next) => {
     const newMessage = new Message(req.body.message);
     res.json({"receivedMessage": newMessage.getContent()});
 });
+
+async function search(searchRequest) {
+    try {
+        const auth = Buffer.from(`${dbUser}:${dbPass}`).toString('base64');
+        const queryParams = searchRequest.toQueryParams();
+        const url = `${dbUrl}/_design/basic/_view/all_by_status_and_name?${queryParams}&descending=false&type=newRows`;
+        
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Database connection error:', error);
+        throw error;
+    }
+}
 
 async function testdb() {
     try {
