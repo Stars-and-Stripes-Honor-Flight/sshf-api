@@ -32,6 +32,10 @@ const corsOptions = {
 // Enable CORS for all routes with specific options
 app.use(cors(corsOptions));
 
+// In-memory cache
+const userCache = new Map();
+const cacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 async function getGroupMemberships(token, userData) {
     try {
         // Fetch user's groups from Google Workspace Directory API
@@ -58,8 +62,6 @@ async function getGroupMemberships(token, userData) {
 
 // Middleware to authenticate Google users
 async function authenticate(req, res, next) {
-    const clientId = '330507742215-scerc6p0lvou59tufmohq1b7b4bj0l90.apps.googleusercontent.com';
-
     try {
         // Get the token from the Authorization header (assuming it's a Bearer token)
         const authHeader = req.headers.authorization;
@@ -68,29 +70,42 @@ async function authenticate(req, res, next) {
         }
         const token = authHeader.split(' ')[1];
 
+        // Check if user data is in cache
+        if (userCache.has(token)) {
+            const cachedData = userCache.get(token);
+            // Check if cache is expired
+            if (Date.now() - cachedData.timestamp < cacheTTL) {
+                req.user = cachedData.user;
+                return next();
+            } else {
+                // Remove expired cache entry
+                userCache.delete(token);
+            }
+        }
+
         // Fetch basic user info
         const userResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: {
             Authorization: `Bearer ${token}`,
             },
         });
-    
+
         if (!userResponse.ok) {
             throw new Error('Failed to fetch user info');
         }
-    
+
         const userData = await userResponse.json();
-    
+
         // Fetch group memberships
         const groups = await getGroupMemberships(token, userData);
-    
+
         // Map groups to roles (customize this based on your needs)
         const roles = groups.map(group => ({
             id: group.id,
             name: group.name,
             email: group.email
         }));
-    
+
         const user = {
             id: userData.sub,
             email: userData.email,
@@ -99,9 +114,9 @@ async function authenticate(req, res, next) {
             avatar: userData.picture,
             roles: roles // Add roles to user data
         };
-    
-        // Store the complete user data
-    
+
+        // Store user data in cache
+        userCache.set(token, { user: user, timestamp: Date.now() });
 
         // Attach user information to the request object (optional)
         req.user = user;
