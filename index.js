@@ -63,6 +63,56 @@ async function checkUserRole(userEmail, requiredRole) {
     }
 }
 
+async function getGroupMemberships2(token, userid) {
+    try {
+      // Fetch user's groups from Google Workspace Directory API
+      const response = await fetch(
+        `https://admin.googleapis.com/admin/directory/v1/groups?userKey=${userid}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch group memberships');
+      }
+
+      const data = await response.json();
+      return data.groups || [];
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+      return [];
+    }
+  }
+
+  async function getGroupMemberships(token, userData) {
+    try {
+      // Fetch user's groups from Google Workspace Directory API
+      const response = await fetch(
+        `https://admin.googleapis.com/admin/directory/v1/groups?userKey=${userData.sub}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch group memberships');
+      }
+
+      const data = await response.json();
+      return data.groups || [];
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+      return [];
+    }
+  }
+
 // Middleware to authenticate Google users
 async function authenticate(req, res, next) {
     const clientId = '330507742215-scerc6p0lvou59tufmohq1b7b4bj0l90.apps.googleusercontent.com';
@@ -75,27 +125,45 @@ async function authenticate(req, res, next) {
         }
         const token = authHeader.split(' ')[1];
 
-        // Verify the token using the Google Auth Library
-        const client = new OAuth2Client(clientId);
-        const ticket = await client.verifyIdToken({
-            idToken: token,
-            audience: clientId,
+        // Fetch basic user info
+        const userResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: {
+            Authorization: `Bearer ${token}`,
+            },
         });
-        const payload = ticket.getPayload();
-        const userid = payload['sub'];
-        const userEmail = payload['email'];
-
-
-        // Check if the user has a specific role (e.g., `roles/editor`)
-        const hasRole = await checkUserRole(userEmail, 'roles/editor');
-        if (!hasRole) {
-            return res.status(403).json({ message: 'Permission denied' });
+    
+        if (!userResponse.ok) {
+            throw new Error('Failed to fetch user info');
         }
+    
+        const userData = await userResponse.json();
+    
+        // Fetch group memberships
+        const groups = await getGroupMemberships(token, userData);
+    
+        // Map groups to roles (customize this based on your needs)
+        const roles = groups.map(group => ({
+            id: group.id,
+            name: group.name,
+            email: group.email
+        }));
+    
+        const user = {
+            id: userData.sub,
+            email: userData.email,
+            firstName: userData.given_name,
+            lastName: userData.family_name,
+            avatar: userData.picture,
+            roles: roles // Add roles to user data
+        };
+    
+        // Store the complete user data
+    
 
         // Attach user information to the request object (optional)
         req.user = {
-            id: userid,
-            email: userEmail,
+            id: user.id,
+            email: user.email,
         };
 
         // Proceed to the next middleware or route handler
