@@ -134,6 +134,13 @@ app.get('/secure-data', authenticate, (req, res) => {
     res.json({ message: 'This is secure data.' });
 });
 
+app.get('/user/hasgroup', authenticate, (req, res) => {
+    const roles = req.user?.roles;
+    const groupEmail = req.query.groupEmail;
+    const hasGroup =  roles?.some(role => role.email === groupEmail) ?? false;
+    res.json({ hasgroup: hasGroup });
+});
+
 app.get("/msg", async (req, res, next) => {
     const dbResult = await testdb();
     res.json({
@@ -143,7 +150,7 @@ app.get("/msg", async (req, res, next) => {
     });
 });
 
-app.get("/search", async (req, res, next) => {
+app.get("/search", authenticate, async (req, res, next) => {
     const searchRequest = new SearchRequest(req.query);
     const dbResult = await search(searchRequest);
     const searchResults = new SearchResults(dbResult);
