@@ -1,7 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import { PoliciesClient } from '@google-cloud/iam';
-import { OAuth2Client } from 'google-auth-library';
 import { Message } from './models/message.js';
 import { SearchRequest } from './models/search_request.js';
 import { SearchResults } from './models/search_results.js';
@@ -13,9 +11,6 @@ const port = 8080;
 const dbUrl = process.env.DB_URL;
 const dbUser = process.env.DB_USER;
 const dbPass = process.env.DB_PASS;
-
-// Initialize IAM client
-const iamClient = new PoliciesClient();
 
 // Define allowed origins for CORS
 const allowedOrigins = [
@@ -37,81 +32,29 @@ const corsOptions = {
 // Enable CORS for all routes with specific options
 app.use(cors(corsOptions));
 
-// Function to check if the user has a specific role
-async function checkUserRole(userEmail, requiredRole) {
-    const request = {
-        resource: `projects/sshf-api-dev`,
-    };
-
+async function getGroupMemberships(token, userData) {
     try {
-        // Get IAM policy
-        const [policy] = await iamClient.getIamPolicy(request);
-
-        // Check if the user is assigned the required role
-        const bindings = policy.bindings || [];
-        for (const binding of bindings) {
-            if (binding.role === requiredRole) {
-                if (binding.members.includes(`user:${userEmail}`)) {
-                    return true; // User has the required role
-                }
-            }
-        }
-        return false; // User does not have the required role
-    } catch (error) {
-        console.error('Error checking IAM policy:', error);
-        return false;
-    }
-}
-
-async function getGroupMemberships2(token, userid) {
-    try {
-      // Fetch user's groups from Google Workspace Directory API
-      const response = await fetch(
-        `https://admin.googleapis.com/admin/directory/v1/groups?userKey=${userid}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch group memberships');
-      }
-
-      const data = await response.json();
-      return data.groups || [];
-    } catch (error) {
-      console.error('Error fetching groups:', error);
-      return [];
-    }
-  }
-
-  async function getGroupMemberships(token, userData) {
-    try {
-      // Fetch user's groups from Google Workspace Directory API
-      const response = await fetch(
+        // Fetch user's groups from Google Workspace Directory API
+        const response = await fetch(
         `https://admin.googleapis.com/admin/directory/v1/groups?userKey=${userData.sub}`,
         {
-          headers: {
+            headers: {
             Authorization: `Bearer ${token}`,
-          },
+            },
         }
-      );
+        );
 
-
-
-      if (!response.ok) {
+        if (!response.ok) {
         throw new Error('Failed to fetch group memberships');
-      }
+        }
 
-      const data = await response.json();
-      return data.groups || [];
+        const data = await response.json();
+        return data.groups || [];
     } catch (error) {
-      console.error('Error fetching groups:', error);
-      return [];
+        console.error('Error fetching groups:', error);
+        return [];
     }
-  }
+}
 
 // Middleware to authenticate Google users
 async function authenticate(req, res, next) {
@@ -161,10 +104,7 @@ async function authenticate(req, res, next) {
     
 
         // Attach user information to the request object (optional)
-        req.user = {
-            id: user.id,
-            email: user.email,
-        };
+        req.user = user;
 
         // Proceed to the next middleware or route handler
         next();
