@@ -167,8 +167,9 @@ app.post("/msg", (req, res, next) => {
 async function search(searchRequest) {
     try {
         const auth = Buffer.from(`${dbUser}:${dbPass}`).toString('base64');
+        const viewName = searchRequest.getViewName();
         const queryParams = searchRequest.toQueryParams();
-        const url = `${dbUrl}/_design/basic/_view/all_by_status_and_name?${queryParams}&descending=false&type=newRows`;
+        const url = `${dbUrl}/_design/basic/_view/${viewName}?${queryParams}&descending=false`;
         
         const response = await fetch(url, {
             headers: {
