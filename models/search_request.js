@@ -39,19 +39,19 @@ export class SearchRequest {
         // Set startkey and endkey based on view type
         if (viewName === 'all_by_status_and_name') {
             const startKey = JSON.stringify([this.status, this.lastname]);
-            const endKey = JSON.stringify([this.status, this.lastname + '\ufff0']);
+            const endKey = JSON.stringify([this.status, '\ufff0']);
             params.append('startkey', startKey);
             params.append('endkey', endKey);
         } 
         else if (viewName === 'all_by_flight_and_name') {
             const startKey = JSON.stringify([this.flight, this.lastname]);
-            const endKey = JSON.stringify([this.flight, this.lastname + '\ufff0']);
+            const endKey = JSON.stringify([this.flight, '\ufff0']);
             params.append('startkey', startKey);
             params.append('endkey', endKey);
         }
         else {  // all_by_name view
-            const startKey = JSON.stringify(this.lastname);
-            const endKey = JSON.stringify(this.lastname + '\ufff0');
+            const startKey = JSON.stringify([this.lastname]);
+            const endKey = JSON.stringify(['\ufff0']);
             params.append('startkey', startKey);
             params.append('endkey', endKey);
         }
