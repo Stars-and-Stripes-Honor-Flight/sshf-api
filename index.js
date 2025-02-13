@@ -1,16 +1,16 @@
 import 'dotenv/config';
 import express from 'express';
-import { Message } from './models/message.js';
-import { SearchRequest } from './models/search_request.js';
-import { SearchResults } from './models/search_results.js';
 import fetch from 'node-fetch';
 import cors from 'cors';
 
+// Import route handlers
+import { getMessage, postMessage } from './routes/msg.js';
+import { getSecureData } from './routes/secure.js';
+import { getHasGroup } from './routes/user.js';
+import { getSearch } from './routes/search.js';
+
 const app = express();
 const port = 8080;
-const dbUrl = process.env.DB_URL;
-const dbUser = process.env.DB_USER;
-const dbPass = process.env.DB_PASS;
 
 // Define allowed origins for CORS
 const allowedOrigins = [
@@ -35,6 +35,20 @@ app.use(cors(corsOptions));
 // In-memory cache
 const userCache = new Map();
 const cacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+// Route definitions
+app.get('/secure-data', authenticate, getSecureData);
+app.get('/user/hasgroup', authenticate, getHasGroup);
+app.get("/msg", getMessage);
+app.get("/search", authenticate, getSearch);
+app.use(express.json()); // for parsing application/json
+app.post("/msg", postMessage);
+
+// Start the Express server
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+});
+
 
 async function getGroupMemberships(token, userData) {
     try {
@@ -128,83 +142,3 @@ async function authenticate(req, res, next) {
         res.status(401).json({ message: 'Unauthorized: Invalid token' });
     }
 }
-
-// Sample route that requires Google IAM role check
-app.get('/secure-data', authenticate, (req, res) => {
-    res.json({ message: 'This is secure data.' });
-});
-
-app.get('/user/hasgroup', authenticate, (req, res) => {
-    const roles = req.user?.roles;
-    const groupEmail = req.query.groupEmail;
-    const hasGroup =  roles?.some(role => role.email === groupEmail) ?? false;
-    res.json({ hasgroup: hasGroup });
-});
-
-app.get("/msg", async (req, res, next) => {
-    const dbResult = await testdb();
-    res.json({
-        "message": "Hello, World!",
-        "url": dbUrl,
-        "doc_count": dbResult.doc_count
-    });
-});
-
-app.get("/search", authenticate, async (req, res, next) => {
-    const searchRequest = new SearchRequest(req.query);
-    const dbResult = await search(searchRequest);
-    const searchResults = new SearchResults(dbResult);
-    res.json(searchResults.toJSON());
-});
-
-app.use(express.json()); // for parsing application/json
-
-app.post("/msg", (req, res, next) => {
-    const newMessage = new Message(req.body.message);
-    res.json({"receivedMessage": newMessage.getContent()});
-});
-
-async function search(searchRequest) {
-    try {
-        const auth = Buffer.from(`${dbUser}:${dbPass}`).toString('base64');
-        const queryParams = searchRequest.toQueryParams();
-        const url = `${dbUrl}/_design/basic/_view/all_by_status_and_name?${queryParams}&descending=false&type=newRows`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'Authorization': `Basic ${auth}`,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Database connection error:', error);
-        throw error;
-    }
-}
-
-async function testdb() {
-    try {
-        const auth = Buffer.from(`${dbUser}:${dbPass}`).toString('base64');
-        const response = await fetch(dbUrl, {
-            headers: {
-                'Authorization': `Basic ${auth}`,
-                'Accept': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Database connection error:', error);
-        throw error;
-    }
-}
-
-// Start the Express server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});

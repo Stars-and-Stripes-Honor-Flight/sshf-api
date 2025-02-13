@@ -30,6 +30,7 @@ build/
 
 # Coverage reports
 coverage/
+.nyc_output/
 
 # misc
 .DS_Store
