@@ -80,5 +80,38 @@ describe('SearchRequest', () => {
             expect(params.get('startkey')).to.equal('["SSHF-Nov2024","Smith"]');
             expect(params.get('endkey')).to.equal('["SSHF-Nov2024","\ufff0"]');
         });
+
+        it('should generate correct params for name-only search', () => {
+            const request = new SearchRequest({
+                status: 'All',
+                flight: 'All',
+                lastname: 'Smith'
+            });
+            const params = new URLSearchParams(request.toQueryParams());
+            expect(params.get('startkey')).to.equal('["Smith"]');
+            expect(params.get('endkey')).to.equal('["\ufff0"]');
+            expect(params.get('limit')).to.equal('25');
+        });
+    });
+
+    describe('toJSON', () => {
+        it('should return correct JSON representation', () => {
+            const request = new SearchRequest({
+                limit: 50,
+                lastname: 'Smith',
+                status: 'Active',
+                flight: 'All'
+            });
+            
+            const json = request.toJSON();
+            
+            expect(json).to.deep.equal({
+                limit: 50,
+                lastname: 'Smith',
+                status: 'Active',
+                flight: 'All',
+                viewName: 'all_by_status_and_name'
+            });
+        });
     });
 }); 
