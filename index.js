@@ -9,6 +9,7 @@ import { getMessage, postMessage } from './routes/msg.js';
 import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
+import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
 
 const app = express();
 const port = 8080;
@@ -44,6 +45,10 @@ app.get("/msg", getMessage);
 app.get("/search", authenticate, dbSession, getSearch);
 app.use(express.json()); // for parsing application/json
 app.post("/msg", postMessage);
+app.post("/docs", authenticate, dbSession, createDocument);
+app.get("/docs/:id", authenticate, dbSession, retrieveDocument);
+app.put("/docs/:id", authenticate, dbSession, updateDocument);
+app.delete("/docs/:id", authenticate, dbSession, deleteDocument);
 
 // Start the Express server
 app.listen(port, () => {
