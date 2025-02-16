@@ -10,6 +10,7 @@ import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
+import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran } from './routes/veterans.js';
 
 const app = express();
 const port = 8080;
@@ -45,10 +46,18 @@ app.get("/msg", getMessage);
 app.get("/search", authenticate, dbSession, getSearch);
 app.use(express.json()); // for parsing application/json
 app.post("/msg", postMessage);
+
+// Generic document routes
 app.post("/docs", authenticate, dbSession, createDocument);
 app.get("/docs/:id", authenticate, dbSession, retrieveDocument);
 app.put("/docs/:id", authenticate, dbSession, updateDocument);
 app.delete("/docs/:id", authenticate, dbSession, deleteDocument);
+
+// Veteran-specific routes
+app.post("/veterans", authenticate, dbSession, createVeteran);
+app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
+app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
+app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
 
 // Start the Express server
 app.listen(port, () => {
