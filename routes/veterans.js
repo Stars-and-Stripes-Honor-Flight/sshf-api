@@ -68,8 +68,12 @@ export async function createVeteran(req, res) {
 
         res.status(201).json(veteran.toJSON());
     } catch (error) {
-        console.error('Error creating veteran document:', error);
-        res.status(500).json({ error: error.message });
+        if (error.message.includes('Validation failed')) {
+            res.status(400).json({ error: error.message });
+        } else {
+            console.error('Error creating veteran document:', error);
+            res.status(500).json({ error: error.message });
+        }
     }
 }
 
@@ -230,8 +234,12 @@ export async function updateVeteran(req, res) {
         updatedVeteran._rev = data.rev;
         res.json(updatedVeteran.toJSON());
     } catch (error) {
-        console.error('Error updating veteran:', error);
-        res.status(500).json({ error: error.message });
+        if (error.message.includes('Validation failed')) {
+            res.status(400).json({ error: error.message });
+        } else {
+            console.error('Error updating veteran:', error);
+            res.status(500).json({ error: error.message });
+        }
     }
 }
 
