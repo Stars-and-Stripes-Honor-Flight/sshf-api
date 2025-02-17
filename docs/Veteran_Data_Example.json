@@ -1,0 +1,209 @@
+{
+    "_id": "29d8dae1191db7e9b9ed5dcbeb038bcc",
+    "_rev": "19-486fb928f816e6488f87995ea1b767d0",
+    "flight": {
+        "status": "Flown",
+        "group": "",
+        "nofly": false,
+        "bus": "Bravo4",
+        "vaccinated": false,
+        "seat": "07D",
+        "status_note": "Guardian fee waiver. DK",
+        "mediaWaiver": false,
+        "id": "SSHF-Nov2024",
+        "confirmed_date": "2024-09-17",
+        "infection_test": false,
+        "confirmed_by": "kliese",
+        "waiver": true,
+        "history": [
+            {
+                "id": "2024-09-05T13:26:10Z",
+                "change": "changed flight from: None to: SSHF-Nov2024 by: Steve Schmechel"
+            },
+            {
+                "id": "2024-09-17T22:17:12Z",
+                "change": "changed confirmed date from:  to: 2024-09-17 by: Jim Kliese"
+            },
+            {
+                "id": "2024-09-19T03:02:50Z",
+                "change": "changed medical form received from: false to: true by: Barbara Burja"
+            },
+            {
+                "id": "2024-09-19T13:14:00Z",
+                "change": "changed flight waiver received from: false to: true by: Barbara Burja"
+            },
+            {
+                "id": "2024-10-07T18:24:42Z",
+                "change": "changed bus from: None to: Bravo5 by: Karyn Roelke"
+            },
+            {
+                "id": "2024-10-07T18:24:45Z",
+                "change": "changed bus from: Bravo5 to: Bravo4 by: Karyn Roelke"
+            },
+            {
+                "id": "2024-10-25T14:00:40Z",
+                "change": "changed seat from:  to: 07D by: Christy Julius"
+            },
+            {
+                "id": "2024-12-17T14:49:23Z",
+                "change": "changed status from: Active to: Flown by: Steve Schmechel"
+            }
+        ]
+    },
+    "weight": "230",
+    "guardian": {
+        "pref_notes": "Carl Carstens",
+        "history": [
+            {
+                "id": "2024-09-16T13:53:04Z",
+                "change": "paired to: Carl Carstens by: Marge Meyers"
+            }
+        ],
+        "id": "29d8dae1191db7e9b9ed5dcbeb516766",
+        "name": "Carl Carstens"
+    },
+    "alt_contact": {
+        "relation": "Daughter",
+        "name": "Amber Carstens",
+        "address": {
+            "city": "Brookfield",
+            "zip": "53045",
+            "phone_mbl": "",
+            "phone": "414-793-4009",
+            "state": "WI",
+            "street": "3440 Bermuda Boulevard",
+            "phone_eve": "",
+            "email": "amber.carstens@gmail.com"
+        }
+    },
+    "accommodations": {
+        "departure_time": "",
+        "arrival_date": "",
+        "notes": "",
+        "departure_date": "",
+        "arrival_flight": "",
+        "attend_banquette": "",
+        "departure_flight": "",
+        "arrival_time": "",
+        "banquette_guest": "",
+        "room_type": "None",
+        "hotel_name": ""
+    },
+    "app_date": "2024-01-29",
+    "mail_call": {
+        "received": true,
+        "name": "Carl Carstens",
+        "notes": "gt",
+        "adopt": "",
+        "relation": "",
+        "address": {
+            "phone": "414-975-0175",
+            "email": "coachcarstens@gmail.com"
+        }
+    },
+    "media_interview_ok": "No",
+    "name": {
+        "middle": "Gene",
+        "nickname": "Ted",
+        "last": "Atkinson",
+        "first": "Theodore"
+    },
+    "homecoming": {
+        "destination": "LL"
+    },
+    "media_newspaper_ok": "No",
+    "shirt": {
+        "size": "XL"
+    },
+    "service": {
+        "dates": "April 16, 1969 to August 9, 1973",
+        "rank": "RD3",
+        "branch": "Navy",
+        "activity": "Radarman aboard USS Anchorage; driver for ship's captain, honor guard on East Coast while waiting for ship to be commissioned."
+    },
+    "vet_type": "Vietnam",
+    "medical": {
+        "limitations": "",
+        "usesWalker": false,
+        "examRequired": false,
+        "form": true,
+        "level": "3",
+        "review": "",
+        "isWheelchairBound": false,
+        "food_restriction": "None",
+        "usesScooter": false,
+        "release": false,
+        "requiresOxygen": false,
+        "alt_level": "3",
+        "usesWheelchair": 1,
+        "usesCane": false
+    },
+    "emerg_contact": {
+        "relation": "Spouse",
+        "name": "Monica Atkinson",
+        "address": {
+            "city": "West Allis",
+            "zip": "53214",
+            "phone_mbl": "414-731-4194",
+            "phone": "414-607-0014",
+            "state": "WI",
+            "street": "1549 South 76th Street",
+            "phone_eve": "",
+            "email": ""
+        }
+    },
+    "call": {
+        "fm_number": "1",
+        "notes": "",
+        "email_sent": false,
+        "assigned_to": "Jim K",
+        "mail_sent": true,
+        "history": [
+            {
+                "id": "2024-09-10T00:58:11Z",
+                "change": "changed assigned caller from:  to: Jim K by: Jim Kliese"
+            },
+            {
+                "id": "2024-09-14T00:40:04Z",
+                "change": "changed FM # from:  to: 1 by: Jim Kliese"
+            },
+            {
+                "id": "2024-09-17T22:17:12Z",
+                "change": "changed veteran mail sent from: false to: true by: Jim Kliese"
+            },
+            {
+                "id": "2024-10-19T14:47:50Z",
+                "change": "changed mail call received from: false to: true by: Christy Julius"
+            }
+        ]
+    },
+    "birth_date": "1948-12-19",
+    "gender": "M",
+    "apparel": {
+        "jacket_size": "2XL",
+        "notes": "Ordered 9/24/2024  Dennis exchanged XL jacket for 2XL.  10/21/2024",
+        "delivery": "Mailed",
+        "item": "None",
+        "shirt_size": "XL",
+        "date": "2024-10-16",
+        "by": "KM"
+    },
+    "type": "Veteran",
+    "address": {
+        "city": "West Allis",
+        "phone_day": "414-607-0014",
+        "zip": "53214",
+        "phone_mbl": "414-731-4194",
+        "county": "Milwaukee",
+        "state": "WI",
+        "street": "1549 South 76th Street",
+        "phone_eve": "",
+        "email": "tgatkinson@msn.com"
+    },
+    "metadata": {
+        "created_at": "2024-02-07T20:26:18Z",
+        "updated_at": "2024-10-24T01:24:18Z",
+        "created_by": "Debbie Krueger",
+        "updated_by": "Paula Nelson"
+    }
+}
