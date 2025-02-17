@@ -3,8 +3,6 @@ import { SearchResults } from '../models/search_results.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
-const dbUser = process.env.DB_USER;
-const dbPass = process.env.DB_PASS;
 
 async function search(searchRequest, dbCookie) {
     try {

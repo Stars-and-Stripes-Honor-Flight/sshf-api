@@ -13,6 +13,14 @@ const options = {
         url: process.env.API_URL || 'http://localhost:8080',
         description: 'API Server',
       },
+      {
+        url: 'http://localhost:8080',
+        description: 'Force local API Server',
+      },
+      {
+        url: 'https://sshf-api-330507742215.us-central1.run.app',
+        description: 'Force Dev Environment API Server',
+      },
     ],
     components: {
       securitySchemes: {
@@ -24,9 +32,15 @@ const options = {
               scopes: {
                 'openid': 'OpenID Connect scope',
                 'email': 'Email scope',
-                'profile': 'Profile scope'
+                'profile': 'Profile scope',
+                'https://www.googleapis.com/auth/admin.directory.group.readonly': 'Group Read Only Scope'
               }
             }
+          },
+          'x-clientId': process.env.GOOGLE_CLIENT_ID,
+          'x-init': {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            appName: 'SSHF API'
           }
         }
       },
