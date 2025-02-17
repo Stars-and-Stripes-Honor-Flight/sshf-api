@@ -271,18 +271,13 @@ export class Veteran {
         }
 
         // Medical validations (additional)
-        if (this.medical.alt_level && !['1', '2', '3'].includes(this.medical.alt_level)) {
-            errors.push('Alternative medical level must be 1, 2, or 3');
+        if (this.medical.level && !['1', '2', '3', '3.5', '4'].includes(this.medical.level)) {
+            errors.push('Medical level must be 1, 2, 3, 3.5, or 4');
+        }
+        if (this.medical.alt_level && !['1', '2', '3', '3.5', '4'].includes(this.medical.alt_level)) {
+            errors.push('Medical level must be 1, 2, 3, 3.5, or 4');
         }
 
-        // Call validations
-        if (this.call.fm_number && !/^\d+$/.test(this.call.fm_number)) {
-            errors.push('Flight manifest number must contain only digits');
-        }
-        if (this.call.assigned_to && !/^[a-zA-Z. -]{2,}$/.test(this.call.assigned_to)) {
-            errors.push('Call assigned to must contain only letters, periods, hyphens and spaces (min 2 chars)');
-        }
-        
         // Validate call history entries if present
         if (this.call.history && Array.isArray(this.call.history)) {
             this.call.history.forEach((entry, index) => {
@@ -385,4 +380,4 @@ export class Veteran {
     static fromJSON(json) {
         return new Veteran(json);
     }
-} 
+}
