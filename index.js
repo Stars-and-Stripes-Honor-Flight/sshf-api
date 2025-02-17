@@ -3,6 +3,8 @@ import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
 import cookie from 'cookie';
+import { setupSwagger } from './swagger/swagger-ui.js';
+import { specs } from './swagger/swagger.js';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
@@ -39,6 +41,9 @@ app.use(cors(corsOptions));
 const userCache = new Map();
 const cacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
 
+// Setup Swagger before routes
+setupSwagger(app);
+
 // Route definitions
 app.get('/secure-data', authenticate, getSecureData);
 app.get('/user/hasgroup', authenticate, getHasGroup);
@@ -58,6 +63,12 @@ app.post("/veterans", authenticate, dbSession, createVeteran);
 app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
 app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
 app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
+
+// Expose OpenAPI spec at custom endpoint
+app.get('/openapi.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(specs);
+});
 
 // Start the Express server
 app.listen(port, () => {

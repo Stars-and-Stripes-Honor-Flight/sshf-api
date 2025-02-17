@@ -3,7 +3,41 @@ import { Veteran } from '../models/veteran.js';
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
 
-// Create a new veteran document
+/**
+ * @swagger
+ * /veterans:
+ *   post:
+ *     summary: Create a new veteran record
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Veteran'
+ *     responses:
+ *       201:
+ *         description: Veteran record created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Veteran'
+ *       400:
+ *         description: Invalid veteran data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 export async function createVeteran(req, res) {
     try {
         const veteran = new Veteran(req.body);
@@ -39,7 +73,37 @@ export async function createVeteran(req, res) {
     }
 }
 
-// Get a veteran by ID
+/**
+ * @swagger
+ * /veterans/{id}:
+ *   get:
+ *     summary: Retrieve a veteran record by ID
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Veteran record ID
+ *     responses:
+ *       200:
+ *         description: Veteran record retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Veteran'
+ *       400:
+ *         description: Document is not a veteran record
+ *       404:
+ *         description: Veteran not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 export async function retrieveVeteran(req, res) {
     try {
         const docId = req.params.id;
@@ -73,7 +137,43 @@ export async function retrieveVeteran(req, res) {
     }
 }
 
-// Update a veteran
+/**
+ * @swagger
+ * /veterans/{id}:
+ *   put:
+ *     summary: Update a veteran record
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Veteran record ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Veteran'
+ *     responses:
+ *       200:
+ *         description: Veteran record updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Veteran'
+ *       400:
+ *         description: Invalid veteran data or document is not a veteran record
+ *       404:
+ *         description: Veteran not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 export async function updateVeteran(req, res) {
     try {
         const docId = req.params.id;
@@ -135,7 +235,44 @@ export async function updateVeteran(req, res) {
     }
 }
 
-// Delete a veteran
+/**
+ * @swagger
+ * /veterans/{id}:
+ *   delete:
+ *     summary: Delete a veteran record
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Veteran record ID
+ *     responses:
+ *       200:
+ *         description: Veteran record deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 id:
+ *                   type: string
+ *                 rev:
+ *                   type: string
+ *       400:
+ *         description: Document is not a veteran record
+ *       404:
+ *         description: Veteran not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
 export async function deleteVeteran(req, res) {
     try {
         const docId = req.params.id;
