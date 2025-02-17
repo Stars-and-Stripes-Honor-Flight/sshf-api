@@ -139,7 +139,7 @@ const options = {
         },
         Veteran: {
           type: 'object',
-          required: ['name', 'type'],
+          required: ['name', 'type', 'address'],
           properties: {
             _id: {
               type: 'string',
@@ -158,33 +158,90 @@ const options = {
               type: 'object',
               required: ['first', 'last'],
               properties: {
-                first: { type: 'string' },
-                middle: { type: 'string' },
-                last: { type: 'string' },
-                nickname: { type: 'string' }
+                first: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z\'. ]{2,}$',
+                  description: 'First name (letters, periods, apostrophes and spaces only, min 2 chars)'
+                },
+                middle: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z\' ]*$',
+                  description: 'Middle name (letters, apostrophes and spaces only)'
+                },
+                last: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z\'. -]{2,}$',
+                  description: 'Last name (letters, periods, apostrophes, hyphens and spaces only, min 2 chars)'
+                },
+                nickname: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z\'. ]*$',
+                  description: 'Nickname (letters, periods, apostrophes and spaces only)'
+                }
               }
             },
             birth_date: { type: 'string' },
             gender: { type: 'string' },
             address: {
               type: 'object',
+              required: ['street', 'city', 'state', 'zip', 'county', 'phone_day'],
               properties: {
-                street: { type: 'string' },
-                city: { type: 'string' },
-                state: { type: 'string' },
-                zip: { type: 'string' },
-                county: { type: 'string' },
-                phone_day: { type: 'string' },
-                phone_eve: { type: 'string' },
-                phone_mbl: { type: 'string' },
-                email: { type: 'string' }
+                street: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z0-9.,# /-]{2,}$',
+                  description: 'Street address (letters, numbers, basic punctuation, min 2 chars)'
+                },
+                city: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z. -]{2,}$',
+                  description: 'City name (letters, periods, hyphens and spaces only, min 2 chars)'
+                },
+                state: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z]{2}$',
+                  description: 'State code (exactly 2 letters)'
+                },
+                zip: { 
+                  type: 'string',
+                  pattern: '^[0-9 -]{5,}$',
+                  description: 'ZIP code (at least 5 digits)'
+                },
+                county: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z. ]{2,}$',
+                  description: 'County name (letters, periods and spaces only, min 2 chars)'
+                },
+                phone_day: { 
+                  type: 'string',
+                  pattern: '^[0-9 -]{12,}$',
+                  description: 'Day phone (at least 12 digits/characters)'
+                },
+                phone_eve: { 
+                  type: 'string',
+                  pattern: '^[0-9 -]*$',
+                  description: 'Evening phone (numbers, spaces and hyphens only)'
+                },
+                phone_mbl: { 
+                  type: 'string',
+                  pattern: '^[0-9 -]*$',
+                  description: 'Mobile phone (numbers, spaces and hyphens only)'
+                },
+                email: { 
+                  type: 'string',
+                  format: 'email',
+                  description: 'Email address'
+                }
               }
             },
             service: {
               type: 'object',
               properties: {
                 branch: { type: 'string' },
-                rank: { type: 'string' },
+                rank: { 
+                  type: 'string',
+                  pattern: '^[a-zA-Z0-9.,# /-]*$',
+                  description: 'Military rank (letters, numbers, basic punctuation)'
+                },
                 dates: { type: 'string' },
                 activity: { type: 'string' }
               }

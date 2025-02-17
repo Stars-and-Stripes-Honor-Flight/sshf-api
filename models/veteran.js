@@ -70,15 +70,65 @@ export class Veteran {
         };
     }
 
-    // Validate required fields
+    // Enhanced validation with specific field rules
     validate() {
-        if (!this.name.last || !this.name.first) {
-            throw new Error('First and last name are required');
+        const errors = [];
+
+        // Required fields and pattern validations from template
+        if (!this.name.first || !/^[a-zA-Z'. ]{2,}$/.test(this.name.first)) {
+            errors.push('First name is required and must contain only letters, periods, apostrophes and spaces (min 2 chars)');
+        }
+        if (!this.name.last || !/^[a-zA-Z'. -]{2,}$/.test(this.name.last)) {
+            errors.push('Last name is required and must contain only letters, periods, apostrophes, hyphens and spaces (min 2 chars)');
+        }
+        if (this.name.middle && !/^[a-zA-Z' ]*$/.test(this.name.middle)) {
+            errors.push('Middle name must contain only letters, apostrophes and spaces');
+        }
+        if (this.name.nickname && !/^[a-zA-Z'. ]*$/.test(this.name.nickname)) {
+            errors.push('Nickname must contain only letters, periods, apostrophes and spaces');
         }
 
-        // Require type to be exactly 'Veteran'
+        // Address validations
+        if (!this.address.street || !/^[a-zA-Z0-9.,# /-]{2,}$/.test(this.address.street)) {
+            errors.push('Street address is required and must contain only letters, numbers, and basic punctuation (min 2 chars)');
+        }
+        if (!this.address.city || !/^[a-zA-Z. -]{2,}$/.test(this.address.city)) {
+            errors.push('City is required and must contain only letters, periods, hyphens and spaces (min 2 chars)');
+        }
+        if (!this.address.county || !/^[a-zA-Z. ]{2,}$/.test(this.address.county)) {
+            errors.push('County is required and must contain only letters, periods and spaces (min 2 chars)');
+        }
+        if (!this.address.state || !/^[a-zA-Z]{2}$/.test(this.address.state)) {
+            errors.push('State is required and must be exactly 2 letters');
+        }
+        if (!this.address.zip || !/^[0-9 -]{5,}$/.test(this.address.zip)) {
+            errors.push('ZIP code is required and must contain at least 5 digits');
+        }
+        if (!this.address.phone_day || !/^[0-9 -]{12,}$/.test(this.address.phone_day)) {
+            errors.push('Day phone is required and must contain at least 12 digits/characters');
+        }
+        if (this.address.phone_eve && !/^[0-9 -]*$/.test(this.address.phone_eve)) {
+            errors.push('Evening phone must contain only numbers, spaces and hyphens');
+        }
+        if (this.address.phone_mbl && !/^[0-9 -]*$/.test(this.address.phone_mbl)) {
+            errors.push('Mobile phone must contain only numbers, spaces and hyphens');
+        }
+        if (this.address.email && !/^[^@]+@[^@]+\.[^@]+$/.test(this.address.email)) {
+            errors.push('Email must be a valid email address');
+        }
+
+        // Service history validations
+        if (this.service.rank && !/^[a-zA-Z0-9.,# /-]*$/.test(this.service.rank)) {
+            errors.push('Rank must contain only letters, numbers, and basic punctuation');
+        }
+
+        // Type validation
         if (this.type !== 'Veteran') {
-            throw new Error('Document type must be Veteran, got: ' + this.type);
+            errors.push('Document type must be Veteran');
+        }
+
+        if (errors.length > 0) {
+            throw new Error('Validation failed: ' + errors.join('; '));
         }
         
         return true;
