@@ -347,6 +347,62 @@ export class Veteran {
         }
     }
 
+    updateHistory(currentVeteran, user) {
+        const userName = user.firstName + ' ' + user.lastName;
+        // Format timestamp as yyyy-MM-DDThh:mm:ssZ without milliseconds
+        const now = new Date();
+        const timestamp = now.toISOString().split('.')[0] + 'Z';
+
+        const historyMapping = [
+            {
+                'historyProperty':'flight.history',
+                'trackedProperties': [
+                { 'property': 'flight.id', 'name': 'flight' },
+                { 'property': 'flight.bus', 'name': 'bus' },
+                { 'property': 'flight.status', 'name': 'status' },
+                { 'property': 'flight.seat', 'name': 'seat' },
+                { 'property': 'flight.confirmed_date', 'name': 'confirmed date' }
+            ]},
+            {
+                'historyProperty': 'call.history',
+                'trackedProperties': [
+                { 'property': 'mail_call.received', 'name': 'mail_call received' },
+                { 'property': 'call.assigned_to', 'name': 'assigned caller' } 
+            ]}
+        ];
+
+        historyMapping.forEach(mapping => {
+            mapping.trackedProperties.forEach(trackedProperty => {
+                this.checkForChanges(currentVeteran, mapping.historyProperty, trackedProperty, userName, timestamp);
+            });
+        });
+    }
+    
+    getValue(obj, path) {
+        const keys = path.split('.');
+        let result = obj;
+      
+        for (const key of keys) {
+          if (result && typeof result === 'object' && key in result) {
+            result = result[key];
+          } else {
+            return undefined;
+          }
+        }
+        return result;
+      }
+
+    checkForChanges(currentVeteran, historyProperty, trackedProperty, userName, timestamp) {
+        const currentValue = this.getValue(currentVeteran, trackedProperty.property);
+        const newValue = this.getValue(this, trackedProperty.property);
+        if (currentValue !== newValue) {
+            this.getValue(this, historyProperty).push({
+                id: timestamp,
+                change: `changed ${trackedProperty.name} from ${currentValue} to ${newValue} by: ${userName}`
+            });
+        }
+    }
+    
     toJSON() {
         return {
             _id: this._id,

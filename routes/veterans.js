@@ -204,6 +204,7 @@ export async function updateVeteran(req, res) {
         if (currentDoc.type !== 'Veteran') {
             return res.status(400).json({ error: 'Document is not a veteran record' });
         }
+        const currentVeteran = Veteran.fromJSON(currentDoc);
 
         // Create updated veteran object
         const updatedVeteran = new Veteran({
@@ -211,6 +212,7 @@ export async function updateVeteran(req, res) {
             _id: docId,
             _rev: currentDoc._rev
         });
+        updatedVeteran.updateHistory(currentVeteran, req.user);
         updatedVeteran.prepareForSave(req.user);
         updatedVeteran.validate();
 
