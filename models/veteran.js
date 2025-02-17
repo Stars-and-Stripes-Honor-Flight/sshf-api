@@ -296,8 +296,8 @@ export class Veteran {
         }
 
         // Gender validation
-        if (this.gender && !['Male', 'Female'].includes(this.gender)) {
-            errors.push('Gender must be Male or Female');
+        if (this.gender && !['M', 'F'].includes(this.gender)) {
+            errors.push('Gender must be M or F');
         }
 
         // Service branch validation

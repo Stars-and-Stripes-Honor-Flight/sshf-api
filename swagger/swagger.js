@@ -197,7 +197,7 @@ const options = {
             birth_date: { type: 'string' },
             gender: {
               type: 'string',
-              enum: ['Male', 'Female'],
+              enum: ['M', 'F'],
               description: 'Veteran gender'
             },
             address: {
