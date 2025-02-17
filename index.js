@@ -2,12 +2,14 @@ import 'dotenv/config';
 import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
+import cookie from 'cookie';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
 import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
+import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
 
 const app = express();
 const port = 8080;
@@ -40,15 +42,67 @@ const cacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
 app.get('/secure-data', authenticate, getSecureData);
 app.get('/user/hasgroup', authenticate, getHasGroup);
 app.get("/msg", getMessage);
-app.get("/search", authenticate, getSearch);
+app.get("/search", authenticate, dbSession, getSearch);
 app.use(express.json()); // for parsing application/json
 app.post("/msg", postMessage);
+app.post("/docs", authenticate, dbSession, createDocument);
+app.get("/docs/:id", authenticate, dbSession, retrieveDocument);
+app.put("/docs/:id", authenticate, dbSession, updateDocument);
+app.delete("/docs/:id", authenticate, dbSession, deleteDocument);
 
 // Start the Express server
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
 
+const dbUrl = process.env.DB_URL;
+const dbUser = process.env.DB_USER;
+const dbPass = process.env.DB_PASS;
+const cacheKey = `AuthSession_${dbUrl}_${dbUser}_${dbPass}`;
+
+async function dbSession(req, res, next) {
+    try {
+        if (userCache.has(cacheKey)) {
+            const cachedCookie = userCache.get(cacheKey);
+            // Check if cache is expired
+            if (Date.now() - cachedCookie.timestamp < cacheTTL) {
+                req.dbCookie = cachedCookie.cookie;
+                return next();
+            } else {
+                // Remove expired cache entry
+                userCache.delete(cacheKey);
+            }
+        }
+
+        const response = await fetch(`${dbUrl}/_session`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                name: dbUser,
+                password: dbPass
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to create CouchDB session');
+        }
+
+        const cookieString = response.headers.get('set-cookie');
+        const authCookie = `AuthSession=${cookie.parse(cookieString).AuthSession}`;
+        
+        // Store cookie in cache
+        userCache.set(cacheKey, { cookie: authCookie, timestamp: Date.now() });
+
+        req.dbCookie = authCookie;
+        next();
+    } catch (error) {
+        console.error('CouchDB session error:', error);
+        res.status(500).json({ message: 'Database session error' });
+    }
+}
 
 async function getGroupMemberships(token, userData) {
     try {
