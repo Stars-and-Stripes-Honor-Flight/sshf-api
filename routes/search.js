@@ -54,7 +54,7 @@ async function search(searchRequest, dbCookie) {
  *         name: status
  *         schema:
  *           type: string
- *           enum: ['Active', 'All']
+ *           enum: ['All', 'Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction']
  *           default: 'Active'
  *         description: Status filter for the search
  *       - in: query
