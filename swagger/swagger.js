@@ -181,7 +181,11 @@ const options = {
               }
             },
             birth_date: { type: 'string' },
-            gender: { type: 'string' },
+            gender: {
+              type: 'string',
+              enum: ['Male', 'Female'],
+              description: 'Veteran gender'
+            },
             address: {
               type: 'object',
               required: ['street', 'city', 'state', 'zip', 'county', 'phone_day'],
@@ -236,7 +240,11 @@ const options = {
             service: {
               type: 'object',
               properties: {
-                branch: { type: 'string' },
+                branch: {
+                  type: 'string',
+                  enum: ['Unknown', 'Army', 'Air Force', 'Navy', 'Marines', 'Coast Guard'],
+                  description: 'Military branch of service'
+                },
                 rank: { 
                   type: 'string',
                   pattern: '^[a-zA-Z0-9.,# /-]*$',
@@ -250,14 +258,40 @@ const options = {
               type: 'object',
               properties: {
                 id: { type: 'string' },
-                status: { type: 'string', default: 'Active' },
+                status: {
+                  type: 'string',
+                  enum: ['Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction'],
+                  default: 'Active',
+                  description: 'Current flight status'
+                },
                 group: { type: 'string' },
-                bus: { type: 'string' },
+                bus: {
+                  type: 'string',
+                  enum: ['None', 'Alpha1', 'Alpha2', 'Alpha3', 'Alpha4', 'Alpha5', 'Bravo1', 'Bravo2', 'Bravo3', 'Bravo4', 'Bravo5'],
+                  description: 'Assigned bus'
+                },
                 seat: { type: 'string' },
                 confirmed_date: { type: 'string' },
                 confirmed_by: { type: 'string' },
                 status_note: { type: 'string' },
-                history: { type: 'array', items: { type: 'object' } }
+                history: { 
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { 
+                        type: 'string',
+                        format: 'date-time',
+                        description: 'Timestamp of the change'
+                      },
+                      change: {
+                        type: 'string',
+                        description: 'Description of what changed'
+                      }
+                    }
+                  },
+                  description: 'History of changes to flight'
+                }
               }
             },
             medical: {
@@ -271,7 +305,12 @@ const options = {
                   description: 'Medical level'
                 },
                 limitations: { type: 'string' },
-                food_restriction: { type: 'string', default: 'None' },
+                food_restriction: {
+                  type: 'string',
+                  enum: ['None', 'Gluten Free', 'Vegetarian', 'Vegan'],
+                  default: 'None',
+                  description: 'Dietary restrictions'
+                },
                 usesCane: { type: 'boolean', default: false },
                 usesWalker: { type: 'boolean', default: false },
                 usesWheelchair: { type: 'boolean', default: false },
@@ -293,11 +332,32 @@ const options = {
                 id: { type: 'string' },
                 name: { type: 'string' },
                 pref_notes: { type: 'string' },
-                history: { type: 'array', items: { type: 'object' } }
+                history: { 
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { 
+                        type: 'string',
+                        format: 'date-time',
+                        description: 'Timestamp of the change'
+                      },
+                      change: {
+                        type: 'string',
+                        description: 'Description of what changed'
+                      }
+                    }
+                  },
+                  description: 'History of changes to guardian pairing'
+                }
               }
             },
             app_date: { type: 'string' },
-            vet_type: { type: 'string' },
+            vet_type: {
+              type: 'string',
+              enum: ['WWII', 'Korea', 'Vietnam', 'Afghanistan', 'Iraq', 'Other'],
+              description: 'Type of veteran/war conflict served'
+            },
             shirt: {
               type: 'object',
               properties: {
@@ -479,6 +539,12 @@ const options = {
             apparel: {
               type: 'object',
               properties: {
+                item: {
+                  type: 'string',
+                  enum: ['None', 'Jacket', 'Polo', 'Both'],
+                  default: 'None',
+                  description: 'Type of apparel items ordered'
+                },
                 jacket_size: {
                   type: 'string',
                   enum: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
@@ -511,7 +577,7 @@ const options = {
                 },
                 assigned_to: { 
                   type: 'string',
-                  description: 'Staff member assigned to call'
+                  description: 'VET member assigned to call'
                 },
                 mail_sent: { 
                   type: 'boolean',

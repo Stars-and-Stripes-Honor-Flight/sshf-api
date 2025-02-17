@@ -295,6 +295,41 @@ export class Veteran {
             });
         }
 
+        // Gender validation
+        if (this.gender && !['Male', 'Female'].includes(this.gender)) {
+            errors.push('Gender must be Male or Female');
+        }
+
+        // Service branch validation
+        if (this.service.branch && !['Unknown', 'Army', 'Air Force', 'Navy', 'Marines', 'Coast Guard'].includes(this.service.branch)) {
+            errors.push('Invalid service branch');
+        }
+
+        // Veteran type validation
+        if (this.vet_type && !['WWII', 'Korea', 'Vietnam', 'Afghanistan', 'Iraq', 'Other'].includes(this.vet_type)) {
+            errors.push('Invalid veteran type');
+        }
+
+        // Medical food restriction validation
+        if (this.medical.food_restriction && !['None', 'Gluten Free', 'Vegetarian', 'Vegan'].includes(this.medical.food_restriction)) {
+            errors.push('Invalid food restriction');
+        }
+
+        // Flight status validation
+        if (this.flight.status && !['Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction'].includes(this.flight.status)) {
+            errors.push('Invalid flight status');
+        }
+
+        // Flight bus validation
+        if (this.flight.bus && !['None', 'Alpha1', 'Alpha2', 'Alpha3', 'Alpha4', 'Alpha5', 'Bravo1', 'Bravo2', 'Bravo3', 'Bravo4', 'Bravo5'].includes(this.flight.bus)) {
+            errors.push('Invalid bus assignment');
+        }
+
+        // Apparel item validation
+        if (this.apparel.item && !['None', 'Jacket', 'Polo', 'Both'].includes(this.apparel.item)) {
+            errors.push('Invalid apparel item');
+        }
+
         if (errors.length > 0) {
             throw new Error('Validation failed: ' + errors.join('; '));
         }
