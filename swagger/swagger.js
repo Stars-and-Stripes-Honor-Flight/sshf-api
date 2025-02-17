@@ -265,14 +265,26 @@ const options = {
               properties: {
                 form: { type: 'boolean', default: false },
                 release: { type: 'boolean', default: false },
-                level: { type: 'string' },
+                level: {
+                  type: 'string',
+                  enum: ['1', '2', '3', '3.5', '4'],
+                  description: 'Medical level'
+                },
                 limitations: { type: 'string' },
                 food_restriction: { type: 'string', default: 'None' },
                 usesCane: { type: 'boolean', default: false },
                 usesWalker: { type: 'boolean', default: false },
-                usesWheelchair: { type: 'number', default: 0 },
+                usesWheelchair: { type: 'boolean', default: false },
                 usesScooter: { type: 'boolean', default: false },
-                requiresOxygen: { type: 'boolean', default: false }
+                requiresOxygen: { type: 'boolean', default: false },
+                isWheelchairBound: { type: 'boolean', default: false },
+                alt_level: {
+                  type: 'string',
+                  enum: ['1', '2', '3', '3.5', '4'],
+                  description: 'Alternative medical level'
+                },
+                examRequired: { type: 'boolean', default: false },
+                review: { type: 'string' }
               }
             },
             guardian: {
@@ -299,6 +311,231 @@ const options = {
                 created_by: { type: 'string' },
                 updated_at: { type: 'string', format: 'date-time' },
                 updated_by: { type: 'string' }
+              }
+            },
+            weight: {
+              type: 'string',
+              pattern: '^\\d{1,3}$',
+              description: 'Weight in pounds (1-999) (Obsolete)'
+            },
+            alt_contact: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  pattern: '^[a-zA-Z\'. -]{2,}$',
+                  description: 'Alternate contact name'
+                },
+                relation: { type: 'string' },
+                address: {
+                  type: 'object',
+                  properties: {
+                    street: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z0-9.,# /-]{2,}$',
+                      description: 'Street address (letters, numbers, basic punctuation, min 2 chars)'
+                    },
+                    city: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z. -]{2,}$',
+                      description: 'City name (letters, periods, hyphens and spaces only, min 2 chars)'
+                    },
+                    state: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z]{2}$',
+                      description: 'State code (exactly 2 letters)'
+                    },
+                    zip: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]{5,}$',
+                      description: 'ZIP code (at least 5 digits)'
+                    },
+                    county: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z. ]{2,}$',
+                      description: 'County name (letters, periods and spaces only, min 2 chars)'
+                    },
+                    phone_day: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]{12,}$',
+                      description: 'Day phone (at least 12 digits/characters)'
+                    },
+                    phone_eve: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]*$',
+                      description: 'Evening phone (numbers, spaces and hyphens only)'
+                    },
+                    phone_mbl: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]*$',
+                      description: 'Mobile phone (numbers, spaces and hyphens only)'
+                    },
+                    email: { 
+                      type: 'string',
+                      format: 'email',
+                      description: 'Email address'
+                    }
+                  }
+                }
+              }
+            },
+            emerg_contact: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  pattern: '^[a-zA-Z\'. -]{2,}$',
+                  description: 'Emergency contact name'
+                },
+                relation: { type: 'string' },
+                address: {
+                  type: 'object',
+                  properties: {
+                    street: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z0-9.,# /-]{2,}$',
+                      description: 'Street address (letters, numbers, basic punctuation, min 2 chars)'
+                    },
+                    city: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z. -]{2,}$',
+                      description: 'City name (letters, periods, hyphens and spaces only, min 2 chars)'
+                    },
+                    state: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z]{2}$',
+                      description: 'State code (exactly 2 letters)'
+                    },
+                    zip: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]{5,}$',
+                      description: 'ZIP code (at least 5 digits)'
+                    },
+                    county: { 
+                      type: 'string',
+                      pattern: '^[a-zA-Z. ]{2,}$',
+                      description: 'County name (letters, periods and spaces only, min 2 chars)'
+                    },
+                    phone_day: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]{12,}$',
+                      description: 'Day phone (at least 12 digits/characters)'
+                    },
+                    phone_eve: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]*$',
+                      description: 'Evening phone (numbers, spaces and hyphens only)'
+                    },
+                    phone_mbl: { 
+                      type: 'string',
+                      pattern: '^[0-9 -]*$',
+                      description: 'Mobile phone (numbers, spaces and hyphens only)'
+                    },
+                    email: { 
+                      type: 'string',
+                      format: 'email',
+                      description: 'Email address'
+                    }
+                  }
+                }
+              }
+            },
+            mail_call: {
+              type: 'object',
+              properties: {
+                received: { type: 'boolean', default: false },
+                name: {
+                  type: 'string',
+                  pattern: '^[a-zA-Z\'. -]{2,}$'
+                },
+                notes: { type: 'string' },
+                adopt: { type: 'string' },
+                relation: { type: 'string' },
+                address: {
+                  type: 'object',
+                  properties: {
+                    phone: {
+                      type: 'string',
+                      pattern: '^[0-9 -]{12,}$'
+                    },
+                    email: {
+                      type: 'string',
+                      format: 'email'
+                    }
+                  }
+                }
+              }
+            },
+            media_interview_ok: {
+              type: 'string',
+              enum: ['Yes', 'No', 'Unknown'],
+              default: 'Unknown'
+            },
+            media_newspaper_ok: {
+              type: 'string',
+              enum: ['Yes', 'No', 'Unknown'],
+              default: 'Unknown'
+            },
+            apparel: {
+              type: 'object',
+              properties: {
+                jacket_size: {
+                  type: 'string',
+                  enum: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+                },
+                shirt_size: {
+                  type: 'string',
+                  enum: ['WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+                },
+                delivery: {
+                  type: 'string',
+                  enum: ['None', 'Mailed', 'Pickup', 'Delivered']
+                },
+                notes: { type: 'string' },
+                date: { type: 'string' },
+                by: { type: 'string' }
+              }
+            },
+            call: {
+              type: 'object',
+              properties: {
+                fm_number: { 
+                  type: 'string',
+                  description: 'Family Member number (obsolete)'
+                },
+                notes: { type: 'string' },
+                email_sent: { 
+                  type: 'boolean',
+                  default: false,
+                  description: 'Whether email has been sent'
+                },
+                assigned_to: { 
+                  type: 'string',
+                  description: 'Staff member assigned to call'
+                },
+                mail_sent: { 
+                  type: 'boolean',
+                  default: false,
+                  description: 'Whether mail has been sent'
+                },
+                history: { 
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { 
+                        type: 'string',
+                        format: 'date-time',
+                        description: 'Timestamp of the change'
+                      },
+                      change: {
+                        type: 'string',
+                        description: 'Description of what changed'
+                      }
+                    }
+                  },
+                  description: 'History of changes to call status'
+                }
               }
             }
           }

@@ -37,7 +37,12 @@ export class Veteran {
             confirmed_date: data.flight?.confirmed_date || '',
             confirmed_by: data.flight?.confirmed_by || '',
             status_note: data.flight?.status_note || '',
-            history: data.flight?.history || []
+            history: data.flight?.history || [],
+            nofly: data.flight?.nofly || false,
+            vaccinated: data.flight?.vaccinated || false,
+            mediaWaiver: data.flight?.mediaWaiver || false,
+            infection_test: data.flight?.infection_test || false,
+            waiver: data.flight?.waiver || false
         };
         this.medical = {
             form: data.medical?.form || false,
@@ -47,9 +52,13 @@ export class Veteran {
             food_restriction: data.medical?.food_restriction || 'None',
             usesCane: data.medical?.usesCane || false,
             usesWalker: data.medical?.usesWalker || false,
-            usesWheelchair: data.medical?.usesWheelchair || 0,
+            usesWheelchair: data.medical?.usesWheelchair || false,
             usesScooter: data.medical?.usesScooter || false,
-            requiresOxygen: data.medical?.requiresOxygen || false
+            requiresOxygen: data.medical?.requiresOxygen || false,
+            examRequired: data.medical?.examRequired || false,
+            review: data.medical?.review || '',
+            isWheelchairBound: data.medical?.isWheelchairBound || false,
+            alt_level: data.medical?.alt_level || ''
         };
         this.guardian = {
             id: data.guardian?.id || '',
@@ -67,6 +76,89 @@ export class Veteran {
             created_by: data.metadata?.created_by || '',
             updated_at: data.metadata?.updated_at || new Date().toISOString(),
             updated_by: data.metadata?.updated_by || ''
+        };
+        this.weight = data.weight || '';
+        
+        this.alt_contact = {
+            name: data.alt_contact?.name || '',
+            relation: data.alt_contact?.relation || '',
+            address: {
+                street: data.alt_contact?.address?.street || '',
+                city: data.alt_contact?.address?.city || '',
+                state: data.alt_contact?.address?.state || '',
+                zip: data.alt_contact?.address?.zip || '',
+                phone: data.alt_contact?.address?.phone || '',
+                phone_mbl: data.alt_contact?.address?.phone_mbl || '',
+                phone_eve: data.alt_contact?.address?.phone_eve || '',
+                email: data.alt_contact?.address?.email || ''
+            }
+        };
+
+        this.emerg_contact = {
+            name: data.emerg_contact?.name || '',
+            relation: data.emerg_contact?.relation || '',
+            address: {
+                street: data.emerg_contact?.address?.street || '',
+                city: data.emerg_contact?.address?.city || '',
+                state: data.emerg_contact?.address?.state || '',
+                zip: data.emerg_contact?.address?.zip || '',
+                phone: data.emerg_contact?.address?.phone || '',
+                phone_mbl: data.emerg_contact?.address?.phone_mbl || '',
+                phone_eve: data.emerg_contact?.address?.phone_eve || '',
+                email: data.emerg_contact?.address?.email || ''
+            }
+        };
+
+        this.accommodations = {
+            departure_time: data.accommodations?.departure_time || '',
+            arrival_date: data.accommodations?.arrival_date || '',
+            notes: data.accommodations?.notes || '',
+            departure_date: data.accommodations?.departure_date || '',
+            arrival_flight: data.accommodations?.arrival_flight || '',
+            attend_banquette: data.accommodations?.attend_banquette || '',
+            departure_flight: data.accommodations?.departure_flight || '',
+            arrival_time: data.accommodations?.arrival_time || '',
+            banquette_guest: data.accommodations?.banquette_guest || '',
+            room_type: data.accommodations?.room_type || 'None',
+            hotel_name: data.accommodations?.hotel_name || ''
+        };
+
+        this.mail_call = {
+            received: data.mail_call?.received || false,
+            name: data.mail_call?.name || '',
+            notes: data.mail_call?.notes || '',
+            adopt: data.mail_call?.adopt || '',
+            relation: data.mail_call?.relation || '',
+            address: {
+                phone: data.mail_call?.address?.phone || '',
+                email: data.mail_call?.address?.email || ''
+            }
+        };
+
+        this.call = {
+            fm_number: data.call?.fm_number || '',
+            notes: data.call?.notes || '',
+            email_sent: data.call?.email_sent || false,
+            assigned_to: data.call?.assigned_to || '',
+            mail_sent: data.call?.mail_sent || false,
+            history: data.call?.history || []
+        };
+
+        this.media_interview_ok = data.media_interview_ok || 'No';
+        this.media_newspaper_ok = data.media_newspaper_ok || 'No';
+
+        this.homecoming = {
+            destination: data.homecoming?.destination || ''
+        };
+
+        this.apparel = {
+            jacket_size: data.apparel?.jacket_size || '',
+            notes: data.apparel?.notes || '',
+            delivery: data.apparel?.delivery || '',
+            item: data.apparel?.item || 'None',
+            shirt_size: data.apparel?.shirt_size || '',
+            date: data.apparel?.date || '',
+            by: data.apparel?.by || ''
         };
     }
 
@@ -127,6 +219,82 @@ export class Veteran {
             errors.push('Document type must be Veteran');
         }
 
+        // Weight validation (numeric string)
+        if (this.weight && !/^\d{1,3}$/.test(this.weight)) {
+            errors.push('Weight must be a number between 1-999');
+        }
+
+        // Emergency Contact validations
+        if (this.emerg_contact.name && !/^[a-zA-Z'. -]{2,}$/.test(this.emerg_contact.name)) {
+            errors.push('Emergency contact name must contain only letters, periods, apostrophes, hyphens and spaces (min 2 chars)');
+        }
+        if (this.emerg_contact.phone && !/^[0-9 -]{12,}$/.test(this.emerg_contact.phone)) {
+            errors.push('Emergency contact phone must contain at least 12 digits/characters');
+        }
+
+        // Alternate Contact validations
+        if (this.alt_contact.name && !/^[a-zA-Z'. -]{2,}$/.test(this.alt_contact.name)) {
+            errors.push('Alternate contact name must contain only letters, periods, apostrophes, hyphens and spaces (min 2 chars)');
+        }
+        if (this.alt_contact.phone && !/^[0-9 -]{12,}$/.test(this.alt_contact.phone)) {
+            errors.push('Alternate contact phone must contain at least 12 digits/characters');
+        }
+
+        // Mail Call validations
+        if (this.mail_call.name && !/^[a-zA-Z'. -]{2,}$/.test(this.mail_call.name)) {
+            errors.push('Mail call name must contain only letters, periods, apostrophes, hyphens and spaces (min 2 chars)');
+        }
+        if (this.mail_call.address.phone && !/^[0-9 -]{12,}$/.test(this.mail_call.address.phone)) {
+            errors.push('Mail call phone must contain at least 12 digits/characters');
+        }
+        if (this.mail_call.address.email && !/^[^@]+@[^@]+\.[^@]+$/.test(this.mail_call.address.email)) {
+            errors.push('Mail call email must be a valid email address');
+        }
+
+        // Media permissions validation
+        if (this.media_interview_ok && !['Yes', 'No', 'Unknown'].includes(this.media_interview_ok)) {
+            errors.push('Media interview permission must be Yes, No, or Unknown');
+        }
+        if (this.media_newspaper_ok && !['Yes', 'No', 'Unknown'].includes(this.media_newspaper_ok)) {
+            errors.push('Media newspaper permission must be Yes, No, or Unknown');
+        }
+
+        // Apparel validations
+        if (this.apparel.jacket_size && !['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(this.apparel.jacket_size)) {
+            errors.push('Invalid jacket size');
+        }
+        if (this.apparel.shirt_size && !['WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(this.apparel.shirt_size)) {
+            errors.push('Invalid shirt size');
+        }
+        if (this.apparel.delivery && !['None', 'Mailed', 'Pickup', 'Delivered'].includes(this.apparel.delivery)) {
+            errors.push('Invalid delivery method');
+        }
+
+        // Medical validations (additional)
+        if (this.medical.alt_level && !['1', '2', '3'].includes(this.medical.alt_level)) {
+            errors.push('Alternative medical level must be 1, 2, or 3');
+        }
+
+        // Call validations
+        if (this.call.fm_number && !/^\d+$/.test(this.call.fm_number)) {
+            errors.push('Flight manifest number must contain only digits');
+        }
+        if (this.call.assigned_to && !/^[a-zA-Z. -]{2,}$/.test(this.call.assigned_to)) {
+            errors.push('Call assigned to must contain only letters, periods, hyphens and spaces (min 2 chars)');
+        }
+        
+        // Validate call history entries if present
+        if (this.call.history && Array.isArray(this.call.history)) {
+            this.call.history.forEach((entry, index) => {
+                if (!entry.id || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(entry.id)) {
+                    errors.push(`Call history entry ${index + 1} has invalid timestamp format`);
+                }
+                if (!entry.change || typeof entry.change !== 'string') {
+                    errors.push(`Call history entry ${index + 1} must have a change description`);
+                }
+            });
+        }
+
         if (errors.length > 0) {
             throw new Error('Validation failed: ' + errors.join('; '));
         }
@@ -165,7 +333,17 @@ export class Veteran {
             app_date: this.app_date,
             vet_type: this.vet_type,
             shirt: this.shirt,
-            metadata: this.metadata
+            metadata: this.metadata,
+            weight: this.weight,
+            alt_contact: this.alt_contact,
+            emerg_contact: this.emerg_contact,
+            accommodations: this.accommodations,
+            mail_call: this.mail_call,
+            call: this.call,
+            media_interview_ok: this.media_interview_ok,
+            media_newspaper_ok: this.media_newspaper_ok,
+            homecoming: this.homecoming,
+            apparel: this.apparel
         };
     }
 
