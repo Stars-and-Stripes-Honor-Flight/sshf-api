@@ -130,6 +130,32 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(404)).to.be.true;
         });
+
+        it('should handle database errors during retrieval', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ reason: 'Database error' })
+            });
+
+            await retrieveVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database error');
+        });
+
+        it('should handle database errors without reason during retrieval', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({})
+            });
+
+            await retrieveVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran');
+        });
     });
 
     describe('updateVeteran', () => {
@@ -217,6 +243,32 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(400)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('not a veteran record');
+        });
+
+        it('should handle database errors during initial get', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ reason: 'Database error' })
+            });
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran for update');
+        });
+
+        it('should handle database errors without reason during initial get', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({})
+            });
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran for update');
         });
     });
 

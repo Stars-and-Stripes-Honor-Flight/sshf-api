@@ -2,10 +2,11 @@ import { expect } from 'chai';
 import { Veteran } from '../models/veteran.js';
 
 describe('Veteran Model', () => {
-    let sampleVeteranData;
+    let baseSampleData, sampleVeteranData;
 
     beforeEach(() => {
-        sampleVeteranData = {
+        // Define base sample data
+        baseSampleData = {
             type: 'Veteran',
             name: {
                 first: 'John',
@@ -44,6 +45,9 @@ describe('Veteran Model', () => {
             },
             weight: '180'
         };
+
+        // Deep clone the sample data for each test
+        sampleVeteranData = JSON.parse(JSON.stringify(baseSampleData));
     });
 
     describe('constructor', () => {
@@ -164,6 +168,32 @@ describe('Veteran Model', () => {
             veteran.apparel.shirt_size = 'L';
             veteran.apparel.delivery = 'Invalid';
             expect(() => veteran.validate()).to.throw('Invalid delivery method');
+        });
+
+        it('should validate birth date format', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            veteran.birth_date = '2024/01/01'; // Invalid format
+            expect(() => veteran.validate()).to.throw('Birth date must be in YYYY-MM-DD format');
+        });
+
+        it('should validate service branch', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            veteran.service.branch = 'Space Force'; // Invalid branch
+            expect(() => veteran.validate()).to.throw('Invalid service branch');
+        });
+
+        it('should validate veteran type', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            veteran.vet_type = 'Modern'; // Invalid type
+            expect(() => veteran.validate()).to.throw('Invalid veteran type');
+        });
+
+        it('should validate accommodation fields', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            
+            veteran.accommodations.room_type = 'Invalid';
+            expect(() => veteran.validate()).to.throw('Invalid room type');
+
         });
     });
 

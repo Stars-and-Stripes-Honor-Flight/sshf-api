@@ -325,6 +325,16 @@ export class Veteran {
             errors.push('Invalid apparel item');
         }
 
+        // Birth date validation
+        if (this.birth_date && !/^\d{4}-\d{2}-\d{2}$/.test(this.birth_date)) {
+            errors.push('Birth date must be in YYYY-MM-DD format');
+        }
+
+        // Accommodations room type validation
+        if (this.accommodations?.room_type && !['None', 'Double', 'Single'].includes(this.accommodations.room_type)) {
+            errors.push('Invalid room type');
+        }
+
         if (errors.length > 0) {
             throw new Error('Validation failed: ' + errors.join('; '));
         }
