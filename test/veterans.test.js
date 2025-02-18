@@ -179,6 +179,45 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(404)).to.be.true;
         });
+
+        it('should handle database update errors', async () => {
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: 'Update failed' })
+            });
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Update failed');
+        });
+
+        it('should handle database update errors when no reason is provided', async () => {
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: '' })
+            });
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to update veteran');
+        });
+
+        it('should handle non-veteran documents during update', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => ({ 
+                    _id: 'test-id',
+                    type: 'Guardian'
+                })
+            });
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('not a veteran record');
+        });
     });
 
     describe('deleteVeteran', () => {
@@ -229,6 +268,60 @@ describe('Veterans Route Handlers', () => {
             await deleteVeteran(req, res);
 
             expect(res.status.calledWith(404)).to.be.true;
+        });
+
+        it('should handle database delete errors', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => ({ 
+                    _id: 'test-id',
+                    _rev: '1-abc',
+                    type: 'Veteran'
+                })
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: 'Delete failed' })
+            });
+
+            await deleteVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Delete failed');
+        });
+
+        it('should handle database delete errors when no reason is provided', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => ({ 
+                    _id: 'test-id',
+                    _rev: '1-abc',
+                    type: 'Veteran'
+                })
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: '' })
+            });
+
+            await deleteVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to delete veteran');
+        });
+
+        it('should handle initial get errors during delete', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                json: async () => ({ reason: 'Get failed' })
+            });
+
+            await deleteVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran for deletion');
         });
     });
 }); 

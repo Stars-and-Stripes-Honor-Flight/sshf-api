@@ -91,6 +91,80 @@ describe('Veteran Model', () => {
             const veteran = new Veteran(sampleVeteranData);
             expect(() => veteran.validate()).to.throw('Invalid flight status');
         });
+
+        it('should validate all address fields', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            
+            // Test invalid email
+            veteran.address.email = 'invalid-email';
+            expect(() => veteran.validate()).to.throw('Email must be a valid email address');
+            
+            // Test invalid phone formats
+            veteran.address.email = 'valid@email.com';
+            veteran.address.phone_eve = 'invalid';
+            expect(() => veteran.validate()).to.throw('Evening phone must contain only numbers');
+            
+            veteran.address.phone_eve = '217-555-5678';
+            veteran.address.phone_mbl = 'invalid';
+            expect(() => veteran.validate()).to.throw('Mobile phone must contain only numbers');
+        });
+
+        it('should validate emergency and alternate contact fields', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            
+            // Test emergency contact validation
+            veteran.emerg_contact = {
+                name: '12', // Invalid name
+                phone: '555'  // Invalid phone
+            };
+            expect(() => veteran.validate()).to.throw('Emergency contact name must contain only letters');
+            
+            // Test alternate contact validation
+            veteran.alt_contact = {
+                name: '12', // Invalid name
+                phone: '555'  // Invalid phone
+            };
+            expect(() => veteran.validate()).to.throw('Alternate contact name must contain only letters');
+        });
+
+        it('should validate mail call fields', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            
+            veteran.mail_call = {
+                name: '12', // Invalid name
+                address: {
+                    phone: '555', // Invalid phone
+                    email: 'invalid-email'
+                }
+            };
+            expect(() => veteran.validate()).to.throw('Mail call name must contain only letters');
+        });
+
+        it('should validate media permissions', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            
+            veteran.media_interview_ok = 'Invalid';
+            expect(() => veteran.validate()).to.throw('Media interview permission must be Yes, No, or Unknown');
+            
+            veteran.media_interview_ok = 'Yes';
+            veteran.media_newspaper_ok = 'Invalid';
+            expect(() => veteran.validate()).to.throw('Media newspaper permission must be Yes, No, or Unknown');
+        });
+
+        it('should validate apparel fields', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            
+            veteran.apparel.jacket_size = 'Invalid';
+            expect(() => veteran.validate()).to.throw('Invalid jacket size');
+            
+            veteran.apparel.jacket_size = 'XL';
+            veteran.apparel.shirt_size = 'Invalid';
+            expect(() => veteran.validate()).to.throw('Invalid shirt size');
+            
+            veteran.apparel.shirt_size = 'L';
+            veteran.apparel.delivery = 'Invalid';
+            expect(() => veteran.validate()).to.throw('Invalid delivery method');
+        });
     });
 
     describe('prepareForSave', () => {
@@ -159,6 +233,44 @@ describe('Veteran Model', () => {
             expect(veteran).to.be.instanceof(Veteran);
             expect(veteran.name.first).to.equal(sampleVeteranData.name.first);
             expect(veteran.address.city).to.equal(sampleVeteranData.address.city);
+        });
+    });
+
+    describe('getValue', () => {
+        it('should handle nested object paths', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            
+            expect(veteran.getValue(veteran, 'name.first')).to.equal('John');
+            expect(veteran.getValue(veteran, 'address.city')).to.equal('Springfield');
+            expect(veteran.getValue(veteran, 'invalid.path')).to.be.undefined;
+        });
+    });
+
+    describe('checkForChanges', () => {
+        it('should track multiple types of changes', () => {
+            const currentVeteran = new Veteran(sampleVeteranData);
+            const newVeteran = new Veteran(sampleVeteranData);
+            const user = { firstName: 'Admin', lastName: 'User' };
+            const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+
+            // Test flight changes
+            newVeteran.checkForChanges(
+                currentVeteran,
+                'flight.history',
+                { property: 'flight.status', name: 'status' },
+                'Admin User',
+                timestamp
+            );
+
+            // Test mail call changes
+            newVeteran.mail_call.received = true;
+            newVeteran.checkForChanges(
+                currentVeteran,
+                'call.history',
+                { property: 'mail_call.received', name: 'mail_call received' },
+                'Admin User',
+                timestamp
+            );
         });
     });
 }); 
