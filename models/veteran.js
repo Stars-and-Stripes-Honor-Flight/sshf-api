@@ -72,9 +72,9 @@ export class Veteran {
             size: data.shirt?.size || ''
         };
         this.metadata = {
-            created_at: data.metadata?.created_at || new Date().toISOString(),
+            created_at: data.metadata?.created_at || '',
             created_by: data.metadata?.created_by || '',
-            updated_at: data.metadata?.updated_at || new Date().toISOString(),
+            updated_at: data.metadata?.updated_at || '',
             updated_by: data.metadata?.updated_by || ''
         };
         this.weight = data.weight || '';

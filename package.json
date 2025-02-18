@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "mocha",
+    "test": "mocha --experimental-modules --es-module-specifier-resolution=node test/**/*.test.js",
     "coverage": "c8 npm run test"
   },
   "nyc": {
