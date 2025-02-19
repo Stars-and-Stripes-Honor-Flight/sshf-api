@@ -220,8 +220,8 @@ export class Veteran {
         }
 
         // Weight validation (numeric string)
-        if (this.weight && !/^\d{1,3}$/.test(this.weight)) {
-            errors.push('Weight must be a number between 1-999');
+        if (this.weight && (!/^\d{1,3}$/.test(this.weight) || this.weight < 60 || this.weight > 450)) {
+            errors.push('Weight must be a number between 60-450');
         }
 
         // Emergency Contact validations

@@ -87,6 +87,18 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
         });
+
+        it('should handle database errors without reason', async () => {
+            global.fetch.resolves({
+                ok: false,
+                json: async () => ({})  // Empty response with no reason
+            });
+
+            await createVeteran(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to create veteran document');
+        });
     });
 
     describe('retrieveVeteran', () => {
