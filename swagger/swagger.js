@@ -61,7 +61,7 @@ const options = {
             status: {
               type: 'string',
               default: 'Active',
-              enum: ['Active', 'All'],
+              enum: ['All', 'Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction'],
               description: 'Status filter for the search'
             },
             flight: {
@@ -271,16 +271,21 @@ const options = {
             flight: {
               type: 'object',
               properties: {
-                id: { type: 'string' },
+                id: { 
+                  type: 'string',
+                  default: 'None',
+                  description: 'Flight ID'
+                },
                 status: {
                   type: 'string',
-                  enum: ['Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction'],
+                  enum: ['All', 'Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction'],
                   default: 'Active',
                   description: 'Current flight status'
                 },
                 group: { type: 'string' },
                 bus: {
                   type: 'string',
+                  default: 'None',
                   enum: ['None', 'Alpha1', 'Alpha2', 'Alpha3', 'Alpha4', 'Alpha5', 'Bravo1', 'Bravo2', 'Bravo3', 'Bravo4', 'Bravo5'],
                   description: 'Assigned bus'
                 },
@@ -369,13 +374,18 @@ const options = {
             app_date: { type: 'string' },
             vet_type: {
               type: 'string',
+              default: 'WWII',
               enum: ['WWII', 'Korea', 'Vietnam', 'Afghanistan', 'Iraq', 'Other'],
               description: 'Type of veteran/war conflict served'
             },
             shirt: {
               type: 'object',
               properties: {
-                size: { type: 'string' }
+                size: {
+                  type: 'string',
+                  default: 'None',
+                  enum: ['None', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+                },
               }
             },
             metadata: {
@@ -517,7 +527,7 @@ const options = {
             mail_call: {
               type: 'object',
               properties: {
-                received: { type: 'boolean', default: false },
+                received: { type: 'string' },
                 name: {
                   type: 'string',
                   pattern: '^[a-zA-Z\'. -]{2,}$'
@@ -561,14 +571,17 @@ const options = {
                 },
                 jacket_size: {
                   type: 'string',
-                  enum: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+                  default: 'None',
+                  enum: ['None', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
                 },
                 shirt_size: {
                   type: 'string',
-                  enum: ['WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+                  default: 'None',
+                  enum: ['None', 'WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
                 },
                 delivery: {
                   type: 'string',
+                  default: 'None',
                   enum: ['None', 'Mailed', 'Pickup', 'Delivered']
                 },
                 notes: { type: 'string' },
