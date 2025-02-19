@@ -1,0 +1,23 @@
+type: object
+properties:
+  total_rows:
+    type: integer
+    description: 'Total number of rows in the result set'
+  offset:
+    type: integer
+    description: 'Starting offset of the result set'
+  rows:
+    type: array
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 'Document ID'
+        key:
+          type: array
+          items:
+            type: string
+          description: 'Search key used for this result'
+        value:
+          $ref: '#/components/schemas/SearchResult' 
