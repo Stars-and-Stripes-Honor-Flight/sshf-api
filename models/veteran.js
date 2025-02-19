@@ -10,7 +10,7 @@ export class Veteran {
             nickname: data.name?.nickname || ''
         };
         this.birth_date = data.birth_date || '';
-        this.gender = data.gender || '';
+        this.gender = data.gender || 'M';
         this.address = {
             street: data.address?.street || '',
             city: data.address?.city || '',
@@ -29,10 +29,10 @@ export class Veteran {
             activity: data.service?.activity || ''
         };
         this.flight = {
-            id: data.flight?.id || '',
+            id: data.flight?.id || 'None',
             status: data.flight?.status || 'Active',
             group: data.flight?.group || '',
-            bus: data.flight?.bus || '',
+            bus: data.flight?.bus || 'None',
             seat: data.flight?.seat || '',
             confirmed_date: data.flight?.confirmed_date || '',
             confirmed_by: data.flight?.confirmed_by || '',
@@ -67,9 +67,9 @@ export class Veteran {
             history: data.guardian?.history || []
         };
         this.app_date = data.app_date || '';
-        this.vet_type = data.vet_type || '';
+        this.vet_type = data.vet_type || 'WWII';
         this.shirt = {
-            size: data.shirt?.size || ''
+            size: data.shirt?.size || 'None'
         };
         this.metadata = {
             created_at: data.metadata?.created_at || '',
@@ -124,7 +124,7 @@ export class Veteran {
         };
 
         this.mail_call = {
-            received: data.mail_call?.received || false,
+            received: data.mail_call?.received || '',
             name: data.mail_call?.name || '',
             notes: data.mail_call?.notes || '',
             adopt: data.mail_call?.adopt || '',
@@ -144,19 +144,19 @@ export class Veteran {
             history: data.call?.history || []
         };
 
-        this.media_interview_ok = data.media_interview_ok || 'No';
-        this.media_newspaper_ok = data.media_newspaper_ok || 'No';
+        this.media_interview_ok = data.media_interview_ok || 'Unknown';
+        this.media_newspaper_ok = data.media_newspaper_ok || 'Unknown';
 
         this.homecoming = {
             destination: data.homecoming?.destination || ''
         };
 
         this.apparel = {
-            jacket_size: data.apparel?.jacket_size || '',
+            jacket_size: data.apparel?.jacket_size || 'None',
             notes: data.apparel?.notes || '',
-            delivery: data.apparel?.delivery || '',
+            delivery: data.apparel?.delivery || 'None',
             item: data.apparel?.item || 'None',
-            shirt_size: data.apparel?.shirt_size || '',
+            shirt_size: data.apparel?.shirt_size || 'None',
             date: data.apparel?.date || '',
             by: data.apparel?.by || ''
         };
@@ -260,10 +260,10 @@ export class Veteran {
         }
 
         // Apparel validations
-        if (this.apparel.jacket_size && !['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(this.apparel.jacket_size)) {
+        if (this.apparel.jacket_size && !['None', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(this.apparel.jacket_size)) {
             errors.push('Invalid jacket size');
         }
-        if (this.apparel.shirt_size && !['WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(this.apparel.shirt_size)) {
+        if (this.apparel.shirt_size && !['None', 'WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'].includes(this.apparel.shirt_size)) {
             errors.push('Invalid shirt size');
         }
         if (this.apparel.delivery && !['None', 'Mailed', 'Pickup', 'Delivered'].includes(this.apparel.delivery)) {

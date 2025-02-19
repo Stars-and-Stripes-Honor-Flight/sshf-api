@@ -57,11 +57,13 @@ export async function createVeteran(req, res) {
             body: JSON.stringify(veteran.toJSON())
         });
 
-        const data = await response.json();
         if (!response.ok) {
+            const data = await response.json();
             throw new Error(data.reason || 'Failed to create veteran document');
         }
 
+        const data = await response.json();
+        
         // Update the veteran with the new _id and _rev
         veteran._id = data.id;
         veteran._rev = data.rev;
@@ -227,10 +229,12 @@ export async function updateVeteran(req, res) {
             body: JSON.stringify(updatedVeteran.toJSON())
         });
 
-        const data = await updateResponse.json();
         if (!updateResponse.ok) {
+            const data = await updateResponse.json();
             throw new Error(data.reason || 'Failed to update veteran');
         }
+
+        const data = await updateResponse.json();
 
         // Update the revision
         updatedVeteran._rev = data.rev;
