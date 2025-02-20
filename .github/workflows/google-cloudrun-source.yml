@@ -38,7 +38,7 @@ jobs:
         uses: 'google-github-actions/auth@v2'
         with:
           project_id: '${{ env.PROJECT_ID }}'
-          workload_identity_provider: 'projects/330507742215/locations/global/workloadIdentityPools/github/providers/github'
+          workload_identity_provider: 'projects/330507742215/locations/global/workloadIdentityPools/sshf-dev/providers/github'
 
       - name: 'Deploy to Cloud Run'
         uses: 'google-github-actions/deploy-cloudrun@33553064113a37d688aa6937bacbdc481580be17' # google-github-actions/deploy-cloudrun@v2
