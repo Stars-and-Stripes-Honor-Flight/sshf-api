@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "mocha",
-    "coverage": "c8 npm run test"
+    "test": "mocha --experimental-modules --es-module-specifier-resolution=node test/**/*.test.js",
+    "coverage": "c8 npm run test",
+    "report": "c8 report --reporter=text --reporter=html"
   },
   "nyc": {
     "include": [
@@ -25,7 +26,9 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.1",
     "google-auth-library": "^9.15.0",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0"
   },
   "type": "module",
   "devDependencies": {

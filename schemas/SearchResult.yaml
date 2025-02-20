@@ -1,0 +1,26 @@
+type: object
+properties:
+  type:
+    type: string
+    description: 'Type of the document'
+  name:
+    type: string
+    description: 'Name of the person'
+  city:
+    type: string
+    description: 'City of residence'
+  appdate:
+    type: string
+    description: 'Application date'
+  flight:
+    type: string
+    description: 'Flight assignment'
+  status:
+    type: string
+    description: 'Current status'
+  pairing:
+    type: string
+    description: 'Name of paired person'
+  pairingId:
+    type: string
+    description: 'ID of paired person' 

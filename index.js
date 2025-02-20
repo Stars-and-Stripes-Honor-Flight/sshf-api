@@ -3,6 +3,8 @@ import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
 import cookie from 'cookie';
+import { specs } from './swagger/swagger.js';
+import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
@@ -10,6 +12,7 @@ import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
+import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran } from './routes/veterans.js';
 
 const app = express();
 const port = 8080;
@@ -17,7 +20,9 @@ const port = 8080;
 // Define allowed origins for CORS
 const allowedOrigins = [
     'http://localhost:3000',
-    'https://sshf-ui-593951006010.us-central1.run.app'
+    'http://localhost:8080',
+    'https://sshf-ui-593951006010.us-central1.run.app',
+    'https://sshf-api-330507742215.us-central1.run.app'
 ];
 
 // Configure CORS options
@@ -36,7 +41,8 @@ app.use(cors(corsOptions));
 
 // In-memory cache
 const userCache = new Map();
-const cacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+const userCacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+const dbCacheTTL = 3 * 60 * 1000; // 3 minutes in milliseconds
 
 // Route definitions
 app.get('/secure-data', authenticate, getSecureData);
@@ -45,10 +51,26 @@ app.get("/msg", getMessage);
 app.get("/search", authenticate, dbSession, getSearch);
 app.use(express.json()); // for parsing application/json
 app.post("/msg", postMessage);
+
+// Generic document routes
 app.post("/docs", authenticate, dbSession, createDocument);
 app.get("/docs/:id", authenticate, dbSession, retrieveDocument);
 app.put("/docs/:id", authenticate, dbSession, updateDocument);
 app.delete("/docs/:id", authenticate, dbSession, deleteDocument);
+
+// Veteran-specific routes
+app.post("/veterans", authenticate, dbSession, createVeteran);
+app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
+app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
+app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
+
+// Expose OpenAPI spec at custom endpoint
+app.get('/openapi.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(specs);
+});
+
+app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 
 // Start the Express server
 app.listen(port, () => {
@@ -65,7 +87,7 @@ async function dbSession(req, res, next) {
         if (userCache.has(cacheKey)) {
             const cachedCookie = userCache.get(cacheKey);
             // Check if cache is expired
-            if (Date.now() - cachedCookie.timestamp < cacheTTL) {
+            if (Date.now() - cachedCookie.timestamp < dbCacheTTL) {
                 req.dbCookie = cachedCookie.cookie;
                 return next();
             } else {
@@ -142,7 +164,7 @@ async function authenticate(req, res, next) {
         if (userCache.has(token)) {
             const cachedData = userCache.get(token);
             // Check if cache is expired
-            if (Date.now() - cachedData.timestamp < cacheTTL) {
+            if (Date.now() - cachedData.timestamp < userCacheTTL) {
                 req.user = cachedData.user;
                 return next();
             } else {

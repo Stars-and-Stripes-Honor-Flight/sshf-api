@@ -1,0 +1,19 @@
+type: object
+properties:
+  limit:
+    type: integer
+    default: 25
+    description: 'Maximum number of results to return'
+  lastname:
+    type: string
+    default: ''
+    description: 'Last name to search for'
+  status:
+    type: string
+    default: 'Active'
+    enum: ['All', 'Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction']
+    description: 'Status filter for the search'
+  flight:
+    type: string
+    default: 'All'
+    description: 'Flight ID filter for the search' 
