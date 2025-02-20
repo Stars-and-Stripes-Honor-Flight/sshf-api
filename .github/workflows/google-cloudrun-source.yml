@@ -35,8 +35,9 @@ jobs:
       # including authenticating via a JSON credentials file.
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@f112390a2df9932162083945e46d439060d66ec2' # google-github-actions/auth@v2
+        uses: 'google-github-actions/auth@v2'
         with:
+          project_id: '${{ env.PROJECT_ID }}'
           workload_identity_provider: 'projects/330507742215/locations/global/workloadIdentityPools/github/providers/github'
 
       - name: 'Deploy to Cloud Run'
