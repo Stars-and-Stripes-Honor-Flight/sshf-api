@@ -70,7 +70,7 @@ jobs:
         with:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
-          token_format: 'access_token'
+          token_format: 'id_token'
           create_credentials_file: true
 
       - name: Deploy to Cloud Run
