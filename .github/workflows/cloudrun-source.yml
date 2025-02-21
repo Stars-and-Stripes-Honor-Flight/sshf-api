@@ -37,9 +37,6 @@
 name: Deploy to Cloud Run from Source
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     types: [closed]
     branches:
@@ -55,6 +52,8 @@ env:
 
 jobs:
   deploy:
+    # Only run if the PR is merged to main (removes the direct push condition)
+    if: github.event.pull_request.merged == true
     runs-on: 'ubuntu-latest'
 
     permissions:
