@@ -86,6 +86,7 @@ jobs:
       - name: 'Deploy to Cloud Run'
         uses: 'google-github-actions/deploy-cloudrun@v2'
         with:
+          project: '${{env.PROJECT_ID}}'
           service: '${{ env.SERVICE_NAME }}'
           region: '${{ env.REGION }}'
           # NOTE: If using a different source folder, update the image name below:
