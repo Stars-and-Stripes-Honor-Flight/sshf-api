@@ -14,6 +14,9 @@ env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   SERVICE_NAME: ${{ secrets.GCP_SERVICE_NAME }}
   REGION: ${{ secrets.GCP_REGION }}
+  WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
 
 jobs:
   deploy:
@@ -27,21 +30,40 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Log Project ID
+        run: echo "Project ID: ${{ env.PROJECT_ID }}"
+
+      - name: Log Service Name
+        run: echo "Service Name: ${{ env.SERVICE_NAME }}"
+
+      - name: Log Region
+        run: echo "Region: ${{ env.REGION }}"
+
+      - name: Log WIP
+        run: echo "Workload Identity Provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}"
+
+      - name: Log Service Account
+        run: echo "Service Account: ${{ env.SERVICE_ACCOUNT }}"
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.SERVICE_ACCOUNT }}
+        run: echo "Authenticated to Google Cloud"
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
+        run: echo "Cloud SDK set up"
 
       - name: Deploy to Cloud Run
         run: |
+          echo "Starting deployment to Cloud Run"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --source . \
             --region ${{ env.REGION }} \
             --platform managed \
             --allow-unauthenticated
+          echo "Deployment to Cloud Run completed"
