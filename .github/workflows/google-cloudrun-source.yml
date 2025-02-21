@@ -30,25 +30,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Log Project ID
+      - name: Check Secrets Population
         run: |
-          echo "Project ID: ${{ env.PROJECT_ID }}"
-
-      - name: Log Service Name
-        run: |
-          echo "Service Name: ${{ env.SERVICE_NAME }}"
-
-      - name: Log Region
-        run: |
-          echo "Region: ${{ env.REGION }}"
-
-      - name: Log WIP
-        run: |
-          echo "Workload Identity Provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}"
-
-      - name: Log Service Account
-        run: |
-          echo "Service Account: ${{ env.SERVICE_ACCOUNT }}"
+          echo "Project ID length: ${#PROJECT_ID}"
+          echo "Service Name length: ${#SERVICE_NAME}"
+          echo "Region length: ${#REGION}"
+          echo "WIP length: ${#WORKLOAD_IDENTITY_PROVIDER}"
+          echo "Service Account length: ${#SERVICE_ACCOUNT}"
+          
+          # Check if any are empty
+          [[ -z "$PROJECT_ID" ]] && echo "⚠️ PROJECT_ID is empty" || echo "✓ PROJECT_ID is set"
+          [[ -z "$SERVICE_NAME" ]] && echo "⚠️ SERVICE_NAME is empty" || echo "✓ SERVICE_NAME is set"
+          [[ -z "$REGION" ]] && echo "⚠️ REGION is empty" || echo "✓ REGION is set"
+          [[ -z "$WORKLOAD_IDENTITY_PROVIDER" ]] && echo "⚠️ WIP is empty" || echo "✓ WIP is set"
+          [[ -z "$SERVICE_ACCOUNT" ]] && echo "⚠️ SERVICE_ACCOUNT is empty" || echo "✓ SERVICE_ACCOUNT is set"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
