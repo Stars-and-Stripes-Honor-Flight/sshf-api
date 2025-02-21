@@ -72,6 +72,7 @@ jobs:
           service_account: ${{ env.SERVICE_ACCOUNT }}
           token_format: 'access_token'
           create_credentials_file: true
+          access_token_scopes: 'https://www.googleapis.com/auth/cloud-platform'
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
