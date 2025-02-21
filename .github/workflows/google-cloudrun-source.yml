@@ -30,6 +30,26 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Log Project ID
+        run: |
+          echo "Project ID: ${{ env.PROJECT_ID }}"
+
+      - name: Log Service Name
+        run: |
+          echo "Service Name: ${{ env.SERVICE_NAME }}"
+
+      - name: Log Region
+        run: |
+          echo "Region: ${{ env.REGION }}"
+
+      - name: Log WIP
+        run: |
+          echo "Workload Identity Provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}"
+
+      - name: Log Service Account
+        run: |
+          echo "Service Account: ${{ env.SERVICE_ACCOUNT }}"
+
       - name: Check Secrets Population
         run: |
           echo "Project ID length: ${#PROJECT_ID}"
@@ -51,17 +71,10 @@ jobs:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
-
       - name: Deploy to Cloud Run
-        run: |
-          echo "Starting deployment to Cloud Run"
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --source . \
-            --region ${{ env.REGION }} \
-            --platform managed \
-            --allow-unauthenticated
-          echo "Deployment to Cloud Run completed"
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          source: .
+          project_id: ${{ env.PROJECT_ID }}
