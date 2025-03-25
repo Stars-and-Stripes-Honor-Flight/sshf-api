@@ -3,6 +3,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
 import cookie from 'cookie';
+import { google } from 'googleapis';
 import { specs } from './swagger/swagger.js';
 import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 
@@ -128,22 +129,19 @@ async function dbSession(req, res, next) {
 
 async function getGroupMemberships(token, userData) {
     try {
-        // Fetch user's groups from Google Workspace Directory API
-        const response = await fetch(
-        `https://admin.googleapis.com/admin/directory/v1/groups?userKey=${userData.sub}`,
-        {
-            headers: {
-            Authorization: `Bearer ${token}`,
-            },
-        }
-        );
+        // Create an OAuth2 client with the token
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: token });
 
-        if (!response.ok) {
-        throw new Error('Failed to fetch group memberships');
-        }
+        // Create the Admin SDK client
+        const admin = google.admin({ version: 'directory_v1', auth: oauth2Client });
 
-        const data = await response.json();
-        return data.groups || [];
+        // Fetch user's groups using the Admin SDK
+        const response = await admin.groups.list({
+            userKey: userData.id
+        });
+
+        return response.data.groups || [];
     } catch (error) {
         console.error('Error fetching groups:', error);
         return [];
@@ -174,17 +172,17 @@ async function authenticate(req, res, next) {
         }
 
         // Fetch basic user info
-        const userResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: {
-            Authorization: `Bearer ${token}`,
-            },
-        });
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: token });
 
-        if (!userResponse.ok) {
+        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+        const userResponse = await oauth2.userinfo.get();
+
+        if (!userResponse.data) {
             throw new Error('Failed to fetch user info');
         }
 
-        const userData = await userResponse.json();
+        const userData = userResponse.data;
 
         // Fetch group memberships
         const groups = await getGroupMemberships(token, userData);

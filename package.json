@@ -25,6 +25,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.1",
+    "googleapis": "^148.0.0",
     "google-auth-library": "^9.15.0",
     "node-fetch": "^3.3.2",
     "swagger-jsdoc": "^6.2.8",
