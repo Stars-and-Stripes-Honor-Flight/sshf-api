@@ -135,9 +135,7 @@ async function getGroupMemberships(token, userData) {
             key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
             scopes: [
                 'https://www.googleapis.com/auth/admin.directory.group.readonly'
-            ],
-            // Specify the user to impersonate (should be a Google Workspace admin)
-            subject: process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL
+            ]
         });
 
         // Create the Admin Directory API client with the delegated service account
