@@ -127,7 +127,7 @@ async function dbSession(req, res, next) {
     }
 }
 
-async function getGroupMemberships(token, userData) {
+async function getGroupMemberships(userData) {
     try {
         
         // First try using Application Default Credentials (will work in Cloud Run)
@@ -234,7 +234,7 @@ async function authenticate(req, res, next) {
         const userData = userResponse.data;
 
         // Fetch group memberships
-        const groups = await getGroupMemberships(token, userData);
+        const groups = await getGroupMemberships(userData);
 
         // Map groups to roles (customize this based on your needs)
         const roles = groups.map(group => ({
