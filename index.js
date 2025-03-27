@@ -129,21 +129,39 @@ async function dbSession(req, res, next) {
 
 async function getGroupMemberships(token, userData) {
     try {
-        // Create an OAuth2 client with the token
-        const oauth2Client = new google.auth.OAuth2();
-        oauth2Client.setCredentials({ access_token: token });
+        // Create a JWT client using the service account credentials with domain-wide delegation
+        const auth = new google.auth.JWT({
+            email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+            key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
+            scopes: [
+                'https://www.googleapis.com/auth/admin.directory.group.readonly'
+            ],
+            // Specify the user to impersonate (should be a Google Workspace admin)
+            subject: process.env.GOOGLE_WORKSPACE_ADMIN_EMAIL
+        });
 
-        // Create the Admin SDK client
-        const admin = google.admin({ version: 'directory_v1', auth: oauth2Client });
+        // Create the Admin Directory API client with the delegated service account
+        const admin = google.admin({ version: 'directory_v1', auth });
 
-        // Fetch user's groups using the Admin SDK
+        // Extract domain from user's email
+        const domain = userData.email.split('@')[1];
+
+        // Fetch all groups the user is a member of
         const response = await admin.groups.list({
-            userKey: userData.id
+            userKey: userData.email,
+            domain: domain,
+            maxResults: 100
         });
 
         return response.data.groups || [];
     } catch (error) {
-        console.error('Error fetching groups:', error);
+        console.error('Error fetching groups:', error.message);
+        if (error.response) {
+            console.error('Error details:', {
+                status: error.response.status,
+                data: error.response.data
+            });
+        }
         return [];
     }
 }
