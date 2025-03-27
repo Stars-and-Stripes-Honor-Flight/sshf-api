@@ -129,14 +129,12 @@ async function dbSession(req, res, next) {
 
 async function getGroupMemberships(token, userData) {
     try {
-        // Create a JWT client using the service account credentials with domain-wide delegation
-        const auth = new google.auth.JWT({
-            email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-            key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
-            scopes: [
-                'https://www.googleapis.com/auth/admin.directory.group.readonly'
-            ]
+        
+        // First try using Application Default Credentials (will work in Cloud Run)
+        const auth = new google.auth.GoogleAuth({
+            scopes: ['https://www.googleapis.com/auth/admin.directory.group.readonly']
         });
+        console.log('Using Application Default Credentials for authentication');
 
         // Create the Admin Directory API client with the delegated service account
         const admin = google.admin({ version: 'directory_v1', auth });
@@ -152,14 +150,49 @@ async function getGroupMemberships(token, userData) {
         });
 
         return response.data.groups || [];
+
     } catch (error) {
-        console.error('Error fetching groups:', error.message);
-        if (error.response) {
-            console.error('Error details:', {
-                status: error.response.status,
-                data: error.response.data
-            });
+
+        try{
+            if (error.message.includes('Could not load the default credentials')) {
+
+                console.log('ADC authentication failed, falling back to JWT with env vars:', error.message);
+                
+                // Fall back to JWT with explicit credentials (for local development)
+                const auth = new google.auth.JWT({
+                    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+                    key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                    scopes: [
+                        'https://www.googleapis.com/auth/admin.directory.group.readonly'
+                    ]
+                });
+
+                // Create the Admin Directory API client with the delegated service account
+                const admin = google.admin({ version: 'directory_v1', auth });
+
+                // Extract domain from user's email
+                const domain = userData.email.split('@')[1];
+
+                // Fetch all groups the user is a member of
+                const response = await admin.groups.list({
+                    userKey: userData.email,
+                    domain: domain,
+                    maxResults: 100
+                });
+
+                return response.data.groups || [];
+            }
+        } catch (error) {
+            console.error('Error fetching groups:', error.message);
+            if (error.response) {
+                console.error('Error details:', {
+                    status: error.response.status,
+                    data: error.response.data
+                });
+            }
+
         }
+
         return [];
     }
 }
