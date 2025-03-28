@@ -189,6 +189,154 @@ describe('Guardian Model', () => {
             expect(guardian.call.history).to.be.an('array').that.is.empty;
         });
 
+        it('should initialize notes field with default values', () => {
+            const guardian = new Guardian();
+            
+            // Test notes initialization
+            expect(guardian.notes).to.be.an('object');
+            expect(guardian.notes.other).to.equal('');
+            expect(guardian.notes.service).to.equal('N');
+        });
+
+        it('should initialize occupation field with default values', () => {
+            const guardian = new Guardian();
+            
+            // Test occupation initialization
+            expect(guardian.occupation).to.equal('');
+        });
+
+        it('should initialize accommodations field with default values', () => {
+            const guardian = new Guardian();
+            
+            // Test accommodations initialization
+            expect(guardian.accommodations).to.be.an('object');
+            expect(guardian.accommodations.departure_time).to.equal('');
+            expect(guardian.accommodations.arrival_date).to.equal('');
+            expect(guardian.accommodations.notes).to.equal('');
+            expect(guardian.accommodations.departure_date).to.equal('');
+            expect(guardian.accommodations.arrival_flight).to.equal('');
+            expect(guardian.accommodations.attend_banquette).to.equal('');
+            expect(guardian.accommodations.departure_flight).to.equal('');
+            expect(guardian.accommodations.arrival_time).to.equal('');
+            expect(guardian.accommodations.banquette_guest).to.equal('');
+            expect(guardian.accommodations.room_type).to.equal('None');
+            expect(guardian.accommodations.hotel_name).to.equal('');
+        });
+
+        it('should initialize apparel field with default values', () => {
+            const guardian = new Guardian();
+            
+            // Test apparel initialization
+            expect(guardian.apparel).to.be.an('object');
+            expect(guardian.apparel.jacket_size).to.equal('None');
+            expect(guardian.apparel.notes).to.equal('');
+            expect(guardian.apparel.delivery).to.equal('None');
+            expect(guardian.apparel.item).to.equal('None');
+            expect(guardian.apparel.shirt_size).to.equal('None');
+            expect(guardian.apparel.date).to.equal('');
+            expect(guardian.apparel.by).to.equal('');
+        });
+
+        it('should initialize properties with provided values', () => {
+            const data = {
+                notes: {
+                    other: 'Some notes',
+                    service: 'Y'
+                },
+                occupation: 'Engineer',
+                accommodations: {
+                    departure_time: '14:00',
+                    arrival_date: '2024-05-01',
+                    notes: 'Early check-in',
+                    departure_date: '2024-05-05',
+                    arrival_flight: 'AA123',
+                    attend_banquette: 'Yes',
+                    departure_flight: 'AA456',
+                    arrival_time: '10:00',
+                    banquette_guest: 'Jane Smith',
+                    room_type: 'Double',
+                    hotel_name: 'Grand Hotel'
+                },
+                mail_call: {
+                    received: 'Yes',
+                    name: 'John Doe',
+                    notes: 'Priority mail',
+                    relation: 'Son',
+                    address: {
+                        phone: '217-555-9876',
+                        email: 'john.doe@example.com'
+                    }
+                },
+                call: {
+                    fm_number: 'FM456',
+                    notes: 'Call in evening',
+                    email_sent: true,
+                    assigned_to: 'Jane Smith',
+                    mail_sent: true,
+                    history: [{ id: '2024-01-01T12:00:00Z', change: 'Initial call' }]
+                },
+                apparel: {
+                    jacket_size: 'XL',
+                    notes: 'Prefers dark colors',
+                    delivery: 'Mailed',
+                    item: 'Jacket',
+                    shirt_size: 'L',
+                    date: '2024-01-15',
+                    by: 'Jane Smith'
+                }
+            };
+
+            const guardian = new Guardian(data);
+            
+            // Test notes initialization from data
+            expect(guardian.notes.other).to.equal('Some notes');
+            expect(guardian.notes.service).to.equal('Y');
+            
+            // Test occupation initialization from data
+            expect(guardian.occupation).to.equal('Engineer');
+            
+            // Test accommodations initialization from data
+            expect(guardian.accommodations.departure_time).to.equal('14:00');
+            expect(guardian.accommodations.arrival_date).to.equal('2024-05-01');
+            expect(guardian.accommodations.notes).to.equal('Early check-in');
+            expect(guardian.accommodations.departure_date).to.equal('2024-05-05');
+            expect(guardian.accommodations.arrival_flight).to.equal('AA123');
+            expect(guardian.accommodations.attend_banquette).to.equal('Yes');
+            expect(guardian.accommodations.departure_flight).to.equal('AA456');
+            expect(guardian.accommodations.arrival_time).to.equal('10:00');
+            expect(guardian.accommodations.banquette_guest).to.equal('Jane Smith');
+            expect(guardian.accommodations.room_type).to.equal('Double');
+            expect(guardian.accommodations.hotel_name).to.equal('Grand Hotel');
+            
+            // Test mail_call initialization from data
+            expect(guardian.mail_call.received).to.equal('Yes');
+            expect(guardian.mail_call.name).to.equal('John Doe');
+            expect(guardian.mail_call.notes).to.equal('Priority mail');
+            expect(guardian.mail_call.relation).to.equal('Son');
+            expect(guardian.mail_call.address.phone).to.equal('217-555-9876');
+            expect(guardian.mail_call.address.email).to.equal('john.doe@example.com');
+            
+            // Test call initialization from data
+            expect(guardian.call.fm_number).to.equal('FM456');
+            expect(guardian.call.notes).to.equal('Call in evening');
+            expect(guardian.call.email_sent).to.be.true;
+            expect(guardian.call.assigned_to).to.equal('Jane Smith');
+            expect(guardian.call.mail_sent).to.be.true;
+            expect(guardian.call.history).to.deep.equal([{ 
+                id: '2024-01-01T12:00:00Z', 
+                change: 'Initial call' 
+            }]);
+            
+            // Test apparel initialization from data
+            expect(guardian.apparel.jacket_size).to.equal('XL');
+            expect(guardian.apparel.notes).to.equal('Prefers dark colors');
+            expect(guardian.apparel.delivery).to.equal('Mailed');
+            expect(guardian.apparel.item).to.equal('Jacket');
+            expect(guardian.apparel.shirt_size).to.equal('L');
+            expect(guardian.apparel.date).to.equal('2024-01-15');
+            expect(guardian.apparel.by).to.equal('Jane Smith');
+        });
+
         it('should properly initialize fields from provided data', () => {
             const data = {
                 veteran: {
@@ -230,6 +378,58 @@ describe('Guardian Model', () => {
             expect(guardian.metadata.created_by).to.equal('John Admin');
             expect(guardian.metadata.updated_at).to.equal('2024-01-02T12:00:00Z');
             expect(guardian.metadata.updated_by).to.equal('Jane Admin');
+        });
+
+        it('should initialize emergency contact fields with provided values', () => {
+            const data = {
+                emerg_contact: {
+                    name: 'Robert Smith',
+                    relation: 'Brother',
+                    address: {
+                        phone: '217-555-7890',
+                        email: 'robert.smith@example.com'
+                    }
+                }
+            };
+            
+            const guardian = new Guardian(data);
+            
+            expect(guardian.emerg_contact.name).to.equal('Robert Smith');
+            expect(guardian.emerg_contact.relation).to.equal('Brother');
+            expect(guardian.emerg_contact.address.phone).to.equal('217-555-7890');
+            expect(guardian.emerg_contact.address.email).to.equal('robert.smith@example.com');
+        });
+
+        it('should initialize emergency contact with partial data', () => {
+            // Test with some missing nested properties
+            const data = {
+                emerg_contact: {
+                    name: 'Robert Smith',
+                    relation: 'Brother',
+                    // address object missing
+                }
+            };
+            
+            const guardian = new Guardian(data);
+            
+            expect(guardian.emerg_contact.name).to.equal('Robert Smith');
+            expect(guardian.emerg_contact.relation).to.equal('Brother');
+            expect(guardian.emerg_contact.address).to.be.an('object');
+            expect(guardian.emerg_contact.address.phone).to.equal('');
+            expect(guardian.emerg_contact.address.email).to.equal('');
+            
+            // Test with empty address object
+            const data2 = {
+                emerg_contact: {
+                    name: 'Robert Smith',
+                    relation: 'Brother',
+                    address: {}
+                }
+            };
+            
+            const guardian2 = new Guardian(data2);
+            expect(guardian2.emerg_contact.address.phone).to.equal('');
+            expect(guardian2.emerg_contact.address.email).to.equal('');
         });
     });
 
