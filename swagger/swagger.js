@@ -58,7 +58,8 @@ const options = {
         SearchResult: loadSchema('SearchResult'),
         SearchResults: loadSchema('SearchResults'),
         Error: loadSchema('Error'),
-        Veteran: loadSchema('Veteran')
+        Veteran: loadSchema('Veteran'),
+        Guardian: loadSchema('Guardian')
       }
     },
     security: [
