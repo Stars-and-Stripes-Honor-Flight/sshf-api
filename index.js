@@ -13,6 +13,7 @@ import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
 import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran } from './routes/veterans.js';
+import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian } from './routes/guardians.js';
 
 const app = express();
 const port = 8080;
@@ -63,6 +64,12 @@ app.post("/veterans", authenticate, dbSession, createVeteran);
 app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
 app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
 app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
+
+// Guardian-specific routes
+app.post("/guardians", authenticate, dbSession, createGuardian);
+app.get("/guardians/:id", authenticate, dbSession, retrieveGuardian);
+app.put("/guardians/:id", authenticate, dbSession, updateGuardian);
+app.delete("/guardians/:id", authenticate, dbSession, deleteGuardian);
 
 // Expose OpenAPI spec at custom endpoint
 app.get('/openapi.json', (req, res) => {
