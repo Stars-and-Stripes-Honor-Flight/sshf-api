@@ -3,6 +3,7 @@ import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
 import cookie from 'cookie';
+import { google } from 'googleapis';
 import { specs } from './swagger/swagger.js';
 import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 
@@ -133,26 +134,72 @@ async function dbSession(req, res, next) {
     }
 }
 
-async function getGroupMemberships(token, userData) {
+async function getGroupMemberships(userData) {
     try {
-        // Fetch user's groups from Google Workspace Directory API
-        const response = await fetch(
-        `https://admin.googleapis.com/admin/directory/v1/groups?userKey=${userData.sub}`,
-        {
-            headers: {
-            Authorization: `Bearer ${token}`,
-            },
-        }
-        );
+        
+        // First try using Application Default Credentials (will work in Cloud Run)
+        const auth = new google.auth.GoogleAuth({
+            scopes: ['https://www.googleapis.com/auth/admin.directory.group.readonly']
+        });
+        console.log('Using Application Default Credentials for authentication');
 
-        if (!response.ok) {
-        throw new Error('Failed to fetch group memberships');
-        }
+        // Create the Admin Directory API client with the delegated service account
+        const admin = google.admin({ version: 'directory_v1', auth });
 
-        const data = await response.json();
-        return data.groups || [];
+        // Extract domain from user's email
+        const domain = userData.email.split('@')[1];
+
+        // Fetch all groups the user is a member of
+        const response = await admin.groups.list({
+            userKey: userData.email,
+            domain: domain,
+            maxResults: 100
+        });
+
+        return response.data.groups || [];
+
     } catch (error) {
-        console.error('Error fetching groups:', error);
+
+        try{
+            if (error.message.includes('Could not load the default credentials')) {
+
+                console.log('ADC authentication failed, falling back to JWT with env vars:', error.message);
+                
+                // Fall back to JWT with explicit credentials (for local development)
+                const auth = new google.auth.JWT({
+                    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+                    key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                    scopes: [
+                        'https://www.googleapis.com/auth/admin.directory.group.readonly'
+                    ]
+                });
+
+                // Create the Admin Directory API client with the delegated service account
+                const admin = google.admin({ version: 'directory_v1', auth });
+
+                // Extract domain from user's email
+                const domain = userData.email.split('@')[1];
+
+                // Fetch all groups the user is a member of
+                const response = await admin.groups.list({
+                    userKey: userData.email,
+                    domain: domain,
+                    maxResults: 100
+                });
+
+                return response.data.groups || [];
+            }
+        } catch (error) {
+            console.error('Error fetching groups:', error.message);
+            if (error.response) {
+                console.error('Error details:', {
+                    status: error.response.status,
+                    data: error.response.data
+                });
+            }
+
+        }
+
         return [];
     }
 }
@@ -181,20 +228,20 @@ async function authenticate(req, res, next) {
         }
 
         // Fetch basic user info
-        const userResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: {
-            Authorization: `Bearer ${token}`,
-            },
-        });
+        const oauth2Client = new google.auth.OAuth2();
+        oauth2Client.setCredentials({ access_token: token });
 
-        if (!userResponse.ok) {
+        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+        const userResponse = await oauth2.userinfo.get();
+
+        if (!userResponse.data) {
             throw new Error('Failed to fetch user info');
         }
 
-        const userData = await userResponse.json();
+        const userData = userResponse.data;
 
         // Fetch group memberships
-        const groups = await getGroupMemberships(token, userData);
+        const groups = await getGroupMemberships(userData);
 
         // Map groups to roles (customize this based on your needs)
         const roles = groups.map(group => ({
