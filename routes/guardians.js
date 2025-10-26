@@ -214,6 +214,19 @@ export async function updateGuardian(req, res) {
             _id: docId,
             _rev: currentDoc._rev
         });
+        
+        // Preserve server-controlled fields
+        updatedGuardian.type = 'Guardian'; // Force type to remain "Guardian"
+        
+        // Preserve metadata creation fields from current document
+        updatedGuardian.metadata.created_at = currentGuardian.metadata.created_at;
+        updatedGuardian.metadata.created_by = currentGuardian.metadata.created_by;
+        
+        // Preserve history arrays from current document
+        updatedGuardian.flight.history = currentGuardian.flight.history;
+        updatedGuardian.veteran.history = currentGuardian.veteran.history;
+        updatedGuardian.call.history = currentGuardian.call.history;
+        
         updatedGuardian.updateHistory(currentGuardian, req.user);
         updatedGuardian.prepareForSave(req.user);
         updatedGuardian.validate();

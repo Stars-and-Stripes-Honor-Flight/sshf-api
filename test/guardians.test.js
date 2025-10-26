@@ -282,6 +282,83 @@ describe('Guardians Route Handlers', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian for update');
         });
+
+        it('should preserve server-controlled fields during update', async () => {
+            // Mock current document with server-controlled fields
+            const currentDoc = {
+                _id: 'test-id',
+                _rev: '1-abc',
+                type: 'Guardian',
+                name: { first: 'John', last: 'Smith' },
+                address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                metadata: {
+                    created_at: '2023-01-01T12:00:00Z',
+                    created_by: 'Original User',
+                    updated_at: '2023-01-01T12:00:00Z',
+                    updated_by: 'Original User'
+                },
+                flight: {
+                    history: [{ id: '2023-01-01T12:00:00Z', change: 'Original flight assignment' }]
+                },
+                veteran: {
+                    history: [{ id: '2023-01-01T12:00:00Z', change: 'Original veteran assignment' }]
+                },
+                call: {
+                    history: [{ id: '2023-01-01T12:00:00Z', change: 'Original call assignment' }]
+                }
+            };
+
+            // Client tries to overwrite server-controlled fields
+            req.body = {
+                type: 'Veteran', // Try to change type
+                metadata: {
+                    created_at: '2024-01-01T12:00:00Z', // Try to change creation metadata
+                    created_by: 'Hacker User'
+                },
+                flight: {
+                    history: [{ id: '2024-01-01T12:00:00Z', change: 'Hacked flight history' }]
+                },
+                veteran: {
+                    history: [{ id: '2024-01-01T12:00:00Z', change: 'Hacked veteran history' }]
+                },
+                call: {
+                    history: [{ id: '2024-01-01T12:00:00Z', change: 'Hacked call history' }]
+                },
+                name: { first: 'Jane', last: 'Doe' }, // Valid change
+                address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' } // Required fields
+            };
+
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => currentDoc
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                json: async () => ({ id: 'test-id', rev: '2-def' })
+            });
+
+            await updateGuardian(req, res);
+
+            expect(res.json.called).to.be.true;
+            const response = res.json.firstCall.args[0];
+            
+            // Verify server-controlled fields are preserved
+            expect(response.type).to.equal('Guardian'); // Should remain "Guardian"
+            expect(response.metadata.created_at).to.equal('2023-01-01T12:00:00Z'); // Should be preserved
+            expect(response.metadata.created_by).to.equal('Original User'); // Should be preserved
+            expect(response.flight.history).to.deep.equal([{ id: '2023-01-01T12:00:00Z', change: 'Original flight assignment' }]); // Should be preserved
+            expect(response.veteran.history).to.deep.equal([{ id: '2023-01-01T12:00:00Z', change: 'Original veteran assignment' }]); // Should be preserved
+            expect(response.call.history).to.deep.equal([{ id: '2023-01-01T12:00:00Z', change: 'Original call assignment' }]); // Should be preserved
+            
+            // Verify client changes are applied to non-server-controlled fields
+            expect(response.name.first).to.equal('Jane');
+            expect(response.name.last).to.equal('Doe');
+            
+            // Verify updated_at and updated_by are set by prepareForSave
+            expect(response.metadata.updated_at).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+            expect(response.metadata.updated_by).to.equal('Admin User');
+        });
     });
 
     describe('deleteGuardian', () => {
