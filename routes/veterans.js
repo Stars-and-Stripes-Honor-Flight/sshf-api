@@ -214,6 +214,19 @@ export async function updateVeteran(req, res) {
             _id: docId,
             _rev: currentDoc._rev
         });
+        
+        // Preserve server-controlled fields
+        updatedVeteran.type = 'Veteran'; // Force type to remain "Veteran"
+        
+        // Preserve metadata creation fields from current document
+        updatedVeteran.metadata.created_at = currentVeteran.metadata.created_at;
+        updatedVeteran.metadata.created_by = currentVeteran.metadata.created_by;
+        
+        // Preserve history arrays from current document
+        updatedVeteran.flight.history = currentVeteran.flight.history;
+        updatedVeteran.guardian.history = currentVeteran.guardian.history;
+        updatedVeteran.call.history = currentVeteran.call.history;
+        
         updatedVeteran.updateHistory(currentVeteran, req.user);
         updatedVeteran.prepareForSave(req.user);
         updatedVeteran.validate();
