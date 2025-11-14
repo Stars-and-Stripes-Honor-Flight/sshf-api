@@ -15,6 +15,7 @@ import { getSearch } from './routes/search.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
 import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran } from './routes/veterans.js';
 import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian } from './routes/guardians.js';
+import { listFlights, createFlight, retrieveFlight, updateFlight } from './routes/flights.js';
 
 const app = express();
 const port = 8080;
@@ -71,6 +72,12 @@ app.post("/guardians", authenticate, dbSession, createGuardian);
 app.get("/guardians/:id", authenticate, dbSession, retrieveGuardian);
 app.put("/guardians/:id", authenticate, dbSession, updateGuardian);
 app.delete("/guardians/:id", authenticate, dbSession, deleteGuardian);
+
+// Flight-specific routes
+app.get("/flights", authenticate, dbSession, listFlights);
+app.post("/flights", authenticate, dbSession, createFlight);
+app.get("/flights/:id", authenticate, dbSession, retrieveFlight);
+app.put("/flights/:id", authenticate, dbSession, updateFlight);
 
 // Expose OpenAPI spec at custom endpoint
 app.get('/openapi.json', (req, res) => {
