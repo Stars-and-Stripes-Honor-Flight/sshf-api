@@ -13,7 +13,7 @@ import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
-import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran } from './routes/veterans.js';
+import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran, searchUnpairedVeterans } from './routes/veterans.js';
 import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian } from './routes/guardians.js';
 import { listFlights, createFlight, retrieveFlight, updateFlight } from './routes/flights.js';
 
@@ -63,6 +63,7 @@ app.delete("/docs/:id", authenticate, dbSession, deleteDocument);
 
 // Veteran-specific routes
 app.post("/veterans", authenticate, dbSession, createVeteran);
+app.get("/veterans/search", authenticate, dbSession, searchUnpairedVeterans);
 app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
 app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
 app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
