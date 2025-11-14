@@ -1,4 +1,5 @@
 import { Guardian } from '../models/guardian.js';
+import { Veteran } from '../models/veteran.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -144,6 +145,117 @@ export async function retrieveGuardian(req, res) {
 }
 
 /**
+ * Constructs a full name from first and last name
+ * @param {Object} name - Name object with first and last properties
+ * @returns {string} Full name in format "First Last"
+ */
+function constructGuardianFullName(name) {
+    return `${name.first || ''} ${name.last || ''}`.trim();
+}
+
+/**
+ * Updates a veteran's guardian reference when pairing changes
+ * @param {string} veteranId - ID of the veteran to update
+ * @param {string} guardianId - ID of the guardian
+ * @param {string} guardianName - Full name of the guardian
+ * @param {string} action - 'add' or 'remove'
+ * @param {Object} user - User object with firstName and lastName
+ * @param {string} timestamp - Timestamp in yyyy-MM-DDThh:mm:ssZ format
+ * @param {string} dbCookie - Database session cookie
+ * @returns {Promise<{success: boolean, error?: string, veteranName?: string}>}
+ */
+async function updateVeteranGuardianReference(veteranId, guardianId, guardianName, action, user, timestamp, dbCookie) {
+    try {
+        const veteranUrl = `${dbUrl}/${dbName}/${veteranId}`;
+        
+        // Fetch the current veteran document
+        const getVeteranResponse = await fetch(veteranUrl, {
+            headers: {
+                'Cookie': dbCookie,
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!getVeteranResponse.ok) {
+            if (getVeteranResponse.status === 404) {
+                return { success: false, error: `Veteran ${veteranId} not found` };
+            }
+            const errorData = await getVeteranResponse.json();
+            return { success: false, error: errorData.reason || 'Failed to get veteran' };
+        }
+
+        const currentVeteranDoc = await getVeteranResponse.json();
+        
+        // Verify this is a veteran document
+        if (currentVeteranDoc.type !== 'Veteran') {
+            return { success: false, error: `Document ${veteranId} is not a veteran record` };
+        }
+
+        const currentVeteran = Veteran.fromJSON(currentVeteranDoc);
+        const veteranName = `${currentVeteran.name.first} ${currentVeteran.name.last}`.trim();
+
+        // Create updated veteran object
+        const updatedVeteran = new Veteran({
+            ...currentVeteranDoc,
+            _id: veteranId,
+            _rev: currentVeteranDoc._rev
+        });
+
+        // Preserve server-controlled fields
+        updatedVeteran.type = 'Veteran';
+        updatedVeteran.metadata.created_at = currentVeteran.metadata.created_at;
+        updatedVeteran.metadata.created_by = currentVeteran.metadata.created_by;
+        
+        // Preserve history arrays from current document
+        updatedVeteran.flight.history = currentVeteran.flight.history;
+        updatedVeteran.call.history = currentVeteran.call.history;
+        updatedVeteran.guardian.history = currentVeteran.guardian.history;
+        updatedVeteran.guardian.pref_notes = currentVeteran.guardian.pref_notes;
+
+        // Update guardian reference based on action
+        const userName = `${user.firstName} ${user.lastName}`;
+        if (action === 'add') {
+            updatedVeteran.guardian.id = guardianId;
+            updatedVeteran.guardian.name = guardianName;
+            updatedVeteran.guardian.history.push({
+                id: timestamp,
+                change: `paired to: ${guardianName} by: ${userName}`
+            });
+        } else if (action === 'remove') {
+            updatedVeteran.guardian.id = '';
+            updatedVeteran.guardian.name = '';
+            updatedVeteran.guardian.history.push({
+                id: timestamp,
+                change: `unpaired from: ${guardianName} by: ${userName}`
+            });
+        }
+
+        updatedVeteran.prepareForSave(user);
+        updatedVeteran.validate();
+
+        // Update the veteran document
+        const updateVeteranResponse = await fetch(veteranUrl, {
+            method: 'PUT',
+            headers: {
+                'Cookie': dbCookie,
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updatedVeteran.toJSON())
+        });
+
+        if (!updateVeteranResponse.ok) {
+            const errorData = await updateVeteranResponse.json();
+            return { success: false, error: errorData.reason || 'Failed to update veteran' };
+        }
+
+        return { success: true, veteranName };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * @swagger
  * /guardians/{id}:
  *   put:
@@ -226,6 +338,78 @@ export async function updateGuardian(req, res) {
         updatedGuardian.flight.history = currentGuardian.flight.history;
         updatedGuardian.veteran.history = currentGuardian.veteran.history;
         updatedGuardian.call.history = currentGuardian.call.history;
+        
+        // Handle veteran pairing changes
+        const currentPairings = currentGuardian.veteran.pairings || [];
+        const newPairings = updatedGuardian.veteran.pairings || [];
+        
+        // Extract IDs for comparison
+        const currentPairingIds = new Set(currentPairings.map(p => p.id));
+        const newPairingIds = new Set(newPairings.map(p => p.id));
+        
+        // Identify added and removed veterans
+        const addedVeterans = newPairings.filter(p => !currentPairingIds.has(p.id));
+        const removedVeterans = currentPairings.filter(p => !newPairingIds.has(p.id));
+        
+        // Generate timestamp for history entries
+        const now = new Date();
+        const timestamp = now.toISOString().split('.')[0] + 'Z';
+        const guardianName = constructGuardianFullName(updatedGuardian.name);
+        const userName = `${req.user.firstName} ${req.user.lastName}`;
+        const errors = [];
+        
+        // Process added veterans
+        for (const pairing of addedVeterans) {
+            const result = await updateVeteranGuardianReference(
+                pairing.id,
+                docId,
+                guardianName,
+                'add',
+                req.user,
+                timestamp,
+                req.dbCookie
+            );
+            
+            if (result.success) {
+                // Add history entry to guardian
+                updatedGuardian.veteran.history.push({
+                    id: timestamp,
+                    change: `paired to: ${result.veteranName} by: ${userName}`
+                });
+            } else {
+                errors.push(`Failed to add pairing for veteran ${pairing.id}: ${result.error}`);
+                console.warn(`Guardian pairing sync warning: ${result.error}`);
+            }
+        }
+        
+        // Process removed veterans
+        for (const pairing of removedVeterans) {
+            const result = await updateVeteranGuardianReference(
+                pairing.id,
+                docId,
+                guardianName,
+                'remove',
+                req.user,
+                timestamp,
+                req.dbCookie
+            );
+            
+            if (result.success) {
+                // Add history entry to guardian
+                updatedGuardian.veteran.history.push({
+                    id: timestamp,
+                    change: `unpaired from: ${result.veteranName} by: ${userName}`
+                });
+            } else {
+                errors.push(`Failed to remove pairing for veteran ${pairing.id}: ${result.error}`);
+                console.warn(`Guardian pairing sync warning: ${result.error}`);
+            }
+        }
+        
+        // Log any errors but don't fail the entire update
+        if (errors.length > 0) {
+            console.error('Guardian pairing synchronization errors:', errors);
+        }
         
         updatedGuardian.updateHistory(currentGuardian, req.user);
         updatedGuardian.prepareForSave(req.user);
