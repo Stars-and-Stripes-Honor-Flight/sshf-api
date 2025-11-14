@@ -1,0 +1,20 @@
+type: array
+items:
+  type: object
+  properties:
+    id:
+      type: string
+      description: 'Document ID'
+    name:
+      type: string
+      description: 'Full name of the veteran (first + last)'
+    city:
+      type: string
+      description: 'City and state of residence (city, state)'
+    flight:
+      type: string
+      description: 'Flight ID assignment'
+    prefs:
+      type: string
+      description: 'Guardian preference notes'
+

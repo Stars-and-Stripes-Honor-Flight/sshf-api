@@ -60,7 +60,9 @@ const options = {
         Error: loadSchema('Error'),
         Veteran: loadSchema('Veteran'),
         Guardian: loadSchema('Guardian'),
-        Flight: loadSchema('Flight')
+        Flight: loadSchema('Flight'),
+        UnpairedVeteranResult: loadSchema('UnpairedVeteranResult'),
+        UnpairedVeteranResults: loadSchema('UnpairedVeteranResults')
       }
     },
     security: [
