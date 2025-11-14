@@ -59,7 +59,8 @@ const options = {
         SearchResults: loadSchema('SearchResults'),
         Error: loadSchema('Error'),
         Veteran: loadSchema('Veteran'),
-        Guardian: loadSchema('Guardian')
+        Guardian: loadSchema('Guardian'),
+        Flight: loadSchema('Flight')
       }
     },
     security: [
