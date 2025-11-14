@@ -146,6 +146,135 @@ describe('Flights Route Handlers', () => {
             expect(response[0].name).to.equal('SSHF-Nov2011');
         });
 
+        it('should handle view results with empty doc and value (fallback to empty object)', async () => {
+            const mockViewResult = {
+                total_rows: 1,
+                offset: 0,
+                rows: [
+                    {
+                        id: 'flight1',
+                        key: 'SSHF-Nov2011',
+                        value: null,
+                        doc: null
+                    }
+                ]
+            };
+
+            global.fetch.resolves({
+                ok: true,
+                json: async () => mockViewResult
+            });
+
+            await listFlights(req, res);
+
+            expect(res.json.called).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response).to.be.an('array');
+            expect(response.length).to.equal(1);
+            expect(response[0]._id).to.equal('flight1'); // Should use row.id
+            expect(response[0].name).to.equal(''); // Should default to empty string
+            expect(response[0].flight_date).to.equal(''); // Should default to empty string
+            expect(response[0].capacity).to.equal(0); // Should default to 0
+            expect(response[0].completed).to.equal(false); // Should default to false
+        });
+
+        it('should handle view results with doc missing _id (use row.id)', async () => {
+            const mockViewResult = {
+                total_rows: 1,
+                offset: 0,
+                rows: [
+                    {
+                        id: 'flight1',
+                        key: 'SSHF-Nov2011',
+                        doc: {
+                            // Missing _id field
+                            name: 'SSHF-Nov2011',
+                            flight_date: '2011-11-05',
+                            capacity: 448,
+                            completed: true
+                        }
+                    }
+                ]
+            };
+
+            global.fetch.resolves({
+                ok: true,
+                json: async () => mockViewResult
+            });
+
+            await listFlights(req, res);
+
+            expect(res.json.called).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response[0]._id).to.equal('flight1'); // Should use row.id
+            expect(response[0].name).to.equal('SSHF-Nov2011');
+        });
+
+        it('should handle view results with missing _id in both doc and row.id (empty string fallback)', async () => {
+            const mockViewResult = {
+                total_rows: 1,
+                offset: 0,
+                rows: [
+                    {
+                        id: '', // Empty id
+                        key: 'SSHF-Nov2011',
+                        doc: {
+                            // Missing _id field
+                            name: 'SSHF-Nov2011',
+                            flight_date: '2011-11-05',
+                            capacity: 448,
+                            completed: true
+                        }
+                    }
+                ]
+            };
+
+            global.fetch.resolves({
+                ok: true,
+                json: async () => mockViewResult
+            });
+
+            await listFlights(req, res);
+
+            expect(res.json.called).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response[0]._id).to.equal(''); // Should default to empty string
+            expect(response[0].name).to.equal('SSHF-Nov2011');
+        });
+
+        it('should handle view results with missing properties in doc (use defaults)', async () => {
+            const mockViewResult = {
+                total_rows: 1,
+                offset: 0,
+                rows: [
+                    {
+                        id: 'flight1',
+                        key: 'SSHF-Nov2011',
+                        doc: {
+                            _id: 'flight1',
+                            // Missing name, flight_date, capacity, completed
+                            type: 'Flight'
+                        }
+                    }
+                ]
+            };
+
+            global.fetch.resolves({
+                ok: true,
+                json: async () => mockViewResult
+            });
+
+            await listFlights(req, res);
+
+            expect(res.json.called).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response[0]._id).to.equal('flight1');
+            expect(response[0].name).to.equal(''); // Should default to empty string
+            expect(response[0].flight_date).to.equal(''); // Should default to empty string
+            expect(response[0].capacity).to.equal(0); // Should default to 0
+            expect(response[0].completed).to.equal(false); // Should default to false
+        });
+
         it('should handle database errors', async () => {
             global.fetch.resolves({
                 ok: false,
