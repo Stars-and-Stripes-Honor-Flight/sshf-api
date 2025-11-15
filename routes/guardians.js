@@ -354,7 +354,13 @@ export async function updateGuardian(req, res) {
         updatedGuardian.veteran.history = currentGuardian.veteran.history;
         updatedGuardian.call.history = currentGuardian.call.history;
         
-        // Handle veteran pairing changes
+        // Validate the guardian data BEFORE making any database changes
+        // This prevents leaving veteran records in an inconsistent state if validation fails
+        updatedGuardian.updateHistory(currentGuardian, req.user);
+        updatedGuardian.prepareForSave(req.user);
+        updatedGuardian.validate();
+        
+        // Handle veteran pairing changes (only after validation succeeds)
         const currentPairings = currentGuardian.veteran.pairings;
         const newPairings = updatedGuardian.veteran.pairings;
         
@@ -425,10 +431,6 @@ export async function updateGuardian(req, res) {
         if (errors.length > 0) {
             console.error('Guardian pairing synchronization errors:', errors);
         }
-        
-        updatedGuardian.updateHistory(currentGuardian, req.user);
-        updatedGuardian.prepareForSave(req.user);
-        updatedGuardian.validate();
 
         // Update the document
         const updateResponse = await fetch(url, {

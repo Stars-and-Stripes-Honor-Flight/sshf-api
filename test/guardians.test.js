@@ -1085,6 +1085,48 @@ describe('Guardians Route Handlers', () => {
                 expect(res.json.called).to.be.true;
             });
 
+            it('should not update veteran records if guardian validation fails', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: []
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardian
+                });
+
+                // Create a request that will fail validation (missing required address fields)
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.address = {}; // Invalid - missing required fields, will fail validation
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                await updateGuardian(req, res);
+
+                // Should fail validation and return 400 error
+                expect(res.status.calledWith(400)).to.be.true;
+                expect(res.json.called).to.be.true;
+                
+                // Verify that veteran update was NOT called (only guardian GET was called)
+                // If validation happens after veteran updates, there would be 2+ fetch calls
+                // But if validation happens before, there should only be 1 fetch call (GET guardian)
+                expect(global.fetch.callCount).to.equal(1);
+            });
+
             it('should not update veterans when pairings are unchanged', async () => {
                 const veteranId = 'veteran-id-1';
                 const veteranName = 'John Veteran';
