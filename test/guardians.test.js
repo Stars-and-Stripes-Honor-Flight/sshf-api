@@ -359,6 +359,818 @@ describe('Guardians Route Handlers', () => {
             expect(response.metadata.updated_at).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
             expect(response.metadata.updated_by).to.equal('Admin User');
         });
+
+        describe('veteran pairing synchronization', () => {
+            beforeEach(() => {
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: []
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardian
+                });
+            });
+
+            it('should add a veteran to pairings and update veteran record', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockVeteran = {
+                    _id: veteranId,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: {
+                        id: '',
+                        name: '',
+                        pref_notes: '',
+                        history: []
+                    },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: {
+                        created_at: '2023-01-01T12:00:00Z',
+                        created_by: 'Test User'
+                    }
+                };
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran
+                });
+
+                // Mock veteran PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: veteranId, rev: '2-xyz' })
+                });
+
+                // Mock guardian PUT request (4th call: GET guardian, GET veteran, PUT veteran, PUT guardian)
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                expect(res.json.called).to.be.true;
+                const response = res.json.firstCall.args[0];
+                
+                // Verify guardian history was updated
+                const pairingHistory = response.veteran.history.filter(h => 
+                    h.change.includes('paired to:') && h.change.includes(veteranName)
+                );
+                expect(pairingHistory.length).to.equal(1);
+                expect(pairingHistory[0].change).to.include('paired to:');
+                expect(pairingHistory[0].change).to.include(veteranName);
+                expect(pairingHistory[0].change).to.include('Admin User');
+
+                // Verify veteran was fetched and updated
+                expect(global.fetch.callCount).to.be.at.least(3);
+            });
+
+            it('should remove a veteran from pairings and update veteran record', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                const mockVeteran = {
+                    _id: veteranId,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: {
+                        id: 'guardian-id',
+                        name: 'Jane Doe',
+                        pref_notes: '',
+                        history: []
+                    },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: {
+                        created_at: '2023-01-01T12:00:00Z',
+                        created_by: 'Test User'
+                    }
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardian
+                });
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: []
+                };
+
+                // Mock veteran GET request
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran
+                });
+
+                // Mock veteran PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: veteranId, rev: '2-xyz' })
+                });
+
+                // Mock guardian PUT request (4th call: GET guardian, GET veteran, PUT veteran, PUT guardian)
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                expect(res.json.called).to.be.true;
+                const response = res.json.firstCall.args[0];
+                
+                // Verify guardian history was updated
+                const unpairingHistory = response.veteran.history.filter(h => 
+                    h.change.includes('unpaired from:') && h.change.includes(veteranName)
+                );
+                expect(unpairingHistory.length).to.equal(1);
+                expect(unpairingHistory[0].change).to.include('unpaired from:');
+                expect(unpairingHistory[0].change).to.include(veteranName);
+                expect(unpairingHistory[0].change).to.include('Admin User');
+            });
+
+            it('should handle multiple veterans added to pairings', async () => {
+                const veteran1Id = 'veteran-id-1';
+                const veteran1Name = 'John Veteran';
+                const veteran2Id = 'veteran-id-2';
+                const veteran2Name = 'Jane Veteran';
+
+                const mockVeteran1 = {
+                    _id: veteran1Id,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: { id: '', name: '', pref_notes: '', history: [] },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: { created_at: '2023-01-01T12:00:00Z', created_by: 'Test User' }
+                };
+
+                const mockVeteran2 = {
+                    _id: veteran2Id,
+                    _rev: '1-abc',
+                    type: 'Veteran',
+                    name: { first: 'Jane', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: { id: '', name: '', pref_notes: '', history: [] },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: { created_at: '2023-01-01T12:00:00Z', created_by: 'Test User' }
+                };
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteran1Id, name: veteran1Name },
+                        { id: veteran2Id, name: veteran2Name }
+                    ]
+                };
+
+                // Mock veteran GET requests
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran1
+                });
+
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: veteran1Id, rev: '2-xyz' })
+                });
+
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => mockVeteran2
+                });
+
+                global.fetch.onCall(4).resolves({
+                    ok: true,
+                    json: async () => ({ id: veteran2Id, rev: '2-abc' })
+                });
+
+                // Mock guardian PUT request (5th call: GET guardian, GET vet1, PUT vet1, GET vet2, PUT vet2, PUT guardian)
+                global.fetch.onCall(5).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                expect(res.json.called).to.be.true;
+                const response = res.json.firstCall.args[0];
+                
+                // Verify both veterans are in history
+                const pairingHistory = response.veteran.history.filter(h => 
+                    h.change.includes('paired to:')
+                );
+                expect(pairingHistory.length).to.equal(2);
+            });
+
+            it('should handle veteran not found error gracefully', async () => {
+                const veteranId = 'non-existent-veteran';
+                
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: 'Non Existent' }
+                    ]
+                };
+
+                // Mock veteran GET request returning 404
+                global.fetch.onSecondCall().resolves({
+                    ok: false,
+                    status: 404,
+                    json: async () => ({ error: 'not_found' })
+                });
+
+                // Mock guardian PUT request (3rd call: GET guardian, GET veteran (404), PUT guardian)
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+                // Status defaults to 200 if not explicitly set, so check that json was called (success)
+                // res.status is not called on success, so we just verify json was called
+            });
+
+            it('should handle veteran update failure gracefully', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockVeteran = {
+                    _id: veteranId,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: { id: '', name: '', pref_notes: '', history: [] },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: { created_at: '2023-01-01T12:00:00Z', created_by: 'Test User' }
+                };
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran
+                });
+
+                // Mock veteran PUT request failing
+                global.fetch.onThirdCall().resolves({
+                    ok: false,
+                    json: async () => ({ reason: 'Update conflict' })
+                });
+
+                // Mock guardian PUT request (4th call: GET guardian, GET veteran, PUT veteran (fail), PUT guardian)
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+                // Status defaults to 200 if not explicitly set, so check that json was called (success)
+                // res.status is not called on success, so we just verify json was called
+            });
+
+            it('should handle veteran GET error (non-404)', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request returning 500 error
+                global.fetch.onSecondCall().resolves({
+                    ok: false,
+                    status: 500,
+                    json: async () => ({ reason: 'Database error' })
+                });
+
+                // Mock guardian PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should handle veteran GET error without reason field', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request returning 500 error without reason
+                global.fetch.onSecondCall().resolves({
+                    ok: false,
+                    status: 500,
+                    json: async () => ({}) // No reason field
+                });
+
+                // Mock guardian PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should handle non-veteran document type error', async () => {
+                const veteranId = 'guardian-id-1'; // Using a guardian ID to simulate wrong type
+                const veteranName = 'John Guardian';
+                
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request returning a Guardian document (wrong type)
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => ({
+                        _id: veteranId,
+                        _rev: '1-xyz',
+                        type: 'Guardian', // Wrong type
+                        name: { first: 'John', last: 'Guardian' }
+                    })
+                });
+
+                // Mock guardian PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should handle exception in updateVeteranGuardianReference', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request to throw an error
+                global.fetch.onSecondCall().rejects(new Error('Network error'));
+
+                // Mock guardian PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should handle veteran removal failure gracefully', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                const mockVeteran = {
+                    _id: veteranId,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: {
+                        id: 'guardian-id',
+                        name: 'Jane Doe',
+                        pref_notes: '',
+                        history: []
+                    },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: {
+                        created_at: '2023-01-01T12:00:00Z',
+                        created_by: 'Test User'
+                    }
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardian
+                });
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: []
+                };
+
+                // Mock veteran GET request
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran
+                });
+
+                // Mock veteran PUT request failing
+                global.fetch.onThirdCall().resolves({
+                    ok: false,
+                    json: async () => ({ reason: 'Update conflict' })
+                });
+
+                // Mock guardian PUT request
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should handle missing veteran.pairings in current guardian', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                // veteran.pairings is undefined (not set)
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: []
+                    // pairings is missing
+                };
+                
+                // After Guardian.fromJSON, manually set pairings to undefined to test fallback
+                const currentGuardianDoc = mockGuardian;
+
+                const mockVeteran = {
+                    _id: veteranId,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: { id: '', name: '', pref_notes: '', history: [] },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: { created_at: '2023-01-01T12:00:00Z', created_by: 'Test User' }
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => {
+                        // Return document without veteran.pairings to test fallback on line 358
+                        // Note: Guardian.fromJSON will initialize it to [], but the || [] fallback is defensive
+                        const doc = JSON.parse(JSON.stringify(mockGuardian));
+                        if (doc.veteran) {
+                            delete doc.veteran.pairings;
+                        }
+                        return doc;
+                    }
+                });
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran
+                });
+
+                // Mock veteran PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: veteranId, rev: '2-xyz' })
+                });
+
+                // Mock guardian PUT request
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should handle missing veteran.pairings in updated guardian', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                const mockVeteran = {
+                    _id: veteranId,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: {
+                        id: 'guardian-id',
+                        name: 'Jane Doe',
+                        pref_notes: '',
+                        history: []
+                    },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: { created_at: '2023-01-01T12:00:00Z', created_by: 'Test User' }
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardian
+                });
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: []
+                    // pairings is missing (undefined) - this will test the || [] fallback on line 359
+                };
+                // Explicitly ensure pairings is not set to test fallback
+                delete req.body.veteran.pairings;
+
+                // Mock veteran GET request
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran
+                });
+
+                // Mock veteran PUT request
+                global.fetch.onThirdCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: veteranId, rev: '2-xyz' })
+                });
+
+                // Mock guardian PUT request
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should handle veteran update error without reason field', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockVeteran = {
+                    _id: veteranId,
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    name: { first: 'John', last: 'Veteran' },
+                    address: { street: '123 Main St', city: 'Springfield', state: 'IL', zip: '62701', county: 'Sangamon', phone_day: '217-555-1234' },
+                    guardian: { id: '', name: '', pref_notes: '', history: [] },
+                    flight: { history: [] },
+                    call: { history: [] },
+                    metadata: { created_at: '2023-01-01T12:00:00Z', created_by: 'Test User' }
+                };
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock veteran GET request
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => mockVeteran
+                });
+
+                // Mock veteran PUT request failing without reason field
+                global.fetch.onThirdCall().resolves({
+                    ok: false,
+                    json: async () => ({}) // No reason field
+                });
+
+                // Mock guardian PUT request
+                global.fetch.onCall(3).resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                // Should still succeed but log warning
+                expect(res.json.called).to.be.true;
+            });
+
+            it('should not update veteran records if guardian validation fails', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: []
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardian
+                });
+
+                // Create a request that will fail validation (missing required address fields)
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.address = {}; // Invalid - missing required fields, will fail validation
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                await updateGuardian(req, res);
+
+                // Should fail validation and return 400 error
+                expect(res.status.calledWith(400)).to.be.true;
+                expect(res.json.called).to.be.true;
+                
+                // Verify that veteran update was NOT called (only guardian GET was called)
+                // If validation happens after veteran updates, there would be 2+ fetch calls
+                // But if validation happens before, there should only be 1 fetch call (GET guardian)
+                expect(global.fetch.callCount).to.equal(1);
+            });
+
+            it('should not update veterans when pairings are unchanged', async () => {
+                const veteranId = 'veteran-id-1';
+                const veteranName = 'John Veteran';
+                
+                const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
+                mockGuardian._id = 'guardian-id';
+                mockGuardian._rev = '1-abc';
+                mockGuardian.type = 'Guardian';
+                mockGuardian.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardian
+                });
+
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [
+                        { id: veteranId, name: veteranName }
+                    ]
+                };
+
+                // Mock guardian PUT request (should be the only additional call)
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                expect(res.json.called).to.be.true;
+                // Should only have 2 fetch calls: GET guardian, PUT guardian
+                // No veteran fetch calls should be made
+                expect(global.fetch.callCount).to.equal(2);
+            });
+        });
     });
 
     describe('deleteGuardian', () => {
