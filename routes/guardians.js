@@ -150,7 +150,7 @@ export async function retrieveGuardian(req, res) {
  * @returns {string} Full name in format "First Last"
  */
 function constructGuardianFullName(name) {
-    return `${name.first || ''} ${name.last || ''}`.trim();
+    return `${name.first} ${name.last}`.trim();
 }
 
 /**
@@ -278,7 +278,7 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
  *             $ref: '#/components/schemas/Guardian'
  *     responses:
  *       200:
- *         description: Guardian record updated successfully
+ *         description: Guardian record updated successfully. When veteran.pairings array is modified, the affected veteran records are automatically updated to reflect the pairing changes. History entries are added to both guardian and veteran records.
  *         content:
  *           application/json:
  *             schema:
@@ -291,6 +291,21 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *     x-code-samples:
+ *       - lang: 'JavaScript'
+ *         label: 'Example: Adding a veteran pairing'
+ *         source: |
+ *           // When updating veteran.pairings, the system automatically:
+ *           // 1. Updates the veteran's guardian.id and guardian.name
+ *           // 2. Adds history entries to both guardian and veteran records
+ *           const response = await fetch('/guardians/guardian-id', {
+ *             method: 'PUT',
+ *             body: JSON.stringify({
+ *               veteran: {
+ *                 pairings: [{ id: 'veteran-id', name: 'Veteran Name' }]
+ *               }
+ *             })
+ *           });
  */
 export async function updateGuardian(req, res) {
     try {
@@ -340,8 +355,8 @@ export async function updateGuardian(req, res) {
         updatedGuardian.call.history = currentGuardian.call.history;
         
         // Handle veteran pairing changes
-        const currentPairings = currentGuardian.veteran.pairings || [];
-        const newPairings = updatedGuardian.veteran.pairings || [];
+        const currentPairings = currentGuardian.veteran.pairings;
+        const newPairings = updatedGuardian.veteran.pairings;
         
         // Extract IDs for comparison
         const currentPairingIds = new Set(currentPairings.map(p => p.id));
