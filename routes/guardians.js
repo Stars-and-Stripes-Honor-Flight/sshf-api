@@ -1,5 +1,6 @@
 import { Guardian } from '../models/guardian.js';
 import { Veteran } from '../models/veteran.js';
+import { dbFetch, DatabaseSessionError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -48,11 +49,9 @@ export async function createGuardian(req, res) {
         delete guardian._rev;
 
         const url = `${dbUrl}/${dbName}`;
-        const response = await fetch(url, {
+        const response = await dbFetch(req, url, {
             method: 'POST',
             headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(guardian.toJSON())
@@ -71,6 +70,10 @@ export async function createGuardian(req, res) {
 
         res.status(201).json(guardian.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         if (error.message.includes('Validation failed')) {
             res.status(400).json({ error: error.message });
         } else {
@@ -116,12 +119,7 @@ export async function retrieveGuardian(req, res) {
         const docId = req.params.id;
         const url = `${dbUrl}/${dbName}/${docId}`;
         
-        const response = await fetch(url, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const response = await dbFetch(req, url);
 
         const data = await response.json();
         if (!response.ok) {
@@ -139,6 +137,10 @@ export async function retrieveGuardian(req, res) {
         const guardian = Guardian.fromJSON(data);
         res.json(guardian.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         console.error('Error getting guardian:', error);
         res.status(500).json({ error: error.message });
     }
@@ -161,20 +163,15 @@ function constructGuardianFullName(name) {
  * @param {string} action - 'add' or 'remove'
  * @param {Object} user - User object with firstName and lastName
  * @param {string} timestamp - Timestamp in yyyy-MM-DDThh:mm:ssZ format
- * @param {string} dbCookie - Database session cookie
+ * @param {Object} req - Express request object with dbCookie
  * @returns {Promise<{success: boolean, error?: string, veteranName?: string}>}
  */
-async function updateVeteranGuardianReference(veteranId, guardianId, guardianName, action, user, timestamp, dbCookie) {
+async function updateVeteranGuardianReference(veteranId, guardianId, guardianName, action, user, timestamp, req) {
     try {
         const veteranUrl = `${dbUrl}/${dbName}/${veteranId}`;
         
         // Fetch the current veteran document
-        const getVeteranResponse = await fetch(veteranUrl, {
-            headers: {
-                'Cookie': dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const getVeteranResponse = await dbFetch(req, veteranUrl);
 
         if (!getVeteranResponse.ok) {
             if (getVeteranResponse.status === 404) {
@@ -234,11 +231,9 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
         updatedVeteran.validate();
 
         // Update the veteran document
-        const updateVeteranResponse = await fetch(veteranUrl, {
+        const updateVeteranResponse = await dbFetch(req, veteranUrl, {
             method: 'PUT',
             headers: {
-                'Cookie': dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(updatedVeteran.toJSON())
@@ -313,12 +308,7 @@ export async function updateGuardian(req, res) {
         const url = `${dbUrl}/${dbName}/${docId}`;
         
         // First, get the current document
-        const getResponse = await fetch(url, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -388,7 +378,7 @@ export async function updateGuardian(req, res) {
                 'add',
                 req.user,
                 timestamp,
-                req.dbCookie
+                req
             );
             
             if (result.success) {
@@ -412,7 +402,7 @@ export async function updateGuardian(req, res) {
                 'remove',
                 req.user,
                 timestamp,
-                req.dbCookie
+                req
             );
             
             if (result.success) {
@@ -433,11 +423,9 @@ export async function updateGuardian(req, res) {
         }
 
         // Update the document
-        const updateResponse = await fetch(url, {
+        const updateResponse = await dbFetch(req, url, {
             method: 'PUT',
             headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(updatedGuardian.toJSON())
@@ -454,6 +442,10 @@ export async function updateGuardian(req, res) {
         updatedGuardian._rev = data.rev;
         res.json(updatedGuardian.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         if (error.message.includes('Validation failed')) {
             res.status(400).json({ error: error.message });
         } else {
@@ -506,12 +498,7 @@ export async function deleteGuardian(req, res) {
         const docId = req.params.id;
         
         // First, get the current document
-        const getResponse = await fetch(`${dbUrl}/${dbName}/${docId}`, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const getResponse = await dbFetch(req, `${dbUrl}/${dbName}/${docId}`);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -529,12 +516,8 @@ export async function deleteGuardian(req, res) {
 
         const url = `${dbUrl}/${dbName}/${docId}?rev=${currentDoc._rev}`;
 
-        const deleteResponse = await fetch(url, {
-            method: 'DELETE',
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
+        const deleteResponse = await dbFetch(req, url, {
+            method: 'DELETE'
         });
 
         const data = await deleteResponse.json();
@@ -544,6 +527,10 @@ export async function deleteGuardian(req, res) {
 
         res.json(data);
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         console.error('Error deleting guardian:', error);
         res.status(500).json({ error: error.message });
     }

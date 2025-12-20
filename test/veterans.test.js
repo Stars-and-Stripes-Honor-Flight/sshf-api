@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran } from '../routes/veterans.js';
+import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Veterans Route Handlers', () => {
     let req, res;
@@ -99,6 +100,19 @@ describe('Veterans Route Handlers', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.equal('Failed to create veteran document');
         });
+
+        it('should return 503 when database session cannot be established', async () => {
+            // Simulate persistent 401 responses that exhaust retry attempts
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await createVeteran(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
     });
 
     describe('retrieveVeteran', () => {
@@ -167,6 +181,18 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await retrieveVeteran(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
     });
 
@@ -281,6 +307,18 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran for update');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
 
         it('should preserve server-controlled fields during update', async () => {
@@ -463,6 +501,18 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran for deletion');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await deleteVeteran(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
     });
 }); 

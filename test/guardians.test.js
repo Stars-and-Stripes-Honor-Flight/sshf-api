@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian } from '../routes/guardians.js';
+import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Guardians Route Handlers', () => {
     let req, res;
@@ -99,6 +100,18 @@ describe('Guardians Route Handlers', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.equal('Failed to create guardian document');
         });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await createGuardian(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
     });
 
     describe('retrieveGuardian', () => {
@@ -167,6 +180,18 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await retrieveGuardian(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
     });
 
@@ -281,6 +306,18 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian for update');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await updateGuardian(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
 
         it('should preserve server-controlled fields during update', async () => {
@@ -1275,6 +1312,18 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian for deletion');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await deleteGuardian(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
     });
 }); 
