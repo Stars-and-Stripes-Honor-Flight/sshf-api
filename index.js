@@ -1,11 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
-import fetch from 'node-fetch';
 import cors from 'cors';
-import cookie from 'cookie';
 import { google } from 'googleapis';
 import { specs } from './swagger/swagger.js';
 import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
+import { dbSession } from './utils/db.js';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
@@ -42,10 +41,9 @@ const corsOptions = {
 // Enable CORS for all routes with specific options
 app.use(cors(corsOptions));
 
-// In-memory cache
+// In-memory cache for user authentication
 const userCache = new Map();
 const userCacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
-const dbCacheTTL = 3 * 60 * 1000; // 3 minutes in milliseconds
 
 // Route definitions
 app.get('/secure-data', authenticate, getSecureData);
@@ -92,55 +90,6 @@ app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
-
-const dbUrl = process.env.DB_URL;
-const dbUser = process.env.DB_USER;
-const dbPass = process.env.DB_PASS;
-const cacheKey = `AuthSession_${dbUrl}_${dbUser}_${dbPass}`;
-
-async function dbSession(req, res, next) {
-    try {
-        if (userCache.has(cacheKey)) {
-            const cachedCookie = userCache.get(cacheKey);
-            // Check if cache is expired
-            if (Date.now() - cachedCookie.timestamp < dbCacheTTL) {
-                req.dbCookie = cachedCookie.cookie;
-                return next();
-            } else {
-                // Remove expired cache entry
-                userCache.delete(cacheKey);
-            }
-        }
-
-        const response = await fetch(`${dbUrl}/_session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                name: dbUser,
-                password: dbPass
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to create CouchDB session');
-        }
-
-        const cookieString = response.headers.get('set-cookie');
-        const authCookie = `AuthSession=${cookie.parse(cookieString).AuthSession}`;
-        
-        // Store cookie in cache
-        userCache.set(cacheKey, { cookie: authCookie, timestamp: Date.now() });
-
-        req.dbCookie = authCookie;
-        next();
-    } catch (error) {
-        console.error('CouchDB session error:', error);
-        res.status(500).json({ message: 'Database session error' });
-    }
-}
 
 async function getGroupMemberships(userData) {
     try {

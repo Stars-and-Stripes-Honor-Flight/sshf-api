@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { getSearch } from '../routes/search.js';
+import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Search Route', () => {
     let req, res, next;
@@ -12,9 +13,11 @@ describe('Search Route', () => {
                 flight: 'All',
                 lastname: 'Smith',
                 limit: 25
-            }
+            },
+            dbCookie: 'auth-cookie'
         };
         res = {
+            status: sinon.stub().returnsThis(),
             json: sinon.spy()
         };
         next = sinon.spy();
@@ -56,13 +59,39 @@ describe('Search Route', () => {
         });
 
         it('should handle database errors', async () => {
+            // Network errors are now retried, and after 3 retries result in 503
             global.fetch = sinon.stub().rejects(new Error('Database error'));
 
-            try {
-                await getSearch(req, res, next);
-            } catch (error) {
-                expect(error.message).to.equal('Database error');
-            }
+            await getSearch(req, res, next);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch = sinon.stub().resolves({
+                ok: false,
+                status: 401
+            });
+
+            await getSearch(req, res, next);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+
+        it('should return 500 for non-session errors', async () => {
+            // Simulate a successful fetch but json() throws an error
+            global.fetch = sinon.stub().resolves({
+                ok: true,
+                status: 200,
+                json: async () => { throw new Error('Invalid JSON response'); }
+            });
+
+            await getSearch(req, res, next);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid JSON response');
         });
     });
 }); 

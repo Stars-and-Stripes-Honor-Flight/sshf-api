@@ -1,29 +1,23 @@
 import { SearchRequest } from '../models/search_request.js';
 import { SearchResults } from '../models/search_results.js';
+import { dbFetch, DatabaseSessionError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
 
-async function search(searchRequest, dbCookie) {
-    try {
-        const viewName = searchRequest.getViewName();
-        const queryParams = searchRequest.toQueryParams();
-        const url = `${dbUrl}/${dbName}/_design/basic/_view/${viewName}?${queryParams}&descending=false`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'Cookie': dbCookie,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Database connection error:', error);
-        throw error;
-    }
+async function search(searchRequest, req) {
+    const viewName = searchRequest.getViewName();
+    const queryParams = searchRequest.toQueryParams();
+    const url = `${dbUrl}/${dbName}/_design/basic/_view/${viewName}?${queryParams}&descending=false`;
+    
+    const response = await dbFetch(req, url, {
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+    
+    const data = await response.json();
+    return data;
 }
 
 /**
@@ -99,8 +93,17 @@ async function search(searchRequest, dbCookie) {
  */
 
 export async function getSearch(req, res, next) {
-    const searchRequest = new SearchRequest(req.query);
-    const dbResult = await search(searchRequest, req.dbCookie);
-    const searchResults = new SearchResults(dbResult);
-    res.json(searchResults.toJSON());
+    try {
+        const searchRequest = new SearchRequest(req.query);
+        const dbResult = await search(searchRequest, req);
+        const searchResults = new SearchResults(dbResult);
+        res.json(searchResults.toJSON());
+    } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
+        console.error('Error searching:', error);
+        res.status(500).json({ error: error.message });
+    }
 } 

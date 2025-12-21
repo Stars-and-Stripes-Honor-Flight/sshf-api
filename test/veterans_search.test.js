@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { searchUnpairedVeterans } from '../routes/veterans.js';
+import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Veterans Search Route', () => {
     let req, res;
@@ -192,14 +193,15 @@ describe('Veterans Search Route', () => {
         });
 
         it('should handle database errors', async () => {
+            // Network errors are now retried, and after 3 retries result in 503
             global.fetch.rejects(new Error('Database connection error'));
 
             await searchUnpairedVeterans(req, res);
 
-            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.calledOnce).to.be.true;
             const response = res.json.firstCall.args[0];
-            expect(response.error).to.equal('Database connection error');
+            expect(response.error).to.include('Database session could not be established');
         });
 
         it('should handle CouchDB error responses (4xx/5xx)', async () => {
@@ -261,6 +263,20 @@ describe('Veterans Search Route', () => {
             expect(res.json.calledOnce).to.be.true;
             const response = res.json.firstCall.args[0];
             expect(response.error).to.equal('Failed to search unpaired veterans');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await searchUnpairedVeterans(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.calledOnce).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.error).to.include('Database session could not be established');
         });
 
         it('should handle empty results', async () => {

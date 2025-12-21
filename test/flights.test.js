@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { listFlights, createFlight, retrieveFlight, updateFlight } from '../routes/flights.js';
+import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Flights Route Handlers', () => {
     let req, res;
@@ -298,6 +299,18 @@ describe('Flights Route Handlers', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to retrieve flights');
         });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await listFlights(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
     });
 
     describe('createFlight', () => {
@@ -433,6 +446,18 @@ describe('Flights Route Handlers', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.equal('Failed to create flight document');
         });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await createFlight(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
     });
 
     describe('retrieveFlight', () => {
@@ -503,6 +528,18 @@ describe('Flights Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get flight');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await retrieveFlight(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
     });
 
@@ -677,6 +714,18 @@ describe('Flights Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get flight for update');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await updateFlight(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
     });
 });

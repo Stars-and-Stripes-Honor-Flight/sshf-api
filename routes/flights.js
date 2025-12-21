@@ -1,4 +1,5 @@
 import { Flight } from '../models/flight.js';
+import { dbFetch, DatabaseSessionError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -62,10 +63,8 @@ export async function listFlights(req, res) {
     try {
         const url = `${dbUrl}/${dbName}/_design/basic/_view/flights?limit=500&include_docs=true&descending=true`;
         
-        const response = await fetch(url, {
+        const response = await dbFetch(req, url, {
             headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
         });
@@ -94,6 +93,10 @@ export async function listFlights(req, res) {
 
         res.json(flights);
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         console.error('Error retrieving flights:', error);
         res.status(500).json({ error: error.message });
     }
@@ -145,11 +148,9 @@ export async function createFlight(req, res) {
         delete flight._rev;
 
         const url = `${dbUrl}/${dbName}`;
-        const response = await fetch(url, {
+        const response = await dbFetch(req, url, {
             method: 'POST',
             headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(flight.toJSON())
@@ -168,6 +169,10 @@ export async function createFlight(req, res) {
 
         res.status(201).json(flight.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         if (error.message.includes('Validation failed')) {
             res.status(400).json({ error: error.message });
         } else {
@@ -213,12 +218,7 @@ export async function retrieveFlight(req, res) {
         const docId = req.params.id;
         const url = `${dbUrl}/${dbName}/${docId}`;
         
-        const response = await fetch(url, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const response = await dbFetch(req, url);
 
         const data = await response.json();
         if (!response.ok) {
@@ -236,6 +236,10 @@ export async function retrieveFlight(req, res) {
         const flight = Flight.fromJSON(data);
         res.json(flight.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         console.error('Error getting flight:', error);
         res.status(500).json({ error: error.message });
     }
@@ -284,12 +288,7 @@ export async function updateFlight(req, res) {
         const url = `${dbUrl}/${dbName}/${docId}`;
         
         // First, get the current document
-        const getResponse = await fetch(url, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -324,11 +323,9 @@ export async function updateFlight(req, res) {
         updatedFlight.validate();
 
         // Update the document
-        const updateResponse = await fetch(url, {
+        const updateResponse = await dbFetch(req, url, {
             method: 'PUT',
             headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(updatedFlight.toJSON())
@@ -345,6 +342,10 @@ export async function updateFlight(req, res) {
         updatedFlight._rev = data.rev;
         res.json(updatedFlight.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         if (error.message.includes('Validation failed')) {
             res.status(400).json({ error: error.message });
         } else {

@@ -1,6 +1,7 @@
 import { Veteran } from '../models/veteran.js';
 import { UnpairedVeteranRequest } from '../models/unpaired_veteran_request.js';
 import { UnpairedVeteranResults } from '../models/unpaired_veteran_results.js';
+import { dbFetch, DatabaseSessionError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -49,11 +50,9 @@ export async function createVeteran(req, res) {
         delete veteran._rev;
 
         const url = `${dbUrl}/${dbName}`;
-        const response = await fetch(url, {
+        const response = await dbFetch(req, url, {
             method: 'POST',
             headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(veteran.toJSON())
@@ -72,6 +71,10 @@ export async function createVeteran(req, res) {
 
         res.status(201).json(veteran.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         if (error.message.includes('Validation failed')) {
             res.status(400).json({ error: error.message });
         } else {
@@ -117,12 +120,7 @@ export async function retrieveVeteran(req, res) {
         const docId = req.params.id;
         const url = `${dbUrl}/${dbName}/${docId}`;
         
-        const response = await fetch(url, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const response = await dbFetch(req, url);
 
         const data = await response.json();
         if (!response.ok) {
@@ -140,6 +138,10 @@ export async function retrieveVeteran(req, res) {
         const veteran = Veteran.fromJSON(data);
         res.json(veteran.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         console.error('Error getting veteran:', error);
         res.status(500).json({ error: error.message });
     }
@@ -188,12 +190,7 @@ export async function updateVeteran(req, res) {
         const url = `${dbUrl}/${dbName}/${docId}`;
         
         // First, get the current document
-        const getResponse = await fetch(url, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -234,11 +231,9 @@ export async function updateVeteran(req, res) {
         updatedVeteran.validate();
 
         // Update the document
-        const updateResponse = await fetch(url, {
+        const updateResponse = await dbFetch(req, url, {
             method: 'PUT',
             headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(updatedVeteran.toJSON())
@@ -255,6 +250,10 @@ export async function updateVeteran(req, res) {
         updatedVeteran._rev = data.rev;
         res.json(updatedVeteran.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         if (error.message.includes('Validation failed')) {
             res.status(400).json({ error: error.message });
         } else {
@@ -307,12 +306,7 @@ export async function deleteVeteran(req, res) {
         const docId = req.params.id;
         
         // First, get the current document
-        const getResponse = await fetch(`${dbUrl}/${dbName}/${docId}`, {
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
-        });
+        const getResponse = await dbFetch(req, `${dbUrl}/${dbName}/${docId}`);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -330,12 +324,8 @@ export async function deleteVeteran(req, res) {
 
         const url = `${dbUrl}/${dbName}/${docId}?rev=${currentDoc._rev}`;
 
-        const deleteResponse = await fetch(url, {
-            method: 'DELETE',
-            headers: {
-                'Cookie': req.dbCookie,
-                'Accept': 'application/json'
-            }
+        const deleteResponse = await dbFetch(req, url, {
+            method: 'DELETE'
         });
 
         const data = await deleteResponse.json();
@@ -345,35 +335,32 @@ export async function deleteVeteran(req, res) {
 
         res.json(data);
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         console.error('Error deleting veteran:', error);
         res.status(500).json({ error: error.message });
     }
 }
 
-async function searchUnpaired(searchRequest, dbCookie) {
-    try {
-        const viewName = searchRequest.getViewName();
-        const queryParams = searchRequest.toQueryParams();
-        const url = `${dbUrl}/${dbName}/_design/basic/_view/${viewName}?${queryParams}&descending=false`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'Cookie': dbCookie,
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.reason || data.error || 'Failed to search unpaired veterans');
+async function searchUnpaired(searchRequest, req) {
+    const viewName = searchRequest.getViewName();
+    const queryParams = searchRequest.toQueryParams();
+    const url = `${dbUrl}/${dbName}/_design/basic/_view/${viewName}?${queryParams}&descending=false`;
+    
+    const response = await dbFetch(req, url, {
+        headers: {
+            'Content-Type': 'application/json'
         }
-        
-        return data;
-    } catch (error) {
-        console.error('Database connection error:', error);
-        throw error;
+    });
+    
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.reason || data.error || 'Failed to search unpaired veterans');
     }
+    
+    return data;
 }
 
 /**
@@ -462,10 +449,14 @@ export async function searchUnpairedVeterans(req, res) {
             return res.status(501).json({ error: 'Not Implemented: paired=true is not yet supported' });
         }
         
-        const dbResult = await searchUnpaired(searchRequest, req.dbCookie);
+        const dbResult = await searchUnpaired(searchRequest, req);
         const searchResults = new UnpairedVeteranResults(dbResult);
         res.json(searchResults.toJSON());
     } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
         console.error('Error searching unpaired veterans:', error);
         res.status(500).json({ error: error.message });
     }
