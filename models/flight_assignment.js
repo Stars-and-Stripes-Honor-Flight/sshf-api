@@ -1,4 +1,18 @@
 /**
+ * Parses a value as a boolean, only returning true if the value is
+ * exactly true (boolean) or the string "true" (case-insensitive).
+ * This handles database values that may contain whitespace or other
+ * truthy strings that should be treated as false.
+ * @param {any} value - The value to parse
+ * @returns {boolean} - true only if value is boolean true or string "true"
+ */
+function parseBoolean(value) {
+    if (value === true) return true;
+    if (typeof value === 'string' && value.toLowerCase() === 'true') return true;
+    return false;
+}
+
+/**
  * Represents an individual person (veteran or guardian) in a flight assignment
  */
 export class AssignmentPerson {
@@ -10,11 +24,11 @@ export class AssignmentPerson {
         this.city = data.city || '';
         this.appdate = data.appdate || '';
         this.group = data.group || '';
-        this.nofly = data.nofly || false;
+        this.nofly = parseBoolean(data.nofly);
         this.fm_number = data.fm_number || '';
         this.assigned_to = data.assigned_to || '';
-        this.mail_sent = data.mail_sent || false;
-        this.email_sent = data.email_sent || false;
+        this.mail_sent = parseBoolean(data.mail_sent);
+        this.email_sent = parseBoolean(data.email_sent);
         this.confirmed = data.confirmed || '';
         this.paired_with = data.paired_with || '';
     }
@@ -47,11 +61,11 @@ export class AssignmentPerson {
             city: row.city || '',
             appdate: row.appdate || '',
             group: row.group || '',
-            nofly: row.nofly || false,
+            nofly: row.nofly,
             fm_number: row.fm_number || '',
             assigned_to: row.assigned_to || '',
-            mail_sent: row.mail_sent || false,
-            email_sent: row.email_sent || false,
+            mail_sent: row.mail_sent,
+            email_sent: row.email_sent,
             confirmed: row.confirmed || '',
             paired_with: row.paired_with || ''
         });
@@ -66,7 +80,7 @@ export class AssignmentPair {
         this.pairId = data.pairId || '';
         this.group = data.group || '';
         this.appDate = data.appDate || '';
-        this.missingPerson = data.missingPerson || false;
+        this.missingPerson = parseBoolean(data.missingPerson);
         this.people = data.people || [];
     }
 

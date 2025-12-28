@@ -61,6 +61,54 @@ describe('Flight Assignment Models', () => {
                 expect(person.confirmed).to.equal('2024-02-01');
                 expect(person.paired_with).to.equal('guard-456');
             });
+
+            it('should parse boolean properties correctly - whitespace treated as false', () => {
+                const data = {
+                    nofly: ' ',      // whitespace should be false
+                    mail_sent: '  ', // whitespace should be false
+                    email_sent: ' '  // whitespace should be false
+                };
+                const person = new AssignmentPerson(data);
+                expect(person.nofly).to.equal(false);
+                expect(person.mail_sent).to.equal(false);
+                expect(person.email_sent).to.equal(false);
+            });
+
+            it('should parse boolean properties correctly - string "true" treated as true', () => {
+                const data = {
+                    nofly: 'true',
+                    mail_sent: 'TRUE',
+                    email_sent: 'True'
+                };
+                const person = new AssignmentPerson(data);
+                expect(person.nofly).to.equal(true);
+                expect(person.mail_sent).to.equal(true);
+                expect(person.email_sent).to.equal(true);
+            });
+
+            it('should parse boolean properties correctly - boolean true treated as true', () => {
+                const data = {
+                    nofly: true,
+                    mail_sent: true,
+                    email_sent: true
+                };
+                const person = new AssignmentPerson(data);
+                expect(person.nofly).to.equal(true);
+                expect(person.mail_sent).to.equal(true);
+                expect(person.email_sent).to.equal(true);
+            });
+
+            it('should parse boolean properties correctly - other values treated as false', () => {
+                const data = {
+                    nofly: 'yes',
+                    mail_sent: 1,
+                    email_sent: 'false'
+                };
+                const person = new AssignmentPerson(data);
+                expect(person.nofly).to.equal(false);
+                expect(person.mail_sent).to.equal(false);
+                expect(person.email_sent).to.equal(false);
+            });
         });
 
         describe('toJSON', () => {
@@ -142,6 +190,21 @@ describe('Flight Assignment Models', () => {
                 expect(pair.group).to.equal('GroupA');
                 expect(pair.appDate).to.equal('2024-01-15');
                 expect(pair.people.length).to.equal(1);
+            });
+
+            it('should parse missingPerson boolean correctly - whitespace treated as false', () => {
+                const pair = new AssignmentPair({ missingPerson: ' ' });
+                expect(pair.missingPerson).to.equal(false);
+            });
+
+            it('should parse missingPerson boolean correctly - string "true" treated as true', () => {
+                const pair = new AssignmentPair({ missingPerson: 'true' });
+                expect(pair.missingPerson).to.equal(true);
+            });
+
+            it('should parse missingPerson boolean correctly - boolean true treated as true', () => {
+                const pair = new AssignmentPair({ missingPerson: true });
+                expect(pair.missingPerson).to.equal(true);
             });
         });
 
