@@ -1089,6 +1089,141 @@ describe('Flight Assignments Route Handlers', () => {
             expect(savedGuardianDoc.flight.history.length).to.equal(1);
             expect(savedGuardianDoc.flight.history[0].change).to.include('changed flight from');
         });
+
+        it('should initialize veteran metadata if not present', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            let savedVetDoc = null;
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: '' }
+                            // No metadata property
+                        }
+                    }]
+                })
+            });
+
+            global.fetch.onCall(2).callsFake(async (url, options) => {
+                savedVetDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ ok: true }) };
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(savedVetDoc.metadata).to.be.an('object');
+            expect(savedVetDoc.metadata.updated_at).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+            expect(savedVetDoc.metadata.updated_by).to.equal('Admin User');
+        });
+
+        it('should handle guardian with no flight object at all', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: 'guard-1'.padEnd(32, '0') },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+
+            global.fetch.onCall(2).resolves({ ok: true, json: async () => ({ ok: true }) });
+
+            // Guardian with no flight object and no metadata
+            let savedGuardianDoc = null;
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                json: async () => ({
+                    _id: 'guard-1'.padEnd(32, '0')
+                    // No flight property at all, no metadata
+                })
+            });
+
+            global.fetch.onCall(4).callsFake(async (url, options) => {
+                savedGuardianDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ ok: true }) };
+            });
+
+            await addVeteransToFlight(req, res);
+
+            const response = res.json.firstCall.args[0];
+            expect(response.added.guardians).to.equal(1);
+            expect(savedGuardianDoc.flight).to.be.an('object');
+            expect(savedGuardianDoc.flight.id).to.equal('SSHF-Nov2024');
+            expect(savedGuardianDoc.flight.history).to.be.an('array');
+            expect(savedGuardianDoc.flight.history[0].change).to.include('changed flight from: None to');
+            expect(savedGuardianDoc.metadata).to.be.an('object');
+            expect(savedGuardianDoc.metadata.updated_at).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+        });
+
+        it('should handle guardian with flight object but no id property', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: 'guard-1'.padEnd(32, '0') },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+
+            global.fetch.onCall(2).resolves({ ok: true, json: async () => ({ ok: true }) });
+
+            // Guardian with flight object but no id
+            let savedGuardianDoc = null;
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                json: async () => ({
+                    _id: 'guard-1'.padEnd(32, '0'),
+                    flight: { history: [] }, // flight exists but no id
+                    metadata: {}
+                })
+            });
+
+            global.fetch.onCall(4).callsFake(async (url, options) => {
+                savedGuardianDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ ok: true }) };
+            });
+
+            await addVeteransToFlight(req, res);
+
+            const response = res.json.firstCall.args[0];
+            expect(response.added.guardians).to.equal(1);
+            expect(savedGuardianDoc.flight.id).to.equal('SSHF-Nov2024');
+            // The old flight should be 'None' since flight.id was undefined
+            expect(savedGuardianDoc.flight.history[0].change).to.include('changed flight from: None to');
+        });
     });
 });
 
