@@ -1,14 +1,51 @@
 /**
- * Parses a value as a boolean, only returning true if the value is
- * exactly true (boolean) or the string "true" (case-insensitive).
- * This handles database values that may contain whitespace or other
- * truthy strings that should be treated as false.
+ * Parses nofly field from CouchDB view.
+ * The view returns " " (single space) for false, "nofly" for true.
+ * Also handles boolean true for direct data.
  * @param {any} value - The value to parse
- * @returns {boolean} - true only if value is boolean true or string "true"
+ * @returns {boolean}
+ */
+function parseNofly(value) {
+    if (value === true) return true;
+    if (typeof value === 'string' && value.trim().toLowerCase() === 'nofly') return true;
+    return false;
+}
+
+/**
+ * Parses confirmed field from CouchDB view.
+ * The view returns " " (single space) for false, "confirmed" for true.
+ * Also handles boolean true for direct data.
+ * @param {any} value - The value to parse
+ * @returns {boolean}
+ */
+function parseConfirmed(value) {
+    if (value === true) return true;
+    if (typeof value === 'string' && value.trim().toLowerCase() === 'confirmed') return true;
+    return false;
+}
+
+/**
+ * Parses mail_sent/email_sent field from CouchDB view.
+ * The view returns "Y" for true, "N" or " " for false.
+ * Also handles boolean true for direct data.
+ * @param {any} value - The value to parse
+ * @returns {boolean}
+ */
+function parseYN(value) {
+    if (value === true) return true;
+    if (typeof value === 'string' && value.trim().toUpperCase() === 'Y') return true;
+    return false;
+}
+
+/**
+ * Parses a generic boolean value.
+ * Returns true only for boolean true or string "true" (case-insensitive).
+ * @param {any} value - The value to parse
+ * @returns {boolean}
  */
 function parseBoolean(value) {
     if (value === true) return true;
-    if (typeof value === 'string' && value.toLowerCase() === 'true') return true;
+    if (typeof value === 'string' && value.trim().toLowerCase() === 'true') return true;
     return false;
 }
 
@@ -24,12 +61,12 @@ export class AssignmentPerson {
         this.city = data.city || '';
         this.appdate = data.appdate || '';
         this.group = data.group || '';
-        this.nofly = parseBoolean(data.nofly);
+        this.nofly = parseNofly(data.nofly);
         this.fm_number = data.fm_number || '';
         this.assigned_to = data.assigned_to || '';
-        this.mail_sent = parseBoolean(data.mail_sent);
-        this.email_sent = parseBoolean(data.email_sent);
-        this.confirmed = data.confirmed || '';
+        this.mail_sent = parseYN(data.mail_sent);
+        this.email_sent = parseYN(data.email_sent);
+        this.confirmed = parseConfirmed(data.confirmed);
         this.paired_with = data.paired_with || '';
     }
 

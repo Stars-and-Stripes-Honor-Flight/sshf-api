@@ -50,10 +50,10 @@ describe('Flight Assignments Route Handlers', () => {
                             id: 'vet-1', 
                             name_first: 'John',
                             name_last: 'Doe',
-                            group: '',
+                            group: ' ',
                             appdate: '2024-01-15',
-                            nofly: false,
-                            confirmed: '2024-02-01',
+                            nofly: ' ',
+                            confirmed: 'confirmed',
                             paired_with: 'guard-1'
                         } 
                     },
@@ -64,8 +64,8 @@ describe('Flight Assignments Route Handlers', () => {
                             id: 'guard-1',
                             name_first: 'Jane',
                             name_last: 'Smith',
-                            nofly: false,
-                            confirmed: ''
+                            nofly: ' ',
+                            confirmed: ' '
                         } 
                     }
                 ]

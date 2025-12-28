@@ -24,7 +24,7 @@ describe('Flight Assignment Models', () => {
                 expect(person.assigned_to).to.equal('');
                 expect(person.mail_sent).to.equal(false);
                 expect(person.email_sent).to.equal(false);
-                expect(person.confirmed).to.equal('');
+                expect(person.confirmed).to.equal(false);
                 expect(person.paired_with).to.equal('');
             });
 
@@ -42,7 +42,7 @@ describe('Flight Assignment Models', () => {
                     assigned_to: 'Caller1',
                     mail_sent: true,
                     email_sent: true,
-                    confirmed: '2024-02-01',
+                    confirmed: true,
                     paired_with: 'guard-456'
                 };
                 const person = new AssignmentPerson(data);
@@ -58,56 +58,90 @@ describe('Flight Assignment Models', () => {
                 expect(person.assigned_to).to.equal('Caller1');
                 expect(person.mail_sent).to.equal(true);
                 expect(person.email_sent).to.equal(true);
-                expect(person.confirmed).to.equal('2024-02-01');
+                expect(person.confirmed).to.equal(true);
                 expect(person.paired_with).to.equal('guard-456');
             });
 
-            it('should parse boolean properties correctly - whitespace treated as false', () => {
+            it('should parse view data - whitespace treated as false', () => {
+                // View returns " " for false values
                 const data = {
-                    nofly: ' ',      // whitespace should be false
-                    mail_sent: '  ', // whitespace should be false
-                    email_sent: ' '  // whitespace should be false
+                    nofly: ' ',
+                    mail_sent: ' ',
+                    email_sent: ' ',
+                    confirmed: ' '
                 };
                 const person = new AssignmentPerson(data);
                 expect(person.nofly).to.equal(false);
                 expect(person.mail_sent).to.equal(false);
                 expect(person.email_sent).to.equal(false);
+                expect(person.confirmed).to.equal(false);
             });
 
-            it('should parse boolean properties correctly - string "true" treated as true', () => {
+            it('should parse view data - actual view values treated as true', () => {
+                // View returns specific strings for true values
                 const data = {
-                    nofly: 'true',
-                    mail_sent: 'TRUE',
-                    email_sent: 'True'
+                    nofly: 'nofly',
+                    mail_sent: 'Y',
+                    email_sent: 'Y',
+                    confirmed: 'confirmed'
                 };
                 const person = new AssignmentPerson(data);
                 expect(person.nofly).to.equal(true);
                 expect(person.mail_sent).to.equal(true);
                 expect(person.email_sent).to.equal(true);
+                expect(person.confirmed).to.equal(true);
             });
 
-            it('should parse boolean properties correctly - boolean true treated as true', () => {
+            it('should parse view data - N treated as false for mail/email', () => {
+                const data = {
+                    mail_sent: 'N',
+                    email_sent: 'N'
+                };
+                const person = new AssignmentPerson(data);
+                expect(person.mail_sent).to.equal(false);
+                expect(person.email_sent).to.equal(false);
+            });
+
+            it('should parse boolean properties - boolean true treated as true', () => {
                 const data = {
                     nofly: true,
                     mail_sent: true,
-                    email_sent: true
+                    email_sent: true,
+                    confirmed: true
                 };
                 const person = new AssignmentPerson(data);
                 expect(person.nofly).to.equal(true);
                 expect(person.mail_sent).to.equal(true);
                 expect(person.email_sent).to.equal(true);
+                expect(person.confirmed).to.equal(true);
             });
 
-            it('should parse boolean properties correctly - other values treated as false', () => {
+            it('should parse boolean properties - case insensitive', () => {
+                const data = {
+                    nofly: 'NOFLY',
+                    mail_sent: 'y',
+                    email_sent: 'Y',
+                    confirmed: 'CONFIRMED'
+                };
+                const person = new AssignmentPerson(data);
+                expect(person.nofly).to.equal(true);
+                expect(person.mail_sent).to.equal(true);
+                expect(person.email_sent).to.equal(true);
+                expect(person.confirmed).to.equal(true);
+            });
+
+            it('should parse boolean properties - other values treated as false', () => {
                 const data = {
                     nofly: 'yes',
-                    mail_sent: 1,
-                    email_sent: 'false'
+                    mail_sent: 'sent',
+                    email_sent: 'true',
+                    confirmed: 'yes'
                 };
                 const person = new AssignmentPerson(data);
                 expect(person.nofly).to.equal(false);
                 expect(person.mail_sent).to.equal(false);
                 expect(person.email_sent).to.equal(false);
+                expect(person.confirmed).to.equal(false);
             });
         });
 
@@ -380,12 +414,12 @@ describe('Flight Assignment Models', () => {
                 pair.addPerson(new AssignmentPerson({ 
                     type: 'Veteran', 
                     id: 'vet-1', 
-                    confirmed: '2024-01-01' 
+                    confirmed: 'confirmed' 
                 }));
                 pair.addPerson(new AssignmentPerson({ 
                     type: 'Guardian', 
                     id: 'guard-1', 
-                    confirmed: '' 
+                    confirmed: ' ' 
                 }));
                 assignment.pairs = [pair];
                 
@@ -439,12 +473,12 @@ describe('Flight Assignment Models', () => {
                 pair.addPerson(new AssignmentPerson({ 
                     type: 'Guardian', 
                     id: 'guard-1', 
-                    confirmed: '2024-02-01' 
+                    confirmed: 'confirmed' 
                 }));
                 pair.addPerson(new AssignmentPerson({ 
                     type: 'Guardian', 
                     id: 'guard-2', 
-                    confirmed: '' 
+                    confirmed: ' ' 
                 }));
                 assignment.pairs = [pair];
                 
