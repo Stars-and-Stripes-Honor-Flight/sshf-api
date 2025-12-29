@@ -27,7 +27,6 @@ export async function getMessage(req, res, next) {
     const dbResult = await testdb();
     res.json({
         "message": "Hello, World!",
-        "url": dbUrl,
         "doc_count": dbResult.doc_count
     });
 }
