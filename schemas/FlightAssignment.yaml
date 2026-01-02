@@ -1,0 +1,140 @@
+FlightAssignment:
+  type: object
+  description: Flight assignment data including flight info, counts, and veteran-guardian pairs
+  properties:
+    flight:
+      type: object
+      description: Flight metadata
+      properties:
+        id:
+          type: string
+          description: Flight document ID
+        rev:
+          type: string
+          description: Flight document revision
+        name:
+          type: string
+          description: Flight name
+        capacity:
+          type: integer
+          description: Flight capacity
+        flight_date:
+          type: string
+          format: date
+          description: Flight date in YYYY-MM-DD format
+    counts:
+      type: object
+      description: Counts of veterans, guardians, and remaining capacity
+      properties:
+        veterans:
+          type: integer
+          description: Number of veterans assigned (excluding nofly)
+        guardians:
+          type: integer
+          description: Number of guardians assigned (excluding nofly)
+        veteransConfirmed:
+          type: integer
+          description: Number of confirmed veterans
+        guardiansConfirmed:
+          type: integer
+          description: Number of confirmed guardians
+        remaining:
+          type: integer
+          description: Remaining capacity on the flight
+    pairs:
+      type: array
+      description: List of veteran-guardian pairs
+      items:
+        $ref: '#/AssignmentPair'
+
+AssignmentPair:
+  type: object
+  description: A veteran-guardian pairing
+  properties:
+    pairId:
+      type: string
+      description: Unique identifier for the pair
+    group:
+      type: string
+      description: Veteran group name (if any)
+    appDate:
+      type: string
+      format: date
+      description: Application date
+    missingPerson:
+      type: boolean
+      description: True if the pair is missing a person (veteran has paired_with but only 1 person)
+    people:
+      type: array
+      description: List of people in the pair (veteran and/or guardian)
+      items:
+        $ref: '#/AssignmentPerson'
+
+AssignmentPerson:
+  type: object
+  description: An individual person (veteran or guardian) in a flight assignment
+  properties:
+    type:
+      type: string
+      enum: [Veteran, Guardian]
+      description: Person type
+    id:
+      type: string
+      description: Document ID
+    name_first:
+      type: string
+      description: First name
+    name_last:
+      type: string
+      description: Last name
+    city:
+      type: string
+      description: City
+    appdate:
+      type: string
+      format: date
+      description: Application date
+    group:
+      type: string
+      description: Group name (if any)
+    nofly:
+      type: boolean
+      description: Whether person is marked as no-fly
+    fm_number:
+      type: string
+      description: FM number for caller assignment
+    assigned_to:
+      type: string
+      description: Assigned caller
+    mail_sent:
+      type: boolean
+      description: Whether mail has been sent
+    email_sent:
+      type: boolean
+      description: Whether email has been sent
+    confirmed:
+      type: string
+      description: Confirmation status
+    paired_with:
+      type: string
+      description: ID of paired person
+
+AddVeteransResult:
+  type: object
+  description: Result of adding veterans to a flight
+  properties:
+    added:
+      type: object
+      properties:
+        veterans:
+          type: integer
+          description: Number of veterans added
+        guardians:
+          type: integer
+          description: Number of guardians added
+    errors:
+      type: array
+      items:
+        type: string
+      description: List of errors encountered during processing
+
