@@ -1,0 +1,38 @@
+type: object
+properties:
+  id:
+    type: string
+    description: 'Unique identifier for the document'
+  type:
+    type: string
+    enum: ['Veteran', 'Guardian']
+    description: 'Type of applicant - either Veteran or Guardian'
+  name:
+    type: string
+    description: 'Name of the applicant'
+  city:
+    type: string
+    description: 'City and state of residence'
+  appdate:
+    type: string
+    description: 'Date the application was received'
+  recdate:
+    type: string
+    format: date-time
+    description: 'Date and time the change occurred (UTC ISO string)'
+  recby:
+    type: string
+    description: 'User who made the change'
+  change:
+    type: string
+    description: 'Short summary of the change'
+required:
+  - id
+  - type
+  - name
+  - city
+  - appdate
+  - recdate
+  - recby
+  - change
+
