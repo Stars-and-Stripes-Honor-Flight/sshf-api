@@ -17,6 +17,7 @@ import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian } from
 import { listFlights, createFlight, retrieveFlight, updateFlight } from './routes/flights.js';
 import { getFlightAssignments, addVeteransToFlight } from './routes/flight-assignments.js';
 import { getWaitlist } from './routes/waitlist.js';
+import { getRecentActivity } from './routes/recent-activity.js';
 
 const app = express();
 const port = 8080;
@@ -86,6 +87,9 @@ app.post("/flights/:id/assignments", authenticate, dbSession, addVeteransToFligh
 
 // Waitlist routes
 app.get("/waitlist", authenticate, dbSession, getWaitlist);
+
+// Recent Activity routes
+app.get("/recent-activity", authenticate, dbSession, getRecentActivity);
 
 // Expose OpenAPI spec at custom endpoint
 app.get('/openapi.json', (req, res) => {

@@ -62,7 +62,8 @@ const options = {
         Guardian: loadSchema('Guardian'),
         Flight: loadSchema('Flight'),
         UnpairedVeteranResult: loadSchema('UnpairedVeteranResult'),
-        UnpairedVeteranResults: loadSchema('UnpairedVeteranResults')
+        UnpairedVeteranResults: loadSchema('UnpairedVeteranResults'),
+        RecentActivityEntry: loadSchema('RecentActivityEntry')
       }
     },
     security: [

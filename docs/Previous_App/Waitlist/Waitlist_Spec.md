@@ -2,7 +2,7 @@
 
 This feature provides the ability to view veterans and unpaired guardians to see their posistions on their respective wait lists.
 The veteran wait list is the most important as any guardians paired with veterans are added to the flight when their veteran is. 
-Only volunteer guardians that are not yet paired to a veteran are shown on the guardian waitlis.
+Only volunteer guardians that are not yet paired to a veteran are shown on the guardian waitlist.
 
 There are database views for each of the lists that return the results in the proper order:
 
