@@ -125,6 +125,11 @@ describe('Flight Detail Models', () => {
                 expect(person.confirmed).to.equal(false);
             });
 
+            it('should parse confirmed - string "confirmed" treated as true', () => {
+                const person = new FlightDetailPerson({ confirmed: 'confirmed' });
+                expect(person.confirmed).to.equal(true);
+            });
+
             it('should parse confirmed - boolean true treated as true', () => {
                 const person = new FlightDetailPerson({ confirmed: true });
                 expect(person.confirmed).to.equal(true);
@@ -221,6 +226,16 @@ describe('Flight Detail Models', () => {
                 expect(person.type).to.equal('');
                 expect(person.bus).to.equal('None');
                 expect(person.nofly).to.equal(false);
+            });
+
+            it('should parse confirmed string "confirmed" from view row', () => {
+                const row = {
+                    type: 'Veteran',
+                    id: 'vet-1',
+                    confirmed: 'confirmed'
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                expect(person.confirmed).to.equal(true);
             });
         });
     });
@@ -414,6 +429,18 @@ describe('Flight Detail Models', () => {
                 expect(result.flight.id).to.equal('flight-456');
                 expect(result.flight.name).to.equal('SSHF-Dec2024');
             });
+
+            it('should use provided FlightDetailStats instance', () => {
+                const stats = new FlightDetailStats();
+                stats.buses.Alpha1 = 5;
+                const data = {
+                    flight: { id: 'f1', name: 'Test' },
+                    stats: stats
+                };
+                const result = new FlightDetailResult(data);
+                expect(result.stats).to.equal(stats);  // Same instance
+                expect(result.stats.buses.Alpha1).to.equal(5);
+            });
         });
 
         describe('calculateStats', () => {
@@ -478,6 +505,32 @@ describe('Flight Detail Models', () => {
                 
                 expect(() => result.calculateStats()).to.not.throw();
                 expect(result.stats.tours.Alpha).to.equal(0);
+            });
+
+            it('should handle person with undefined bus (defaults to None)', () => {
+                const result = new FlightDetailResult({ flight: { capacity: 100 } });
+                const pair = new FlightDetailPair();
+                const person = new FlightDetailPerson({ type: 'Veteran', id: 'v1' });
+                person.bus = undefined;  // Explicitly set to undefined
+                pair.addPerson(person);
+                result.pairs = [pair];
+                
+                result.calculateStats();
+                
+                expect(result.stats.buses.None).to.equal(1);
+            });
+
+            it('should handle person with null bus (defaults to None)', () => {
+                const result = new FlightDetailResult({ flight: { capacity: 100 } });
+                const pair = new FlightDetailPair();
+                const person = new FlightDetailPerson({ type: 'Veteran', id: 'v1' });
+                person.bus = null;  // Explicitly set to null
+                pair.addPerson(person);
+                result.pairs = [pair];
+                
+                result.calculateStats();
+                
+                expect(result.stats.buses.None).to.equal(1);
             });
         });
 
@@ -667,6 +720,15 @@ describe('Flight Detail Models', () => {
                 const json = result.toJSON();
                 
                 expect(json.stats.buses.Alpha1).to.equal(5);
+            });
+
+            it('should handle stats that is not a FlightDetailStats instance', () => {
+                const result = new FlightDetailResult();
+                result.stats = { buses: { Alpha1: 10 }, tours: { Alpha: 10 }, flight: { Alpha: 10 } };
+                
+                const json = result.toJSON();
+                
+                expect(json.stats).to.deep.equal(result.stats);
             });
         });
 

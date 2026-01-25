@@ -1458,6 +1458,21 @@ describe('Guardians Route Handlers', () => {
             expect(res.json.firstCall.args[0].error).to.equal('Guardian not found');
         });
 
+        it('should return 500 when fetch fails with non-404 error', async () => {
+            req.body = { value: '14A' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ error: 'Database error' })
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian for update');
+        });
+
         it('should return 400 when document is not a guardian', async () => {
             req.body = { value: '14A' };
             
@@ -1489,6 +1504,25 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Conflict');
+        });
+
+        it('should return 500 when save fails without reason', async () => {
+            req.body = { value: '14A' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockGuardianDoc
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: undefined })  // Explicitly undefined to hit || branch
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to update guardian seat');
         });
 
         it('should return 503 when database session cannot be established', async () => {
@@ -1638,6 +1672,21 @@ describe('Guardians Route Handlers', () => {
             expect(res.status.calledWith(404)).to.be.true;
         });
 
+        it('should return 500 when fetch fails with non-404 error', async () => {
+            req.body = { value: 'Alpha1' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ error: 'Database error' })
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian for update');
+        });
+
         it('should return 400 when document is not a guardian', async () => {
             req.body = { value: 'Alpha1' };
             
@@ -1667,6 +1716,25 @@ describe('Guardians Route Handlers', () => {
             await updateGuardianBus(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
+        });
+
+        it('should return 500 when save fails without reason', async () => {
+            req.body = { value: 'Bravo1' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockGuardianDoc
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: undefined })  // Explicitly undefined to hit || branch
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to update guardian bus');
         });
 
         it('should return 503 when database session cannot be established', async () => {
