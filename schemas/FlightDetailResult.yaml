@@ -1,0 +1,147 @@
+FlightDetailResult:
+  type: object
+  description: Flight detail data including flight info, statistics, and seat/bus assignments
+  properties:
+    flight:
+      type: object
+      description: Flight metadata
+      properties:
+        id:
+          type: string
+          description: Flight document ID
+        name:
+          type: string
+          description: Flight name
+        capacity:
+          type: integer
+          description: Flight capacity
+        flight_date:
+          type: string
+          format: date
+          description: Flight date in YYYY-MM-DD format
+    stats:
+      type: object
+      description: Statistics for the flight
+      properties:
+        buses:
+          type: object
+          description: Count of people per bus
+          properties:
+            None:
+              type: integer
+            Alpha1:
+              type: integer
+            Alpha2:
+              type: integer
+            Alpha3:
+              type: integer
+            Alpha4:
+              type: integer
+            Alpha5:
+              type: integer
+            Bravo1:
+              type: integer
+            Bravo2:
+              type: integer
+            Bravo3:
+              type: integer
+            Bravo4:
+              type: integer
+            Bravo5:
+              type: integer
+        tours:
+          type: object
+          description: Count of people per tour (Alpha = Alpha1-5, Bravo = Bravo1-5)
+          properties:
+            Alpha:
+              type: integer
+            Bravo:
+              type: integer
+            None:
+              type: integer
+        flight:
+          type: object
+          description: Count of people per tour excluding nofly entries
+          properties:
+            Alpha:
+              type: integer
+            Bravo:
+              type: integer
+            None:
+              type: integer
+    pairs:
+      type: array
+      description: List of veteran-guardian pairs with seat/bus assignments
+      items:
+        $ref: '#/FlightDetailPair'
+
+FlightDetailPair:
+  type: object
+  description: A veteran-guardian pairing with mismatch detection
+  properties:
+    pairId:
+      type: string
+      description: Unique identifier for the pair (veteran's ID or guardian's ID if unpaired)
+    busMismatch:
+      type: boolean
+      description: True if people in the pair have different bus assignments
+    missingPairedPerson:
+      type: boolean
+      description: True if a paired person is not on this flight
+    people:
+      type: array
+      description: List of people in the pair (veteran and/or guardian)
+      items:
+        $ref: '#/FlightDetailPerson'
+
+FlightDetailPerson:
+  type: object
+  description: An individual person (veteran or guardian) in the flight detail
+  properties:
+    type:
+      type: string
+      enum: [Veteran, Guardian]
+      description: Person type
+    id:
+      type: string
+      description: Document ID
+    name_first:
+      type: string
+      description: First name
+    name_last:
+      type: string
+      description: Last name
+    city:
+      type: string
+      description: City and state
+    bus:
+      type: string
+      enum: [None, Alpha1, Alpha2, Alpha3, Alpha4, Alpha5, Bravo1, Bravo2, Bravo3, Bravo4, Bravo5]
+      description: Bus assignment
+    seat:
+      type: string
+      description: Seat assignment (e.g., "14A")
+    shirt:
+      type: string
+      description: Shirt size
+    nofly:
+      type: boolean
+      description: Whether person is marked as no-fly
+    confirmed:
+      type: boolean
+      description: Whether person is confirmed for the flight
+    med_limits:
+      type: string
+      description: Medical limitations (Veterans only)
+    group:
+      type: string
+      description: Group name (Veterans only)
+    med_exprnc:
+      type: string
+      description: Medical experience (Guardians only)
+    training:
+      type: string
+      description: Training status (Guardians only)
+    training_complete:
+      type: boolean
+      description: Whether training is complete (Guardians only)
