@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian } from '../routes/guardians.js';
+import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian, updateGuardianSeat, updateGuardianBus } from '../routes/guardians.js';
 import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Guardians Route Handlers', () => {
@@ -1324,6 +1324,362 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+    });
+
+    describe('updateGuardianSeat', () => {
+        const mockGuardianDoc = {
+            _id: 'guard-123',
+            _rev: '1-abc',
+            type: 'Guardian',
+            flight: {
+                id: 'SSHF-Nov2024',
+                bus: 'Alpha1',
+                seat: '10A',
+                history: []
+            },
+            metadata: {
+                created_at: '2024-01-01T00:00:00Z',
+                created_by: 'Test User'
+            }
+        };
+
+        it('should update guardian seat successfully', async () => {
+            req.body = { value: '14B' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(mockGuardianDoc))
+            });
+
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-123', rev: '2-xyz' }) };
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.json.called).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.ok).to.equal(true);
+            expect(response.seat).to.equal('14B');
+            expect(savedDoc.flight.seat).to.equal('14B');
+            expect(savedDoc.flight.history.length).to.equal(1);
+            expect(savedDoc.flight.history[0].change).to.include('changed seat from: 10A to: 14B');
+        });
+
+        it('should update guardian seat with empty old value', async () => {
+            req.body = { value: '5C' };
+            const docWithoutSeat = {
+                _id: 'guard-123',
+                _rev: '1-abc',
+                type: 'Guardian',
+                flight: {
+                    id: 'SSHF-Nov2024',
+                    bus: 'Alpha1',
+                    seat: '',
+                    history: []
+                },
+                metadata: {}
+            };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(docWithoutSeat))
+            });
+
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-123', rev: '2-xyz' }) };
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(savedDoc.flight.history[0].change).to.include('changed seat from:  to: 5C');
+        });
+
+        it('should initialize flight and history if not present', async () => {
+            req.body = { value: '7D' };
+            const docWithoutFlight = { 
+                _id: 'guard-123', 
+                _rev: '1-abc', 
+                type: 'Guardian' 
+            };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => docWithoutFlight
+            });
+
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-123', rev: '2-xyz' }) };
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(savedDoc.flight).to.be.an('object');
+            expect(savedDoc.flight.seat).to.equal('7D');
+            expect(savedDoc.flight.history).to.be.an('array');
+        });
+
+        it('should return 400 when value is missing', async () => {
+            req.body = {};
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('value is required');
+        });
+
+        it('should return 400 when value is null', async () => {
+            req.body = { value: null };
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+        });
+
+        it('should return 404 when guardian not found', async () => {
+            req.body = { value: '14A' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 404,
+                json: async () => ({ error: 'not_found' })
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(404)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Guardian not found');
+        });
+
+        it('should return 400 when document is not a guardian', async () => {
+            req.body = { value: '14A' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => ({ _id: 'doc-1', type: 'Veteran' })
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('not a guardian record');
+        });
+
+        it('should return 500 when save fails', async () => {
+            req.body = { value: '14A' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockGuardianDoc
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: 'Conflict' })
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Conflict');
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            req.body = { value: '14A' };
+            
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+        });
+    });
+
+    describe('updateGuardianBus', () => {
+        const mockGuardianDoc = {
+            _id: 'guard-123',
+            _rev: '1-abc',
+            type: 'Guardian',
+            flight: {
+                id: 'SSHF-Nov2024',
+                bus: 'Alpha1',
+                seat: '10A',
+                history: []
+            },
+            metadata: {
+                created_at: '2024-01-01T00:00:00Z',
+                created_by: 'Test User'
+            }
+        };
+
+        it('should update guardian bus successfully', async () => {
+            req.body = { value: 'Bravo3' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockGuardianDoc
+            });
+
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-123', rev: '2-xyz' }) };
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(res.json.called).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.ok).to.equal(true);
+            expect(response.bus).to.equal('Bravo3');
+            expect(savedDoc.flight.bus).to.equal('Bravo3');
+            expect(savedDoc.flight.history.length).to.equal(1);
+            expect(savedDoc.flight.history[0].change).to.include('changed bus from: Alpha1 to: Bravo3');
+        });
+
+        it('should accept all valid bus values', async () => {
+            const validBuses = ['None', 'Alpha1', 'Alpha2', 'Alpha3', 'Alpha4', 'Alpha5', 'Bravo1', 'Bravo2', 'Bravo3', 'Bravo4', 'Bravo5'];
+            
+            for (const bus of validBuses) {
+                req.body = { value: bus };
+                
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => mockGuardianDoc
+                });
+
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guard-123', rev: '2-xyz' })
+                });
+
+                await updateGuardianBus(req, res);
+
+                expect(res.json.called).to.be.true;
+                const response = res.json.lastCall.args[0];
+                expect(response.bus).to.equal(bus);
+                
+                sinon.restore();
+                global.fetch = sinon.stub();
+                res = {
+                    status: sinon.stub().returnsThis(),
+                    json: sinon.spy()
+                };
+            }
+        });
+
+        it('should return 400 for invalid bus value', async () => {
+            req.body = { value: 'InvalidBus' };
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Invalid bus value');
+            expect(res.json.firstCall.args[0].error).to.include('None, Alpha1');
+        });
+
+        it('should return 400 when value is missing', async () => {
+            req.body = {};
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('value is required');
+        });
+
+        it('should initialize flight and history if not present', async () => {
+            req.body = { value: 'Alpha2' };
+            const docWithoutFlight = { 
+                _id: 'guard-123', 
+                _rev: '1-abc', 
+                type: 'Guardian' 
+            };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => docWithoutFlight
+            });
+
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-123', rev: '2-xyz' }) };
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(savedDoc.flight).to.be.an('object');
+            expect(savedDoc.flight.bus).to.equal('Alpha2');
+            expect(savedDoc.flight.history).to.be.an('array');
+            expect(savedDoc.flight.history[0].change).to.include('changed bus from: None to: Alpha2');
+        });
+
+        it('should return 404 when guardian not found', async () => {
+            req.body = { value: 'Alpha1' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 404,
+                json: async () => ({ error: 'not_found' })
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(404)).to.be.true;
+        });
+
+        it('should return 400 when document is not a guardian', async () => {
+            req.body = { value: 'Alpha1' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => ({ _id: 'doc-1', type: 'Flight' })
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+        });
+
+        it('should return 500 when save fails', async () => {
+            req.body = { value: 'Bravo1' };
+            
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockGuardianDoc
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({ reason: 'Database error' })
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+        });
+
+        it('should return 503 when database session cannot be established', async () => {
+            req.body = { value: 'Alpha1' };
+            
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
         });
     });
 }); 
