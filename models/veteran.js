@@ -357,6 +357,51 @@ export class Veteran {
         }
     }
 
+    /**
+     * Updates history arrays when tracked properties change.
+     * 
+     * VETERAN HISTORY TRACKING DOCUMENTATION:
+     * ========================================
+     * 
+     * flight.history tracks changes to:
+     * ---------------------------------
+     * | Property               | Display Name             |
+     * |------------------------|--------------------------|
+     * | flight.id              | flight                   |
+     * | flight.bus             | bus                      |
+     * | flight.status          | status                   |
+     * | flight.seat            | seat                     |
+     * | flight.confirmed_date  | confirmed date           |
+     * | flight.group           | group                    |
+     * | flight.waiver          | flight waiver received   |
+     * | flight.mediaWaiver     | media waiver received    |
+     * | flight.vaccinated      | vaccinated               |
+     * | flight.infection_test  | infection test           |
+     * | flight.nofly           | flight nofly             |
+     * | medical.release        | medical release received |
+     * | medical.form           | medical form received    |
+     * 
+     * call.history tracks changes to:
+     * -------------------------------
+     * | Property               | Display Name             |
+     * |------------------------|--------------------------|
+     * | call.assigned_to       | assigned caller          |
+     * | call.fm_number         | FM #                     |
+     * | call.mail_sent         | veteran mail sent        |
+     * | call.email_sent        | mail call email sent     |
+     * | mail_call.received     | mail call received       |
+     * | mail_call.adopt        | mail call adopt          |
+     * 
+     * guardian.history tracks pairing changes (handled in routes/guardians.js):
+     * -------------------------------------------------------------------------
+     * | Event                  | Format                                        |
+     * |------------------------|-----------------------------------------------|
+     * | Guardian paired        | "paired to: {guardianName} by: {userName}"    |
+     * | Guardian unpaired      | "unpaired from: {guardianName} by: {userName}"|
+     * 
+     * @param {Veteran} currentVeteran - The current veteran document from the database
+     * @param {Object} user - The user making the change (with firstName and lastName)
+     */
     updateHistory(currentVeteran, user) {
         const userName = user.firstName + ' ' + user.lastName;
         // Format timestamp as yyyy-MM-DDThh:mm:ssZ without milliseconds
@@ -365,20 +410,34 @@ export class Veteran {
 
         const historyMapping = [
             {
-                'historyProperty':'flight.history',
+                'historyProperty': 'flight.history',
                 'trackedProperties': [
-                { 'property': 'flight.id', 'name': 'flight' },
-                { 'property': 'flight.bus', 'name': 'bus' },
-                { 'property': 'flight.status', 'name': 'status' },
-                { 'property': 'flight.seat', 'name': 'seat' },
-                { 'property': 'flight.confirmed_date', 'name': 'confirmed date' }
-            ]},
+                    { 'property': 'flight.id', 'name': 'flight' },
+                    { 'property': 'flight.bus', 'name': 'bus' },
+                    { 'property': 'flight.status', 'name': 'status' },
+                    { 'property': 'flight.seat', 'name': 'seat' },
+                    { 'property': 'flight.confirmed_date', 'name': 'confirmed date' },
+                    { 'property': 'flight.group', 'name': 'group' },
+                    { 'property': 'flight.waiver', 'name': 'flight waiver received' },
+                    { 'property': 'flight.mediaWaiver', 'name': 'media waiver received' },
+                    { 'property': 'flight.vaccinated', 'name': 'vaccinated' },
+                    { 'property': 'flight.infection_test', 'name': 'infection test' },
+                    { 'property': 'flight.nofly', 'name': 'flight nofly' },
+                    { 'property': 'medical.release', 'name': 'medical release received' },
+                    { 'property': 'medical.form', 'name': 'medical form received' }
+                ]
+            },
             {
                 'historyProperty': 'call.history',
                 'trackedProperties': [
-                { 'property': 'mail_call.received', 'name': 'mail_call received' },
-                { 'property': 'call.assigned_to', 'name': 'assigned caller' } 
-            ]}
+                    { 'property': 'call.assigned_to', 'name': 'assigned caller' },
+                    { 'property': 'call.fm_number', 'name': 'FM #' },
+                    { 'property': 'call.mail_sent', 'name': 'veteran mail sent' },
+                    { 'property': 'call.email_sent', 'name': 'mail call email sent' },
+                    { 'property': 'mail_call.received', 'name': 'mail call received' },
+                    { 'property': 'mail_call.adopt', 'name': 'mail call adopt' }
+                ]
+            }
         ];
 
         historyMapping.forEach(mapping => {
