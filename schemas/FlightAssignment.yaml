@@ -45,7 +45,7 @@ FlightAssignment:
       type: array
       description: List of veteran-guardian pairs
       items:
-        $ref: '#/AssignmentPair'
+        $ref: '#/components/schemas/AssignmentPair'
 
 AssignmentPair:
   type: object
@@ -68,7 +68,7 @@ AssignmentPair:
       type: array
       description: List of people in the pair (veteran and/or guardian)
       items:
-        $ref: '#/AssignmentPerson'
+        $ref: '#/components/schemas/AssignmentPerson'
 
 AssignmentPerson:
   type: object
