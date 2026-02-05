@@ -1,5 +1,6 @@
 import { Guardian } from '../models/guardian.js';
 import { Veteran } from '../models/veteran.js';
+import { VALID_BUSES } from '../models/flight_detail.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
@@ -532,6 +533,301 @@ export async function deleteGuardian(req, res) {
             return res.status(503).json({ error: error.message });
         }
         console.error('Error deleting guardian:', error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
+/**
+ * @swagger
+ * /guardians/{id}/seat:
+ *   patch:
+ *     summary: Update a guardian's seat assignment
+ *     description: |
+ *       Quickly updates only the seat assignment for a guardian without loading the full model.
+ *       Adds a history entry for the change.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Guardian record ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - value
+ *             properties:
+ *               value:
+ *                 type: string
+ *                 description: New seat assignment (e.g., "14A")
+ *     responses:
+ *       200:
+ *         description: Seat updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 id:
+ *                   type: string
+ *                 rev:
+ *                   type: string
+ *                 seat:
+ *                   type: string
+ *       400:
+ *         description: Invalid request or document is not a guardian record
+ *       404:
+ *         description: Guardian not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+export async function updateGuardianSeat(req, res) {
+    try {
+        const docId = req.params.id;
+        const { value } = req.body;
+
+        // Validate request body
+        if (value === undefined || value === null) {
+            return res.status(400).json({ error: 'value is required' });
+        }
+
+        const newSeat = String(value);
+
+        // Get the current document
+        const url = `${dbUrl}/${dbName}/${docId}`;
+        const getResponse = await dbFetch(req, url);
+
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) {
+                return res.status(404).json({ error: 'Guardian not found' });
+            }
+            throw new Error('Failed to get guardian for update');
+        }
+
+        const doc = await getResponse.json();
+
+        // Verify this is a guardian document
+        if (doc.type !== 'Guardian') {
+            return res.status(400).json({ error: 'Document is not a guardian record' });
+        }
+
+        // Get current seat value
+        const oldSeat = doc.flight?.seat || '';
+
+        // Update seat
+        if (!doc.flight) {
+            doc.flight = {};
+        }
+        doc.flight.seat = newSeat;
+
+        // Add history entry
+        if (!doc.flight.history) {
+            doc.flight.history = [];
+        }
+        const userName = req.user.firstName + ' ' + req.user.lastName;
+        const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+        doc.flight.history.push({
+            id: timestamp,
+            change: `changed seat from: ${oldSeat} to: ${newSeat} by: ${userName}`
+        });
+
+        // Update metadata
+        if (!doc.metadata) {
+            doc.metadata = {};
+        }
+        doc.metadata.updated_at = timestamp;
+        doc.metadata.updated_by = userName;
+
+        // Save the document
+        const updateResponse = await dbFetch(req, url, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(doc)
+        });
+
+        if (!updateResponse.ok) {
+            const data = await updateResponse.json();
+            throw new Error(data.reason || 'Failed to update guardian seat');
+        }
+
+        const data = await updateResponse.json();
+        res.json({
+            ok: true,
+            id: data.id,
+            rev: data.rev,
+            seat: newSeat
+        });
+    } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
+        console.error('Error updating guardian seat:', error);
+        res.status(500).json({ error: error.message });
+    }
+}
+
+/**
+ * @swagger
+ * /guardians/{id}/bus:
+ *   patch:
+ *     summary: Update a guardian's bus assignment
+ *     description: |
+ *       Quickly updates only the bus assignment for a guardian without loading the full model.
+ *       Adds a history entry for the change.
+ *       Bus must be one of: None, Alpha1, Alpha2, Alpha3, Alpha4, Alpha5, Bravo1, Bravo2, Bravo3, Bravo4, Bravo5
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Guardian record ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - value
+ *             properties:
+ *               value:
+ *                 type: string
+ *                 enum: [None, Alpha1, Alpha2, Alpha3, Alpha4, Alpha5, Bravo1, Bravo2, Bravo3, Bravo4, Bravo5]
+ *                 description: New bus assignment
+ *     responses:
+ *       200:
+ *         description: Bus updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 id:
+ *                   type: string
+ *                 rev:
+ *                   type: string
+ *                 bus:
+ *                   type: string
+ *       400:
+ *         description: Invalid request, invalid bus value, or document is not a guardian record
+ *       404:
+ *         description: Guardian not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+export async function updateGuardianBus(req, res) {
+    try {
+        const docId = req.params.id;
+        const { value } = req.body;
+
+        // Validate request body
+        if (value === undefined || value === null) {
+            return res.status(400).json({ error: 'value is required' });
+        }
+
+        const newBus = String(value);
+
+        // Validate bus value
+        if (!VALID_BUSES.includes(newBus)) {
+            return res.status(400).json({ 
+                error: `Invalid bus value. Must be one of: ${VALID_BUSES.join(', ')}` 
+            });
+        }
+
+        // Get the current document
+        const url = `${dbUrl}/${dbName}/${docId}`;
+        const getResponse = await dbFetch(req, url);
+
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) {
+                return res.status(404).json({ error: 'Guardian not found' });
+            }
+            throw new Error('Failed to get guardian for update');
+        }
+
+        const doc = await getResponse.json();
+
+        // Verify this is a guardian document
+        if (doc.type !== 'Guardian') {
+            return res.status(400).json({ error: 'Document is not a guardian record' });
+        }
+
+        // Get current bus value
+        const oldBus = doc.flight?.bus || 'None';
+
+        // Update bus
+        if (!doc.flight) {
+            doc.flight = {};
+        }
+        doc.flight.bus = newBus;
+
+        // Add history entry
+        if (!doc.flight.history) {
+            doc.flight.history = [];
+        }
+        const userName = req.user.firstName + ' ' + req.user.lastName;
+        const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+        doc.flight.history.push({
+            id: timestamp,
+            change: `changed bus from: ${oldBus} to: ${newBus} by: ${userName}`
+        });
+
+        // Update metadata
+        if (!doc.metadata) {
+            doc.metadata = {};
+        }
+        doc.metadata.updated_at = timestamp;
+        doc.metadata.updated_by = userName;
+
+        // Save the document
+        const updateResponse = await dbFetch(req, url, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(doc)
+        });
+
+        if (!updateResponse.ok) {
+            const data = await updateResponse.json();
+            throw new Error(data.reason || 'Failed to update guardian bus');
+        }
+
+        const data = await updateResponse.json();
+        res.json({
+            ok: true,
+            id: data.id,
+            rev: data.rev,
+            bus: newBus
+        });
+    } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
+        console.error('Error updating guardian bus:', error);
         res.status(500).json({ error: error.message });
     }
 } 

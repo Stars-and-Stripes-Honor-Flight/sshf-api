@@ -63,7 +63,8 @@ const options = {
         Flight: loadSchema('Flight'),
         UnpairedVeteranResult: loadSchema('UnpairedVeteranResult'),
         UnpairedVeteranResults: loadSchema('UnpairedVeteranResults'),
-        RecentActivityEntry: loadSchema('RecentActivityEntry')
+        RecentActivityEntry: loadSchema('RecentActivityEntry'),
+        FlightDetailResult: loadSchema('FlightDetailResult')
       }
     },
     security: [

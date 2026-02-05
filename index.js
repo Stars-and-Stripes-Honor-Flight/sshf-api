@@ -12,10 +12,11 @@ import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
-import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran, searchUnpairedVeterans } from './routes/veterans.js';
-import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian } from './routes/guardians.js';
+import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran, searchUnpairedVeterans, updateVeteranSeat, updateVeteranBus } from './routes/veterans.js';
+import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian, updateGuardianSeat, updateGuardianBus } from './routes/guardians.js';
 import { listFlights, createFlight, retrieveFlight, updateFlight } from './routes/flights.js';
 import { getFlightAssignments, addVeteransToFlight } from './routes/flight-assignments.js';
+import { getFlightDetail } from './routes/flight-detail.js';
 import { getWaitlist } from './routes/waitlist.js';
 import { getRecentActivity } from './routes/recent-activity.js';
 
@@ -67,12 +68,16 @@ app.post("/veterans", authenticate, dbSession, createVeteran);
 app.get("/veterans/search", authenticate, dbSession, searchUnpairedVeterans);
 app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
 app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
+app.patch("/veterans/:id/seat", authenticate, dbSession, updateVeteranSeat);
+app.patch("/veterans/:id/bus", authenticate, dbSession, updateVeteranBus);
 app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
 
 // Guardian-specific routes
 app.post("/guardians", authenticate, dbSession, createGuardian);
 app.get("/guardians/:id", authenticate, dbSession, retrieveGuardian);
 app.put("/guardians/:id", authenticate, dbSession, updateGuardian);
+app.patch("/guardians/:id/seat", authenticate, dbSession, updateGuardianSeat);
+app.patch("/guardians/:id/bus", authenticate, dbSession, updateGuardianBus);
 app.delete("/guardians/:id", authenticate, dbSession, deleteGuardian);
 
 // Flight-specific routes
@@ -84,6 +89,9 @@ app.put("/flights/:id", authenticate, dbSession, updateFlight);
 // Flight assignment routes
 app.get("/flights/:id/assignments", authenticate, dbSession, getFlightAssignments);
 app.post("/flights/:id/assignments", authenticate, dbSession, addVeteransToFlight);
+
+// Flight detail routes
+app.get("/flights/:id/detail", authenticate, dbSession, getFlightDetail);
 
 // Waitlist routes
 app.get("/waitlist", authenticate, dbSession, getWaitlist);
