@@ -19,6 +19,7 @@ import { getFlightAssignments, addVeteransToFlight } from './routes/flight-assig
 import { getFlightDetail } from './routes/flight-detail.js';
 import { getWaitlist } from './routes/waitlist.js';
 import { getRecentActivity } from './routes/recent-activity.js';
+import { exportFlightCsv, exportCallCenterFollowUpCsv, exportTourLeadCsv } from './routes/exports.js';
 
 const app = express();
 const port = 8080;
@@ -98,6 +99,11 @@ app.get("/waitlist", authenticate, dbSession, getWaitlist);
 
 // Recent Activity routes
 app.get("/recent-activity", authenticate, dbSession, getRecentActivity);
+
+// Export routes
+app.get("/exports/flight", authenticate, dbSession, exportFlightCsv);
+app.get("/exports/callcenterfollowup", authenticate, dbSession, exportCallCenterFollowUpCsv);
+app.get("/exports/tourlead", authenticate, dbSession, exportTourLeadCsv);
 
 // Expose OpenAPI spec at custom endpoint
 app.get('/openapi.json', (req, res) => {
