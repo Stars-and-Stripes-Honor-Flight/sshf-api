@@ -86,12 +86,18 @@ properties:
       id:
         type: string
         default: 'None'
-        description: 'Flight ID'
+        description: 'Flight ID. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'flight'
       status:
         type: string
         enum: ['Active', 'Flown', 'Deceased', 'Removed', 'Future-Spring', 'Future-Fall', 'Future-PostRestriction', 'Copied']
         default: 'Active'
-        description: 'Current flight status'
+        description: 'Current flight status. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'status'
       group:
         type: string
         description: 'Flight group'
@@ -99,13 +105,22 @@ properties:
         type: string
         default: 'None'
         enum: ['None', 'Alpha1', 'Alpha2', 'Alpha3', 'Alpha4', 'Alpha5', 'Bravo1', 'Bravo2', 'Bravo3', 'Bravo4', 'Bravo5']
-        description: 'Assigned bus'
+        description: 'Assigned bus. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'bus'
       seat:
         type: string
-        description: 'Assigned seat'
+        description: 'Assigned seat. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'seat'
       confirmed_date:
         type: string
-        description: 'Date the flight was confirmed'
+        description: 'Date the flight was confirmed. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'confirmed date'
       confirmed_by:
         type: string
         description: 'Person who confirmed the flight'
@@ -124,65 +139,110 @@ properties:
             change:
               type: string
               description: 'Description of what changed'
-        description: 'History of changes to flight'
+        description: >
+          History of changes to flight-related fields.
+          Records changes to: flight.id, flight.bus, flight.status, flight.seat,
+          flight.confirmed_date, flight.training, flight.paid, flight.training_see_doc,
+          flight.training_complete, flight.waiver, flight.mediaWaiver, flight.vaccinated,
+          flight.infection_test, flight.nofly, flight.exempt, flight.booksOrdered,
+          medical.release, medical.form.
       nofly:
         type: boolean
         default: false
-        description: 'Indicates guardian is not flying'
+        description: 'Indicates guardian is not flying. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'flight nofly'
       vaccinated:
         type: boolean
         default: false
-        description: 'Indicates guardian is vaccinated'
+        description: 'Indicates guardian is vaccinated. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'vaccinated'
       mediaWaiver:
         type: boolean
         default: false
-        description: 'Indicates media waiver is received'
+        description: 'Indicates media waiver is received. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'media waiver received'
       infection_test:
         type: boolean
         default: false
-        description: 'Indicates infection test is completed'
+        description: 'Indicates infection test is completed. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'infection test'
       waiver:
         type: boolean
         default: false
-        description: 'Indicates liability waiver is received'
+        description: 'Indicates liability waiver is received. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'flight waiver received'
       training:
         type: string
         enum: ['None', 'Main', 'Previous', 'Phone', 'Web', 'Make-up']
-        description: 'Type of training completed'
+        description: 'Type of training completed. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'training'
       training_notes:
         type: string
         description: 'Notes about guardian training'
       training_see_doc:
         type: boolean
         default: false
-        description: 'Indicates guardian needs to see a doctor at training'
+        description: 'Indicates guardian needs to see a doctor at training. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'training see doctor'
       training_complete:
         type: boolean
         default: false
-        description: 'Indicates guardian has completed training'
+        description: 'Indicates guardian has completed training. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'training complete'
       paid:
         type: boolean
         default: false
-        description: 'Indicates guardian has paid'
+        description: 'Indicates guardian has paid. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'paid'
       exempt:
         type: boolean
         default: false
-        description: 'Indicates guardian is exempt from payment'
+        description: 'Indicates guardian is exempt from payment. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'exempt'
       booksOrdered:
         type: integer
         default: 0
-        description: 'Number of books ordered'
+        description: 'Number of books ordered. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'books ordered'
   medical:
     type: object
     properties:
       form:
         type: boolean
         default: false
-        description: 'Indicates medical form is received'
+        description: 'Indicates medical form is received. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'medical form received'
       release:
         type: boolean
         default: false
-        description: 'Indicates medical release is received'
+        description: 'Indicates medical release is received. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'medical release received'
       level:
         type: string
         pattern: "^[A-D]$"
@@ -224,7 +284,10 @@ properties:
             change:
               type: string
               description: 'Description of what changed'
-        description: 'History of veteran assignments'
+        description: >
+          History of veteran pairing changes.
+          Records pairing events: "paired to: {veteranName} by: {userName}"
+          and "unpaired from: {veteranName} by: {userName}".
       pairings:
         type: array
         items:
@@ -374,17 +437,26 @@ properties:
     properties:
       fm_number:
         type: string
-        description: 'Family Member number'
+        description: 'Family Member number. Changes are recorded in call.history.'
+        x-historyTracked:
+          historyArray: 'call.history'
+          displayName: 'FM #'
       notes:
         type: string
         description: 'Call notes'
       email_sent:
         type: boolean
         default: false
-        description: 'Indicates if email has been sent'
+        description: 'Indicates if email has been sent. Changes are recorded in call.history.'
+        x-historyTracked:
+          historyArray: 'call.history'
+          displayName: 'guardian email sent'
       assigned_to:
         type: string
-        description: 'Staff member assigned to call'
+        description: 'Staff member assigned to call. Changes are recorded in call.history.'
+        x-historyTracked:
+          historyArray: 'call.history'
+          displayName: 'assigned caller'
       mail_sent:
         type: boolean
         default: false
@@ -401,7 +473,9 @@ properties:
             change:
               type: string
               description: 'Description of what changed'
-        description: 'History of call status changes'
+        description: >
+          History of changes to call-related fields.
+          Records changes to: call.assigned_to, call.fm_number, call.email_sent.
   apparel:
     type: object
     properties:
@@ -433,4 +507,4 @@ properties:
         description: 'Date apparel was sent'
       by:
         type: string
-        description: 'Person who sent the apparel' 
+        description: 'Person who sent the apparel'

@@ -1536,7 +1536,7 @@ describe('Veteran Model', () => {
             newVeteran.updateHistory(currentVeteran, user);
             
             expect(newVeteran.call.history).to.have.lengthOf(1);
-            expect(newVeteran.call.history[0].change).to.include('changed mail_call received');
+            expect(newVeteran.call.history[0].change).to.include('changed mail call received');
         });
     });
 
@@ -1592,7 +1592,7 @@ describe('Veteran Model', () => {
             newVeteran.checkForChanges(
                 currentVeteran,
                 'call.history',
-                { property: 'mail_call.received', name: 'mail_call received' },
+                { property: 'mail_call.received', name: 'mail call received' },
                 'Admin User',
                 timestamp
             );

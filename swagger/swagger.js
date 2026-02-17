@@ -3,10 +3,27 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import yaml from 'js-yaml';
 
-// Load schema files
-const loadSchema = (filename) => {
+// Load schema file and return all schemas defined in it
+const loadSchemaFile = (filename) => {
   const filePath = join(process.cwd(), 'schemas', `${filename}.yaml`);
-  return yaml.load(readFileSync(filePath, 'utf8'));
+  const content = yaml.load(readFileSync(filePath, 'utf8'));
+  
+  // Check if the file has a named schema key (e.g., "FlightDetailResult:")
+  // or if it's a direct schema definition (starts with "type: object")
+  if (content.type) {
+    // Direct schema definition - wrap it with the filename as the key
+    return { [filename]: content };
+  }
+  // Named schema(s) - return as-is
+  return content;
+};
+
+// Load and merge all schemas from multiple files
+const loadAllSchemas = (...filenames) => {
+  return filenames.reduce((acc, filename) => {
+    const schemas = loadSchemaFile(filename);
+    return { ...acc, ...schemas };
+  }, {});
 };
 
 const options = {
@@ -53,19 +70,20 @@ const options = {
           }
         }
       },
-      schemas: {
-        SearchRequest: loadSchema('SearchRequest'),
-        SearchResult: loadSchema('SearchResult'),
-        SearchResults: loadSchema('SearchResults'),
-        Error: loadSchema('Error'),
-        Veteran: loadSchema('Veteran'),
-        Guardian: loadSchema('Guardian'),
-        Flight: loadSchema('Flight'),
-        UnpairedVeteranResult: loadSchema('UnpairedVeteranResult'),
-        UnpairedVeteranResults: loadSchema('UnpairedVeteranResults'),
-        RecentActivityEntry: loadSchema('RecentActivityEntry'),
-        FlightDetailResult: loadSchema('FlightDetailResult')
-      }
+      schemas: loadAllSchemas(
+        'SearchRequest',
+        'SearchResult',
+        'SearchResults',
+        'Error',
+        'Veteran',
+        'Guardian',
+        'Flight',
+        'FlightAssignment',
+        'UnpairedVeteranResult',
+        'UnpairedVeteranResults',
+        'RecentActivityEntry',
+        'FlightDetailResult'
+      )
     },
     security: [
       {

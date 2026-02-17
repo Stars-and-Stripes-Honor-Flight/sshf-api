@@ -73,7 +73,7 @@ FlightDetailResult:
       type: array
       description: List of veteran-guardian pairs with seat/bus assignments
       items:
-        $ref: '#/FlightDetailPair'
+        $ref: '#/components/schemas/FlightDetailPair'
 
 FlightDetailPair:
   type: object
@@ -92,7 +92,7 @@ FlightDetailPair:
       type: array
       description: List of people in the pair (veteran and/or guardian)
       items:
-        $ref: '#/FlightDetailPerson'
+        $ref: '#/components/schemas/FlightDetailPerson'
 
 FlightDetailPerson:
   type: object
