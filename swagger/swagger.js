@@ -82,7 +82,8 @@ const options = {
         'UnpairedVeteranResult',
         'UnpairedVeteranResults',
         'RecentActivityEntry',
-        'FlightDetailResult'
+        'FlightDetailResult',
+        'WaitlistVeteranGroup'
       )
     },
     security: [

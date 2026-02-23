@@ -18,6 +18,7 @@ import { listFlights, createFlight, retrieveFlight, updateFlight } from './route
 import { getFlightAssignments, addVeteransToFlight } from './routes/flight-assignments.js';
 import { getFlightDetail } from './routes/flight-detail.js';
 import { getWaitlist } from './routes/waitlist.js';
+import { getWaitlistVeteranGroups } from './routes/waitlist-veteran-groups.js';
 import { getRecentActivity } from './routes/recent-activity.js';
 import { exportFlightCsv, exportCallCenterFollowUpCsv, exportTourLeadCsv } from './routes/exports.js';
 
@@ -96,6 +97,7 @@ app.get("/flights/:id/detail", authenticate, dbSession, getFlightDetail);
 
 // Waitlist routes
 app.get("/waitlist", authenticate, dbSession, getWaitlist);
+app.get("/waitlist/veteran-groups", authenticate, dbSession, getWaitlistVeteranGroups);
 
 // Recent Activity routes
 app.get("/recent-activity", authenticate, dbSession, getRecentActivity);
