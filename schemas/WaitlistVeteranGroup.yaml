@@ -1,0 +1,14 @@
+type: object
+description: Active veteran names grouped by flight group assignment
+properties:
+  group:
+    type: string
+    description: Flight group identifier from the waitlist_veteran_groups view key
+  names:
+    type: array
+    description: Veteran display names from the view values for this group
+    items:
+      type: string
+required:
+  - group
+  - names
