@@ -5,19 +5,29 @@ export class SearchRequest {
         this.lastname = data.lastname || '';
         this.status = data.status || 'Active';
         this.flight = data.flight || 'All';
+        this.phone_num = data.phone_num || '';
+        this.digitsOnlyPhone = String(this.phone_num).replace(/[^0-9]/g, '');
 
         // Validate and enforce rules
         this.validateAndNormalize();
     }
 
     validateAndNormalize() {
-        // If Status is not 'All' then Flight must be 'All'
-        if (this.status !== 'All' && this.flight !== 'All') {
+        // For non-phone searches, if Status is not 'All' then Flight must be 'All'
+        if (!this.digitsOnlyPhone && this.status !== 'All' && this.flight !== 'All') {
             this.flight = 'All';
+        }
+
+        // For phone searches, require at least 3 numeric digits.
+        if (this.phone_num && this.digitsOnlyPhone.length < 3) {
+            throw new Error('Validation failed: phone_num must contain at least 3 numeric digits');
         }
     }
 
     getViewName() {
+        if (this.digitsOnlyPhone) {
+            return 'all_by_phone_number';
+        }
         if (this.status !== 'All') {
             return 'all_by_status_and_name';
         }
@@ -37,7 +47,13 @@ export class SearchRequest {
         }
 
         // Set startkey and endkey based on view type
-        if (viewName === 'all_by_status_and_name') {
+        if (viewName === 'all_by_phone_number') {
+            const startKey = JSON.stringify([this.digitsOnlyPhone]);
+            const endKey = JSON.stringify([this.digitsOnlyPhone + '\ufff0']);
+            params.append('startkey', startKey);
+            params.append('endkey', endKey);
+        }
+        else if (viewName === 'all_by_status_and_name') {
             const startKey = JSON.stringify([this.status, this.lastname]);
             const endKey = JSON.stringify([this.status, '\ufff0']);
             params.append('startkey', startKey);
@@ -66,6 +82,7 @@ export class SearchRequest {
             lastname: this.lastname,
             status: this.status,
             flight: this.flight,
+            phone_num: this.phone_num,
             viewName: this.getViewName()
         };
     }

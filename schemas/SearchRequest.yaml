@@ -7,7 +7,11 @@ properties:
   lastname:
     type: string
     default: ''
-    description: 'Last name to search for'
+    description: 'Last name to search for (ignored when phone_num is provided)'
+  phone_num:
+    type: string
+    default: ''
+    description: 'Phone number search term; non-digits are ignored and at least 3 numeric digits are required'
   status:
     type: string
     default: 'Active'

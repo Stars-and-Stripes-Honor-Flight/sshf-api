@@ -20,6 +20,29 @@ async function search(searchRequest, req) {
     return data;
 }
 
+function filterPhoneSearchResults(searchRequest, dbResult) {
+    if (searchRequest.getViewName() !== 'all_by_phone_number') {
+        return dbResult;
+    }
+
+    let filteredRows = dbResult.rows || [];
+
+    if (searchRequest.status !== 'All') {
+        filteredRows = filteredRows.filter(row => row.value && row.value.status === searchRequest.status);
+    }
+
+    if (searchRequest.flight !== 'All') {
+        filteredRows = filteredRows.filter(row => row.value && row.value.flight === searchRequest.flight);
+    }
+
+    return {
+        ...dbResult,
+        total_rows: filteredRows.length,
+        offset: 0,
+        rows: filteredRows
+    };
+}
+
 /**
  * @swagger
  * /search:
@@ -43,7 +66,12 @@ async function search(searchRequest, req) {
  *         name: lastname
  *         schema:
  *           type: string
- *         description: Last name to search for (partial match)
+ *         description: Last name to search for (partial match). Ignored when phone_num is provided.
+ *       - in: query
+ *         name: phone_num
+ *         schema:
+ *           type: string
+ *         description: Phone number search term. Non-digits are ignored; requires at least 3 numeric digits.
  *       - in: query
  *         name: status
  *         schema:
@@ -96,9 +124,13 @@ export async function getSearch(req, res, next) {
     try {
         const searchRequest = new SearchRequest(req.query);
         const dbResult = await search(searchRequest, req);
-        const searchResults = new SearchResults(dbResult);
+        const filteredResult = filterPhoneSearchResults(searchRequest, dbResult);
+        const searchResults = new SearchResults(filteredResult);
         res.json(searchResults.toJSON());
     } catch (error) {
+        if (error.message && error.message.includes('Validation failed')) {
+            return res.status(400).json({ error: error.message });
+        }
         if (error instanceof DatabaseSessionError) {
             console.error('Database session error:', error.message);
             return res.status(503).json({ error: error.message });
