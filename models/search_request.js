@@ -26,7 +26,7 @@ export class SearchRequest {
 
     getViewName() {
         if (this.digitsOnlyPhone) {
-            return 'all_by_phone_number';
+            return 'all_by_phone_number2';
         }
         if (this.status !== 'All') {
             return 'all_by_status_and_name';
@@ -47,7 +47,7 @@ export class SearchRequest {
         }
 
         // Set startkey and endkey based on view type
-        if (viewName === 'all_by_phone_number') {
+        if (viewName === 'all_by_phone_number2') {
             const startKey = JSON.stringify([this.digitsOnlyPhone]);
             const endKey = JSON.stringify([this.digitsOnlyPhone + '\ufff0']);
             params.append('startkey', startKey);

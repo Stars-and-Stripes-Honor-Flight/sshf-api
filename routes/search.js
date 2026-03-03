@@ -21,7 +21,7 @@ async function search(searchRequest, req) {
 }
 
 function filterPhoneSearchResults(searchRequest, dbResult) {
-    if (searchRequest.getViewName() !== 'all_by_phone_number') {
+    if (searchRequest.getViewName() !== 'all_by_phone_number2') {
         return dbResult;
     }
 
@@ -101,6 +101,7 @@ function filterPhoneSearchResults(searchRequest, dbResult) {
  *                   value:
  *                     type: "Veteran"
  *                     name: "John Smith"
+ *                     phone: "312-555-1234"
  *                     city: "Chicago"
  *                     appdate: "2024-01-15"
  *                     flight: "F23"

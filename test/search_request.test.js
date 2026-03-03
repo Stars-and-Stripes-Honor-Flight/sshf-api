@@ -66,7 +66,7 @@ describe('SearchRequest', () => {
                 status: 'All',
                 flight: 'All'
             });
-            expect(request.getViewName()).to.equal('all_by_phone_number');
+            expect(request.getViewName()).to.equal('all_by_phone_number2');
         });
 
         it('should return all_by_flight_and_name when flight is not All', () => {

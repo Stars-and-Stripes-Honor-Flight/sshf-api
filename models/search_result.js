@@ -2,6 +2,7 @@ export class SearchResult {
     constructor(data) {
         this.type = data.type;
         this.name = data.name;
+        this.phone = data.phone;
         this.city = data.city;
         this.appdate = data.appdate;
         this.flight = data.flight;
@@ -13,6 +14,7 @@ export class SearchResult {
     // Getter methods
     getType() { return this.type; }
     getName() { return this.name; }
+    getPhone() { return this.phone; }
     getCity() { return this.city; }
     getAppDate() { return this.appdate; }
     getFlight() { return this.flight; }
@@ -25,6 +27,7 @@ export class SearchResult {
         return {
             type: this.type,
             name: this.name,
+            phone: this.phone,
             city: this.city,
             appdate: this.appdate,
             flight: this.flight,

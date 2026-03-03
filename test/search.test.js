@@ -53,6 +53,7 @@ describe('Search Route', () => {
                     value: {
                         type: 'veteran',
                         name: 'John Smith',
+                        phone: '217-555-1234',
                         city: 'Springfield',
                         status: 'Active'
                     }
@@ -92,8 +93,9 @@ describe('Search Route', () => {
                         value: {
                             type: 'veteran',
                             name: 'John Smith',
-                            city: '(312) 555-1212',
-                            appdate: 'Mobile',
+                            phone: '(312) 555-1212',
+                            city: 'Chicago, IL',
+                            appdate: '2024-01-15',
                             flight: 'SSHF-Nov2024',
                             status: 'Active',
                             pairing: 'Jane Doe',
@@ -106,8 +108,9 @@ describe('Search Route', () => {
                         value: {
                             type: 'guardian',
                             name: 'Jane Doe',
-                            city: '(312) 555-1212',
-                            appdate: 'Evening',
+                            phone: '(312) 555-1212',
+                            city: 'Chicago, IL',
+                            appdate: '2024-02-10',
                             flight: 'SSHF-Nov2024',
                             status: 'Flown',
                             pairing: 'John Smith',
@@ -120,8 +123,9 @@ describe('Search Route', () => {
                         value: {
                             type: 'veteran',
                             name: 'Bob Example',
-                            city: '(312) 555-1212',
-                            appdate: 'Daytime',
+                            phone: '(312) 555-1212',
+                            city: 'Naperville, IL',
+                            appdate: '2024-03-05',
                             flight: 'SSHF-Oct2024',
                             status: 'Active',
                             pairing: 'None',
@@ -134,8 +138,9 @@ describe('Search Route', () => {
                         value: {
                             type: 'veteran',
                             name: 'Active Match',
-                            city: '(312) 555-1212',
-                            appdate: 'Mobile',
+                            phone: '(312) 555-1212',
+                            city: 'Evanston, IL',
+                            appdate: '2024-04-20',
                             flight: 'SSHF-Nov2024',
                             status: 'Active',
                             pairing: 'None',
@@ -158,8 +163,37 @@ describe('Search Route', () => {
             expect(response.rows).to.have.lengthOf(2);
             expect(response.rows[0].value.status).to.equal('Active');
             expect(response.rows[0].value.flight).to.equal('SSHF-Nov2024');
+            expect(response.rows[0].value.phone).to.equal('(312) 555-1212');
             expect(response.rows[1].value.status).to.equal('Active');
             expect(response.rows[1].value.flight).to.equal('SSHF-Nov2024');
+            expect(response.rows[1].value.phone).to.equal('(312) 555-1212');
+        });
+
+        it('should handle phone search responses with missing rows', async () => {
+            req.query = {
+                limit: 25,
+                lastname: 'Ignored',
+                status: 'All',
+                flight: 'All',
+                phone_num: '(312) 555-1212'
+            };
+
+            const mockDbResult = {
+                total_rows: 0,
+                offset: 0
+            };
+
+            global.fetch = sinon.stub().resolves({
+                ok: true,
+                json: async () => mockDbResult
+            });
+
+            await getSearch(req, res, next);
+
+            expect(res.json.calledOnce).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.total_rows).to.equal(0);
+            expect(response.rows).to.deep.equal([]);
         });
 
         it('should handle database errors', async () => {
