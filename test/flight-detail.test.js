@@ -53,6 +53,8 @@ describe('Flight Detail Route Handlers', () => {
                             bus: 'Alpha1',
                             seat: '14A',
                             shirt: 'XL',
+                            fm_number: 'FM25',
+                            assigned_to: 'Rachael M (Jim)',
                             nofly: '',
                             confirmed: '',
                             med_limits: '[3/3]',
@@ -71,6 +73,8 @@ describe('Flight Detail Route Handlers', () => {
                             bus: 'Alpha1',
                             seat: '14B',
                             shirt: 'L',
+                            fm_number: '',
+                            assigned_to: 'Rachael M (Jim)',
                             nofly: '',
                             confirmed: '',
                             med_exprnc: 'EMT',
@@ -98,6 +102,10 @@ describe('Flight Detail Route Handlers', () => {
             expect(response.pairs[0].people.length).to.equal(2);
             expect(response.pairs[0].busMismatch).to.equal(false);
             expect(response.pairs[0].missingPairedPerson).to.equal(false);
+            expect(response.pairs[0].people[0].fm_number).to.equal('FM25');
+            expect(response.pairs[0].people[0].assigned_to).to.equal('Rachael M (Jim)');
+            expect(response.pairs[0].people[1].fm_number).to.equal('');
+            expect(response.pairs[0].people[1].assigned_to).to.equal('Rachael M (Jim)');
             expect(response.stats.buses.Alpha1).to.equal(2);
             expect(response.stats.tours.Alpha).to.equal(2);
             expect(response.stats.flight.Alpha).to.equal(2);
@@ -453,6 +461,8 @@ describe('Flight Detail Route Handlers', () => {
                             name_last: 'Doe',
                             bus: 'Alpha1',
                             seat: '14A',
+                            fm_number: 'FM38',
+                            assigned_to: 'Mara (Mary)',
                             med_limits: '[3/3] wheelchair',
                             group: '583-2'
                         } 
@@ -469,6 +479,8 @@ describe('Flight Detail Route Handlers', () => {
 
             const response = res.json.firstCall.args[0];
             const veteran = response.pairs[0].people[0];
+            expect(veteran.fm_number).to.equal('FM38');
+            expect(veteran.assigned_to).to.equal('Mara (Mary)');
             expect(veteran.med_limits).to.equal('[3/3] wheelchair');
             expect(veteran.group).to.equal('583-2');
         });
@@ -490,6 +502,8 @@ describe('Flight Detail Route Handlers', () => {
                             name_last: 'Smith',
                             bus: 'Bravo2',
                             seat: '7B',
+                            fm_number: '',
+                            assigned_to: 'Caller F',
                             med_exprnc: 'Retired Paramedic',
                             training: 'Previous [A]',
                             training_complete: true
@@ -507,6 +521,8 @@ describe('Flight Detail Route Handlers', () => {
 
             const response = res.json.firstCall.args[0];
             const guardian = response.pairs[0].people[0];
+            expect(guardian.fm_number).to.equal('');
+            expect(guardian.assigned_to).to.equal('Caller F');
             expect(guardian.med_exprnc).to.equal('Retired Paramedic');
             expect(guardian.training).to.equal('Previous [A]');
             expect(guardian.training_complete).to.equal(true);

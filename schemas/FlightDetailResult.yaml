@@ -124,6 +124,13 @@ FlightDetailPerson:
     shirt:
       type: string
       description: Shirt size
+    fm_number:
+      type: string
+      maxLength: 5
+      description: Optional family member hold for application identifier, often blank
+    assigned_to:
+      type: string
+      description: Assigned caller or coordinator name
     nofly:
       type: boolean
       description: Whether person is marked as no-fly

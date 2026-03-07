@@ -17,6 +17,7 @@ const dbName = process.env.DB_NAME;
  *         - Tour counts (Alpha, Bravo, None)
  *         - Flight counts (excludes nofly entries)
  *       - List of veteran-guardian pairs with seat/bus assignments
+ *       - Per-person call-center fields such as fm_number and assigned_to when present
  *       
  *       Each pair includes mismatch flags:
  *       - busMismatch: true if people in the pair have different bus assignments

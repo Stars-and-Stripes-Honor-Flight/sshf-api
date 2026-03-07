@@ -71,6 +71,8 @@ export class FlightDetailPerson {
         this.bus = normalizeBus(data.bus);
         this.seat = data.seat || '';
         this.shirt = data.shirt || '';
+        this.fm_number = data.fm_number || '';
+        this.assigned_to = data.assigned_to || '';
         this.nofly = parseNofly(data.nofly);
         this.confirmed = parseConfirmed(data.confirmed);
         
@@ -98,6 +100,8 @@ export class FlightDetailPerson {
             bus: this.bus,
             seat: this.seat,
             shirt: this.shirt,
+            fm_number: this.fm_number,
+            assigned_to: this.assigned_to,
             nofly: this.nofly,
             confirmed: this.confirmed
         };
@@ -127,6 +131,8 @@ export class FlightDetailPerson {
             bus: row.bus,
             seat: row.seat || '',
             shirt: row.shirt || '',
+            fm_number: row.fm_number || '',
+            assigned_to: row.assigned_to || '',
             nofly: row.nofly,
             confirmed: row.confirmed,
             // Veteran fields
