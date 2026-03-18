@@ -12,6 +12,7 @@ describe('SearchResults', () => {
                 value: {
                     type: 'veteran',
                     name: 'John Smith',
+                    phone: '414-817-1255',
                     city: 'Springfield',
                     appdate: '2024-01-01',
                     flight: 'SSHF-Nov2024',
@@ -26,6 +27,7 @@ describe('SearchResults', () => {
                 value: {
                     type: 'veteran',
                     name: 'Jane Smith',
+                    phone: '414-817-1658',
                     city: 'Shelbyville',
                     appdate: '2024-01-02',
                     flight: 'SSHF-Nov2024',

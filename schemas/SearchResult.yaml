@@ -6,6 +6,9 @@ properties:
   name:
     type: string
     description: 'Name of the person'
+  phone:
+    type: string
+    description: 'Phone number'
   city:
     type: string
     description: 'City of residence'

@@ -5,6 +5,7 @@ describe('SearchResult', () => {
     const sampleData = {
         type: 'veteran',
         name: 'John Smith',
+        phone: '414-817-1255',
         city: 'Springfield',
         appdate: '2024-01-01',
         flight: 'SSHF-Nov2024',
@@ -18,6 +19,7 @@ describe('SearchResult', () => {
             const result = new SearchResult(sampleData);
             expect(result.type).to.equal(sampleData.type);
             expect(result.name).to.equal(sampleData.name);
+            expect(result.phone).to.equal(sampleData.phone);
             expect(result.city).to.equal(sampleData.city);
             expect(result.appdate).to.equal(sampleData.appdate);
             expect(result.flight).to.equal(sampleData.flight);
@@ -33,6 +35,7 @@ describe('SearchResult', () => {
         it('should return correct values', () => {
             expect(result.getType()).to.equal(sampleData.type);
             expect(result.getName()).to.equal(sampleData.name);
+            expect(result.getPhone()).to.equal(sampleData.phone);
             expect(result.getCity()).to.equal(sampleData.city);
             expect(result.getAppDate()).to.equal(sampleData.appdate);
             expect(result.getFlight()).to.equal(sampleData.flight);
