@@ -77,6 +77,21 @@ npm test
 npm run coverage
 ```
 
+## Dependency Maintenance
+
+Use a conservative update flow so GitHub alerts can be cleared without pulling in unnecessary breakage:
+
+1. Start from a clean branch and install the locked dependency set with `npm ci`.
+2. Establish a baseline with `npm run deps:verify`.
+3. Review direct dependency drift with `npm run deps:outdated`.
+4. Check production vulnerabilities first with `npm run deps:audit`.
+5. Refresh packages within the existing semver ranges with `npm run deps:update`.
+6. Re-run `npm run deps:audit` and `npm run deps:verify`.
+7. If a GitHub alert remains, upgrade only the direct parent package that pulls in the vulnerable dependency, then re-run the audit and tests.
+8. Use `npm run deps:audit:all` when you want to inspect dev-only warnings separately from production risk.
+
+Avoid manually editing `package-lock.json`. If the lockfile truly needs to be regenerated, delete `node_modules` and `package-lock.json`, run `npm install`, and then re-run the full verification flow before committing the new lockfile.
+
 ## API Documentation
 
 Interactive API documentation is available at `/api-docs` when the server is running.
@@ -118,6 +133,10 @@ sshf-api/
 2. Make your changes with appropriate tests
 3. Run `npm run coverage` to verify tests pass with full coverage
 4. Submit a pull request for review
+
+### Dependency Updates
+
+Use the `Dependency Review` GitHub Actions workflow for a scheduled or on-demand production audit. It installs the locked dependency set, reports outdated direct dependencies, audits production packages, and then runs the test suite and coverage checks.
 
 ## License
 
