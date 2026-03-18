@@ -1,0 +1,36 @@
+name: Dependency Review
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 1'
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Report outdated direct dependencies
+        run: npm run deps:outdated || true
+
+      - name: Audit production dependencies
+        run: npm run deps:audit
+
+      - name: Run verification suite
+        run: npm run deps:verify
+        env:
+          NODE_ENV: test
