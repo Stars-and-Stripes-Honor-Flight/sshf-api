@@ -30,6 +30,8 @@ describe('Flight Detail Models', () => {
                 expect(person.bus).to.equal('None');
                 expect(person.seat).to.equal('');
                 expect(person.shirt).to.equal('');
+                expect(person.fm_number).to.equal('');
+                expect(person.assigned_to).to.equal('');
                 expect(person.nofly).to.equal(false);
                 expect(person.confirmed).to.equal(false);
             });
@@ -44,11 +46,15 @@ describe('Flight Detail Models', () => {
                     bus: 'Alpha3',
                     seat: '14A',
                     shirt: 'XL',
+                    fm_number: 'FM25',
+                    assigned_to: 'Caller A',
                     med_limits: '[3/3] wheelchair',
                     group: '583-2'
                 };
                 const person = new FlightDetailPerson(data);
                 expect(person.type).to.equal('Veteran');
+                expect(person.fm_number).to.equal('FM25');
+                expect(person.assigned_to).to.equal('Caller A');
                 expect(person.med_limits).to.equal('[3/3] wheelchair');
                 expect(person.group).to.equal('583-2');
                 expect(person).to.not.have.property('med_exprnc');
@@ -65,12 +71,16 @@ describe('Flight Detail Models', () => {
                     bus: 'Bravo2',
                     seat: '7B',
                     shirt: 'L',
+                    fm_number: '',
+                    assigned_to: 'Caller B',
                     med_exprnc: 'Retired Nurse',
                     training: 'Main [A]',
                     training_complete: true
                 };
                 const person = new FlightDetailPerson(data);
                 expect(person.type).to.equal('Guardian');
+                expect(person.fm_number).to.equal('');
+                expect(person.assigned_to).to.equal('Caller B');
                 expect(person.med_exprnc).to.equal('Retired Nurse');
                 expect(person.training).to.equal('Main [A]');
                 expect(person.training_complete).to.equal(true);
@@ -162,6 +172,8 @@ describe('Flight Detail Models', () => {
                     bus: 'Alpha1',
                     seat: '5C',
                     shirt: 'M',
+                    fm_number: 'FM38',
+                    assigned_to: 'Caller C',
                     nofly: false,
                     confirmed: true,
                     med_limits: '[2/2]',
@@ -170,9 +182,11 @@ describe('Flight Detail Models', () => {
                 const json = person.toJSON();
                 expect(json).to.have.all.keys([
                     'type', 'id', 'name_first', 'name_last', 'city', 'bus', 'seat',
-                    'shirt', 'nofly', 'confirmed', 'med_limits', 'group'
+                    'shirt', 'fm_number', 'assigned_to', 'nofly', 'confirmed', 'med_limits', 'group'
                 ]);
                 expect(json.type).to.equal('Veteran');
+                expect(json.fm_number).to.equal('FM38');
+                expect(json.assigned_to).to.equal('Caller C');
                 expect(json.med_limits).to.equal('[2/2]');
             });
 
@@ -182,6 +196,8 @@ describe('Flight Detail Models', () => {
                     id: 'guard-abc',
                     name_first: 'Alice',
                     name_last: 'Brown',
+                    fm_number: '',
+                    assigned_to: 'Caller D',
                     med_exprnc: 'EMT',
                     training: 'Previous [B]',
                     training_complete: true
@@ -189,9 +205,11 @@ describe('Flight Detail Models', () => {
                 const json = person.toJSON();
                 expect(json).to.have.all.keys([
                     'type', 'id', 'name_first', 'name_last', 'city', 'bus', 'seat',
-                    'shirt', 'nofly', 'confirmed', 'med_exprnc', 'training', 'training_complete'
+                    'shirt', 'fm_number', 'assigned_to', 'nofly', 'confirmed', 'med_exprnc', 'training', 'training_complete'
                 ]);
                 expect(json.type).to.equal('Guardian');
+                expect(json.fm_number).to.equal('');
+                expect(json.assigned_to).to.equal('Caller D');
                 expect(json.training_complete).to.equal(true);
             });
         });
@@ -207,6 +225,8 @@ describe('Flight Detail Models', () => {
                     bus: 'Bravo4',
                     seat: '12D',
                     shirt: 'XL',
+                    fm_number: 'FM25',
+                    assigned_to: 'Caller E',
                     nofly: 'nofly',
                     confirmed: '',
                     med_limits: '[1/1]',
@@ -216,6 +236,8 @@ describe('Flight Detail Models', () => {
                 expect(person).to.be.instanceOf(FlightDetailPerson);
                 expect(person.type).to.equal('Veteran');
                 expect(person.bus).to.equal('Bravo4');
+                expect(person.fm_number).to.equal('FM25');
+                expect(person.assigned_to).to.equal('Caller E');
                 expect(person.nofly).to.equal(true);
                 expect(person.confirmed).to.equal(true);
             });
@@ -225,6 +247,8 @@ describe('Flight Detail Models', () => {
                 const person = FlightDetailPerson.fromViewRow(row);
                 expect(person.type).to.equal('');
                 expect(person.bus).to.equal('None');
+                expect(person.fm_number).to.equal('');
+                expect(person.assigned_to).to.equal('');
                 expect(person.nofly).to.equal(false);
             });
 

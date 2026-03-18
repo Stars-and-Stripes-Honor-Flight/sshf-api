@@ -1,6 +1,8 @@
 # Flight Detail
 
-This feature provides the ability to view seat and bus assignments for veterans and guardians. The data returned should be grouped based on the pairings. Remember that a guardian could be potentially paired with up to 3 veterans. 
+This feature provides the ability to view seat and bus assignments for veterans and guardians. The data returned should be grouped based on the pairings. Remember that a guardian could be potentially paired with up to 3 veterans.
+
+Each returned person should also include the optional `fm_number` and `assigned_to` values from the `flight_pairings` view so the UI can display call-center assignment details alongside seat and bus information. `fm_number` is often blank, but when populated it is a short string up to 5 characters.
 
 A general rules is that all paired groups should be on the same flight and the same bus. If that is not the case the entries involved should be flagged so that the UI can show a validation error.
 
@@ -10,6 +12,7 @@ The new API response will return data for an entire flight. It will also include
 The count of people assigned to each bus. (Alpha1 thru Alpha5 and Bravo1 thru Bravo5)
 The count of people that are on each tour. (Alpha and Bravo)
 The count of people that are on each flight which removes any that are marked "flight.nofly": true.
+The per-person payload should preserve `fm_number` and `assigned_to` from the view output.
 
 Note: We will drop the functionality for pairing guardians with veterans as that is no longer part of this step.
 
