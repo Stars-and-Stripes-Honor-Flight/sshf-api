@@ -118,6 +118,7 @@ export class Guardian {
             notes: data.call?.notes || '',
             email_sent: data.call?.email_sent || false,
             assigned_to: data.call?.assigned_to || '',
+            how_heard_about: data.call?.how_heard_about || 'Unknown',
             mail_sent: data.call?.mail_sent || false,
             history: data.call?.history || []
         };
@@ -244,6 +245,15 @@ export class Guardian {
                     errors.push(`Call history entry ${index + 1} must have a change description`);
                 }
             });
+        }
+        const validHowHeardAbout = [
+            'Unknown', 'VA or vet org', 'radio segment', 'tv interview or segment',
+            'school or community event', 'an SSHF event or fundraiser',
+            'newspaper or magazine ad or story', 'social media', 'family or friend',
+            'airport signage or experience', 'Kwik Trip Pump ad', 'other'
+        ];
+        if (this.call.how_heard_about && !validHowHeardAbout.includes(this.call.how_heard_about)) {
+            errors.push('Invalid how heard about value');
         }
 
         // Flight history entries validation
@@ -372,6 +382,7 @@ export class Guardian {
      * |------------------------|--------------------------|
      * | call.assigned_to       | assigned caller          |
      * | call.fm_number         | FM #                     |
+     * | call.how_heard_about   | how heard about          |
      * | call.email_sent        | guardian email sent      |
      * 
      * veteran.history tracks pairing changes (handled in routes/guardians.js):
@@ -419,6 +430,7 @@ export class Guardian {
                 'trackedProperties': [
                     { 'property': 'call.assigned_to', 'name': 'assigned caller' },
                     { 'property': 'call.fm_number', 'name': 'FM #' },
+                    { 'property': 'call.how_heard_about', 'name': 'how heard about' },
                     { 'property': 'call.email_sent', 'name': 'guardian email sent' }
                 ]
             }

@@ -500,6 +500,14 @@ properties:
         x-historyTracked:
           historyArray: 'call.history'
           displayName: 'assigned caller'
+      how_heard_about:
+        type: string
+        default: 'Unknown'
+        enum: ['Unknown', 'VA or vet org', 'radio segment', 'tv interview or segment', 'school or community event', 'an SSHF event or fundraiser', 'newspaper or magazine ad or story', 'social media', 'family or friend', 'airport signage or experience', 'Kwik Trip Pump ad', 'other']
+        description: 'How the veteran heard about the program. Changes are recorded in call.history.'
+        x-historyTracked:
+          historyArray: 'call.history'
+          displayName: 'how heard about'
       mail_sent:
         type: boolean
         default: false
@@ -521,7 +529,7 @@ properties:
               description: 'Description of what changed'
         description: >
           History of changes to call-related fields.
-          Records changes to: call.assigned_to, call.fm_number, call.mail_sent,
+          Records changes to: call.assigned_to, call.fm_number, call.how_heard_about, call.mail_sent,
           call.email_sent, mail_call.received, mail_call.adopt.
   homecoming:
     type: object

@@ -185,6 +185,7 @@ describe('Guardian Model', () => {
             expect(guardian.call.notes).to.equal('');
             expect(guardian.call.email_sent).to.be.false;
             expect(guardian.call.assigned_to).to.equal('');
+            expect(guardian.call.how_heard_about).to.equal('Unknown');
             expect(guardian.call.mail_sent).to.be.false;
             expect(guardian.call.history).to.be.an('array').that.is.empty;
         });
@@ -272,6 +273,7 @@ describe('Guardian Model', () => {
                     notes: 'Call in evening',
                     email_sent: true,
                     assigned_to: 'Jane Smith',
+                    how_heard_about: 'social media',
                     mail_sent: true,
                     history: [{ id: '2024-01-01T12:00:00Z', change: 'Initial call' }]
                 },
@@ -321,6 +323,7 @@ describe('Guardian Model', () => {
             expect(guardian.call.notes).to.equal('Call in evening');
             expect(guardian.call.email_sent).to.be.true;
             expect(guardian.call.assigned_to).to.equal('Jane Smith');
+            expect(guardian.call.how_heard_about).to.equal('social media');
             expect(guardian.call.mail_sent).to.be.true;
             expect(guardian.call.history).to.deep.equal([{ 
                 id: '2024-01-01T12:00:00Z', 
@@ -582,6 +585,24 @@ describe('Guardian Model', () => {
             const validRestrictions = ['None', 'Gluten Free', 'Vegetarian', 'Vegan'];
             validRestrictions.forEach(restriction => {
                 guardian.medical.food_restriction = restriction;
+                expect(() => guardian.validate()).to.not.throw();
+            });
+        });
+
+        it('should validate how heard about values', () => {
+            const guardian = new Guardian(sampleGuardianData);
+
+            guardian.call.how_heard_about = 'invalid-source';
+            expect(() => guardian.validate()).to.throw('Invalid how heard about value');
+
+            const validHowHeardAbout = [
+                'Unknown', 'VA or vet org', 'radio segment', 'tv interview or segment',
+                'school or community event', 'an SSHF event or fundraiser',
+                'newspaper or magazine ad or story', 'social media', 'family or friend',
+                'airport signage or experience', 'Kwik Trip Pump ad', 'other'
+            ];
+            validHowHeardAbout.forEach((source) => {
+                guardian.call.how_heard_about = source;
                 expect(() => guardian.validate()).to.not.throw();
             });
         });
@@ -1193,6 +1214,18 @@ describe('Guardian Model', () => {
             
             expect(newGuardian.call.history).to.have.lengthOf(1);
             expect(newGuardian.call.history[0].change).to.include('changed assigned caller from:  to: John Smith by: Admin User');
+        });
+
+        it('should track how heard about changes', () => {
+            const currentGuardian = new Guardian(sampleGuardianData);
+            const newGuardian = new Guardian(sampleGuardianData);
+            newGuardian.call.how_heard_about = 'family or friend';
+
+            const user = { firstName: 'Admin', lastName: 'User' };
+            newGuardian.updateHistory(currentGuardian, user);
+
+            expect(newGuardian.call.history).to.have.lengthOf(1);
+            expect(newGuardian.call.history[0].change).to.include('changed how heard about from: Unknown to: family or friend by: Admin User');
         });
 
         it('should track multiple changes', () => {
