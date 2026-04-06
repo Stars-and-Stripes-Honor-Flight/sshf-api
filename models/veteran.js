@@ -140,6 +140,7 @@ export class Veteran {
             notes: data.call?.notes || '',
             email_sent: data.call?.email_sent || false,
             assigned_to: data.call?.assigned_to || '',
+            how_heard_about: data.call?.how_heard_about || 'Unknown',
             mail_sent: data.call?.mail_sent || false,
             history: data.call?.history || []
         };
@@ -289,6 +290,15 @@ export class Veteran {
                 }
             });
         }
+        const validHowHeardAbout = [
+            'Unknown', 'VA or vet org', 'radio segment', 'tv interview or segment',
+            'school or community event', 'an SSHF event or fundraiser',
+            'newspaper or magazine ad or story', 'social media', 'family or friend',
+            'airport signage or experience', 'Kwik Trip Pump ad', 'other'
+        ];
+        if (this.call.how_heard_about && !validHowHeardAbout.includes(this.call.how_heard_about)) {
+            errors.push('Invalid how heard about value');
+        }
 
         // Gender validation
         if (this.gender && !['M', 'F'].includes(this.gender)) {
@@ -387,6 +397,7 @@ export class Veteran {
      * |------------------------|--------------------------|
      * | call.assigned_to       | assigned caller          |
      * | call.fm_number         | FM #                     |
+     * | call.how_heard_about   | how heard about          |
      * | call.mail_sent         | veteran mail sent        |
      * | call.email_sent        | mail call email sent     |
      * | mail_call.received     | mail call received       |
@@ -432,6 +443,7 @@ export class Veteran {
                 'trackedProperties': [
                     { 'property': 'call.assigned_to', 'name': 'assigned caller' },
                     { 'property': 'call.fm_number', 'name': 'FM #' },
+                    { 'property': 'call.how_heard_about', 'name': 'how heard about' },
                     { 'property': 'call.mail_sent', 'name': 'veteran mail sent' },
                     { 'property': 'call.email_sent', 'name': 'mail call email sent' },
                     { 'property': 'mail_call.received', 'name': 'mail call received' },

@@ -203,6 +203,7 @@ describe('Veteran Model', () => {
             expect(veteran.call.notes).to.equal('');
             expect(veteran.call.email_sent).to.be.false;
             expect(veteran.call.assigned_to).to.equal('');
+            expect(veteran.call.how_heard_about).to.equal('Unknown');
             expect(veteran.call.mail_sent).to.be.false;
             expect(veteran.call.history).to.be.an('array').that.is.empty;
 
@@ -645,7 +646,8 @@ describe('Veteran Model', () => {
             const veteran = new Veteran({
                 call: {
                     fm_number: 'FM123',
-                    notes: 'Test notes'
+                    notes: 'Test notes',
+                    how_heard_about: 'social media'
                     // other fields missing
                 }
             });
@@ -653,6 +655,7 @@ describe('Veteran Model', () => {
             // Verify defined values are kept and missing ones get defaults
             expect(veteran.call.fm_number).to.equal('FM123');
             expect(veteran.call.notes).to.equal('Test notes');
+            expect(veteran.call.how_heard_about).to.equal('social media');
             expect(veteran.call.email_sent).to.be.false;
             expect(veteran.call.assigned_to).to.equal('');
             expect(veteran.call.mail_sent).to.be.false;
@@ -1490,6 +1493,24 @@ describe('Veteran Model', () => {
             veteran.medical.food_restriction = '';
             expect(() => veteran.validate()).to.not.throw();
         });
+
+        it('should validate how heard about values', () => {
+            const veteran = new Veteran(sampleVeteranData);
+
+            veteran.call.how_heard_about = 'invalid-source';
+            expect(() => veteran.validate()).to.throw('Invalid how heard about value');
+
+            const validHowHeardAbout = [
+                'Unknown', 'VA or vet org', 'radio segment', 'tv interview or segment',
+                'school or community event', 'an SSHF event or fundraiser',
+                'newspaper or magazine ad or story', 'social media', 'family or friend',
+                'airport signage or experience', 'Kwik Trip Pump ad', 'other'
+            ];
+            validHowHeardAbout.forEach((source) => {
+                veteran.call.how_heard_about = source;
+                expect(() => veteran.validate()).to.not.throw();
+            });
+        });
     });
 
     describe('prepareForSave', () => {
@@ -1537,6 +1558,18 @@ describe('Veteran Model', () => {
             
             expect(newVeteran.call.history).to.have.lengthOf(1);
             expect(newVeteran.call.history[0].change).to.include('changed mail call received');
+        });
+
+        it('should track how heard about changes', () => {
+            const currentVeteran = new Veteran(sampleVeteranData);
+            const newVeteran = new Veteran(sampleVeteranData);
+            newVeteran.call.how_heard_about = 'family or friend';
+
+            const user = { firstName: 'Admin', lastName: 'User' };
+            newVeteran.updateHistory(currentVeteran, user);
+
+            expect(newVeteran.call.history).to.have.lengthOf(1);
+            expect(newVeteran.call.history[0].change).to.include('changed how heard about from Unknown to family or friend by: Admin User');
         });
     });
 
