@@ -1,0 +1,28 @@
+---
+description: Keep route handlers, models, tests, and documentation aligned per resource
+globs: ["index.js", "routes/**/*.js", "models/**/*.js", "test/**/*.js", "swagger/**/*.js", "schemas/**/*.yaml", "README.md"]
+alwaysApply: true
+---
+
+# Route-model pairing workflow
+
+For each API resource, maintain a clear and predictable pairing between route handlers, model logic, tests, and docs.
+
+1. Add or update route handlers in `routes/` for each endpoint change.
+2. Add or update the corresponding data model in `models/` when payload or validation rules change.
+3. Add or update tests in `test/` for every changed route or model behavior.
+4. Keep OpenAPI/Swagger docs updated for new or changed endpoints.
+5. Preserve the existing project structure and naming style used in this repository.
+
+## Resource change checklist
+
+- Route behavior matches model validation and serialization rules
+- Route files avoid embedding large validation rules that belong in model classes
+- Tests cover happy path, validation failures, and not-found/error paths
+- Docs reflect route parameters, request body shape, and response codes
+
+## Guardrails
+
+- Do not add new endpoints without tests
+- Do not add model fields without updating tests and docs
+- Do not bypass model validation in route handlers unless explicitly documented

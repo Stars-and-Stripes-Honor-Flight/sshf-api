@@ -47,6 +47,19 @@ function parseBoolean(value) {
 }
 
 /**
+ * Parses books ordered value to a safe integer.
+ * @param {any} value - books ordered value from doc
+ * @returns {number}
+ */
+function parseBooksOrdered(value) {
+    const numeric = Number(value);
+    if (Number.isInteger(numeric) && numeric >= 0) {
+        return numeric;
+    }
+    return 0;
+}
+
+/**
  * Normalizes bus value to a valid bus name or 'None'
  * @param {string} value - The bus value from the view
  * @returns {string}
@@ -67,7 +80,11 @@ export class FlightDetailPerson {
         this.id = data.id || '';
         this.name_first = data.name_first || '';
         this.name_last = data.name_last || '';
+        this.name_middle = data.name_middle || '';
+        this.birth_date = data.birth_date || '';
+        this.gender = data.gender || '';
         this.city = data.city || '';
+        this.phone_mbl = data.phone_mbl || '';
         this.bus = normalizeBus(data.bus);
         this.seat = data.seat || '';
         this.shirt = data.shirt || '';
@@ -75,11 +92,25 @@ export class FlightDetailPerson {
         this.assigned_to = data.assigned_to || '';
         this.nofly = parseNofly(data.nofly);
         this.confirmed = parseConfirmed(data.confirmed);
+        this.medical_form = parseBoolean(data.medical_form);
+        this.medical_level = data.medical_level || '';
+        this.flight_vaccinated = parseBoolean(data.flight_vaccinated);
+        this.apparel_shirt_size = data.apparel_shirt_size || '';
+        this.apparel_jacket_size = data.apparel_jacket_size || '';
+        this.apparel_notes = data.apparel_notes || '';
         
         // Veteran-specific fields
         if (data.type === 'Veteran') {
             this.med_limits = data.med_limits || '';
             this.group = data.group || '';
+            this.mail_call_received = parseBoolean(data.mail_call_received);
+            this.mail_call_adopt = parseBoolean(data.mail_call_adopt);
+            this.mail_call_notes = data.mail_call_notes || '';
+            this.medical_alt_level = data.medical_alt_level || '';
+            this.medical_limitations = data.medical_limitations || '';
+            this.medical_review = data.medical_review || '';
+            this.medical_requires_oxygen = parseBoolean(data.medical_requires_oxygen);
+            this.homecoming_destination = data.homecoming_destination || '';
         }
         
         // Guardian-specific fields
@@ -87,6 +118,11 @@ export class FlightDetailPerson {
             this.med_exprnc = data.med_exprnc || '';
             this.training = data.training || '';
             this.training_complete = parseBoolean(data.training_complete);
+            this.flight_training_notes = data.flight_training_notes || '';
+            this.flight_waiver = parseBoolean(data.flight_waiver);
+            this.flight_training_see_doc = parseBoolean(data.flight_training_see_doc);
+            this.flight_paid = parseBoolean(data.flight_paid);
+            this.flight_books_ordered = parseBooksOrdered(data.flight_books_ordered);
         }
     }
 
@@ -96,52 +132,101 @@ export class FlightDetailPerson {
             id: this.id,
             name_first: this.name_first,
             name_last: this.name_last,
+            name_middle: this.name_middle,
+            birth_date: this.birth_date,
+            gender: this.gender,
             city: this.city,
+            phone_mbl: this.phone_mbl,
             bus: this.bus,
             seat: this.seat,
             shirt: this.shirt,
             fm_number: this.fm_number,
             assigned_to: this.assigned_to,
             nofly: this.nofly,
-            confirmed: this.confirmed
+            confirmed: this.confirmed,
+            medical_form: this.medical_form,
+            medical_level: this.medical_level,
+            flight_vaccinated: this.flight_vaccinated,
+            apparel_shirt_size: this.apparel_shirt_size,
+            apparel_jacket_size: this.apparel_jacket_size,
+            apparel_notes: this.apparel_notes
         };
         
         // Include type-specific fields
         if (this.type === 'Veteran') {
             result.med_limits = this.med_limits;
             result.group = this.group;
+            result.mail_call_received = this.mail_call_received;
+            result.mail_call_adopt = this.mail_call_adopt;
+            result.mail_call_notes = this.mail_call_notes;
+            result.medical_alt_level = this.medical_alt_level;
+            result.medical_limitations = this.medical_limitations;
+            result.medical_review = this.medical_review;
+            result.medical_requires_oxygen = this.medical_requires_oxygen;
+            result.homecoming_destination = this.homecoming_destination;
         }
         
         if (this.type === 'Guardian') {
             result.med_exprnc = this.med_exprnc;
             result.training = this.training;
             result.training_complete = this.training_complete;
+            result.flight_training_notes = this.flight_training_notes;
+            result.flight_waiver = this.flight_waiver;
+            result.flight_training_see_doc = this.flight_training_see_doc;
+            result.flight_paid = this.flight_paid;
+            result.flight_books_ordered = this.flight_books_ordered;
         }
         
         return result;
     }
 
     static fromViewRow(row) {
+        const value = row?.value ? row.value : (row || {});
+        const doc = row?.doc || value.doc || {};
+
         return new FlightDetailPerson({
-            type: row.type || '',
-            id: row.id || '',
-            name_first: row.name_first || '',
-            name_last: row.name_last || '',
-            city: row.city || '',
-            bus: row.bus,
-            seat: row.seat || '',
-            shirt: row.shirt || '',
-            fm_number: row.fm_number || '',
-            assigned_to: row.assigned_to || '',
-            nofly: row.nofly,
-            confirmed: row.confirmed,
+            type: value.type || '',
+            id: value.id || '',
+            name_first: value.name_first || '',
+            name_last: value.name_last || '',
+            city: value.city || '',
+            bus: value.bus,
+            seat: value.seat || '',
+            shirt: value.shirt || '',
+            fm_number: value.fm_number || '',
+            assigned_to: value.assigned_to || '',
+            nofly: value.nofly,
+            confirmed: value.confirmed,
+            name_middle: doc.name?.middle || '',
+            birth_date: doc.birth_date || '',
+            gender: doc.gender || '',
+            phone_mbl: doc.address?.phone_mbl || '',
+            medical_form: doc.medical?.form,
+            medical_level: doc.medical?.level || '',
+            flight_vaccinated: doc.flight?.vaccinated,
+            apparel_shirt_size: doc.apparel?.shirt_size || '',
+            apparel_jacket_size: doc.apparel?.jacket_size || '',
+            apparel_notes: doc.apparel?.notes || '',
             // Veteran fields
-            med_limits: row.med_limits || '',
-            group: row.group || '',
+            med_limits: value.med_limits || '',
+            group: value.group || '',
+            mail_call_received: doc.mail_call?.received,
+            mail_call_adopt: doc.mail_call?.adopt,
+            mail_call_notes: doc.mail_call?.notes || '',
+            medical_alt_level: doc.medical?.alt_level || '',
+            medical_limitations: doc.medical?.limitations || '',
+            medical_review: doc.medical?.review || '',
+            medical_requires_oxygen: doc.medical?.requiresOxygen,
+            homecoming_destination: doc.homecoming?.destination || '',
             // Guardian fields
-            med_exprnc: row.med_exprnc || '',
-            training: row.training || '',
-            training_complete: row.training_complete
+            med_exprnc: value.med_exprnc || '',
+            training: value.training || '',
+            training_complete: value.training_complete,
+            flight_training_notes: doc.flight?.training_notes || '',
+            flight_waiver: doc.flight?.waiver,
+            flight_training_see_doc: doc.flight?.training_see_doc,
+            flight_paid: doc.flight?.paid,
+            flight_books_ordered: doc.flight?.booksOrdered
         });
     }
 }
@@ -333,7 +418,7 @@ export class FlightDetailResult {
             const value = row.value;
             personIdsOnFlight.add(value.id);
             
-            const person = FlightDetailPerson.fromViewRow(value);
+            const person = FlightDetailPerson.fromViewRow(row);
             const pairing = value.pairing && value.pairing.length > 0 ? value.pairing : null;
             
             if (value.type === 'Guardian') {

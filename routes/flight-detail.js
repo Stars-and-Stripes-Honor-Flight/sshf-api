@@ -18,6 +18,7 @@ const dbName = process.env.DB_NAME;
  *         - Flight counts (excludes nofly entries)
  *       - List of veteran-guardian pairs with seat/bus assignments
  *       - Per-person call-center fields such as fm_number and assigned_to when present
+ *       - Per-person form fields used by gt-checkin, medical, and other flight forms
  *       
  *       Each pair includes mismatch flags:
  *       - busMismatch: true if people in the pair have different bus assignments
@@ -78,7 +79,8 @@ export async function getFlightDetail(req, res) {
         const viewUrl = `${dbUrl}/${dbName}/_design/basic/_view/flight_pairings?` +
             `startkey=${encodeURIComponent(JSON.stringify([flightData.name]))}` +
             `&endkey=${encodeURIComponent(JSON.stringify([flightData.name + '\ufff0']))}` +
-            `&descending=false`;
+            `&descending=false` +
+            `&include_docs=true`;
 
         const viewResponse = await dbFetch(req, viewUrl, {
             headers: {

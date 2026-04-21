@@ -1,0 +1,27 @@
+---
+description: Keep OpenAPI documentation synchronized with route and model behavior
+globs: ["routes/**/*.js", "models/**/*.js", "swagger/**/*.js", "schemas/**/*.yaml", "test/**/*.js", "README.md"]
+alwaysApply: true
+---
+
+# OpenAPI sync workflow
+
+When endpoint behavior changes, update API documentation in the same task so docs remain reliable.
+
+1. Update Swagger/OpenAPI annotations for changed routes.
+2. Update schema definitions when request or response fields change.
+3. Keep documented status codes aligned with real route behavior.
+4. Add or update tests that assert key contract behavior.
+5. Ensure examples and endpoint descriptions reflect the implemented behavior.
+
+## Documentation expectations
+
+- Endpoint paths, parameters, and security requirements should match route registration
+- Schema required fields and enums should match model validation rules
+- Success and error payload documentation should match route responses
+
+## Guardrails
+
+- Do not merge endpoint changes with stale OpenAPI docs
+- Do not document behavior that is not implemented
+- Do not change docs only; docs and code should move together for behavior changes

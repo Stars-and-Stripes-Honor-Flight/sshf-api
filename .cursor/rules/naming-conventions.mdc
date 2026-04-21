@@ -1,0 +1,27 @@
+---
+description: Enforce naming conventions for routes, models, tests, and symbols
+globs: ["index.js", "routes/**/*.js", "models/**/*.js", "test/**/*.js", "swagger/**/*.js", "schemas/**/*.yaml", ".cursor/rules/*.mdc"]
+alwaysApply: true
+---
+
+# Naming conventions workflow
+
+For new files and symbols, follow existing naming patterns and avoid introducing mixed conventions.
+
+1. Keep route file names in kebab-case to match current route structure.
+2. Keep model file names in snake_case to match current model structure.
+3. Keep test file names aligned to target resource names with `.test.js` suffix.
+4. Keep exported functions descriptive and action-oriented (`create`, `retrieve`, `update`, `delete`, `list`, `search`, `get`).
+5. Keep environment variable names uppercase with underscores.
+
+## Consistency expectations
+
+- Prefer extending existing naming patterns over introducing new variants
+- When touching related files, opportunistically reduce obvious naming drift
+- Keep endpoint path naming and file naming logically aligned
+
+## Guardrails
+
+- Do not introduce mixed casing styles in the same directory
+- Do not add duplicate test files that differ only by separator style (`-` vs `_`) unless migration work is intentional
+- Do not rename established public endpoints without explicit request and migration notes

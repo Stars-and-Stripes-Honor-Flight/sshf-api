@@ -1,0 +1,48 @@
+---
+description: Index and precedence guide for repository rule files
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Rules index and precedence
+
+This file explains how repository rules in `.cursor/rules/` work together.
+
+## Baseline location
+
+Keep `.cursor/index.mdc` in the parent `.cursor` folder.
+
+It is the global baseline for this project and defines high-level environment constraints:
+
+- Cloud Run hosting context
+- Google domain authentication context
+- CouchDB REST integration context
+- JSON API and ES module requirements
+
+Do not duplicate that baseline text in each rule file.
+
+## How rules work together
+
+Use `.cursor/index.mdc` for project-wide foundation and use files in `.cursor/rules/` for focused behavior guardrails.
+
+- `test-first-planning.mdc` defines plan-first and test-first execution flow
+- API contract and OpenAPI rules keep behavior and documentation aligned
+- Route/model and naming rules keep repository organization consistent
+- Auth and CouchDB rules enforce middleware and data access patterns
+- Config and security rules protect operational consistency and secrets hygiene
+
+## Conflict precedence guidance
+
+When guidance overlaps, apply rules in this order:
+
+1. Follow explicit user instructions first.
+2. Apply `.cursor/index.mdc` as the global project baseline.
+3. Apply `test-first-planning.mdc` for workflow and sequencing.
+4. Apply the most specific rule file for the touched area (auth, db, naming, docs, config, security).
+5. If two specific rules conflict, prefer the stricter guardrail and document the decision in your response.
+
+## Guardrails
+
+- Do not move `.cursor/index.mdc` into `.cursor/rules/` unless the team intentionally changes rule loading strategy.
+- Do not weaken stricter rule guidance to satisfy a looser rule.
+- If a rule becomes stale, update the rule file rather than silently bypassing it.

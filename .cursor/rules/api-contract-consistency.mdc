@@ -1,0 +1,29 @@
+---
+description: Enforce consistent JSON request and response contracts across API routes
+globs: ["index.js", "routes/**/*.js", "models/**/*.js", "swagger/**/*.js", "schemas/**/*.yaml", "test/**/*.js"]
+alwaysApply: true
+---
+
+# API contract consistency workflow
+
+For any endpoint change, keep request and response contracts consistent across routes, models, tests, and docs.
+
+1. Keep the API JSON-only for request and response payloads.
+2. Use explicit HTTP status codes for success and error paths.
+3. Use a consistent error payload shape for all route handlers.
+4. Validate or normalize input before database writes.
+5. Return stable field names and types for successful responses.
+6. Keep route behavior, tests, and OpenAPI docs aligned in the same change.
+
+## Response shape expectations
+
+- Prefer one shared success pattern per endpoint type and keep it stable over time
+- Prefer one shared error pattern project-wide (for example, a single top-level error key)
+- Do not mix response shapes for similar failures across resources
+- Include enough context in error messages for client handling without exposing internals
+
+## Guardrails
+
+- Do not silently change status codes or payload keys without updating tests and OpenAPI
+- Do not return HTML or plain text from API endpoints unless explicitly required
+- Do not add new route-level response conventions that conflict with existing ones
