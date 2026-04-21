@@ -98,6 +98,34 @@ Interactive API documentation is available at `/api-docs` when the server is run
 
 The OpenAPI specification can be accessed directly at `/openapi.json`.
 
+### Key Flight Detail Endpoints
+
+- `GET /flights/:id/detail`
+- `PATCH /veterans/:id/seat`
+- `PATCH /veterans/:id/bus`
+- `PATCH /veterans/:id/mail-call-received`
+- `PATCH /veterans/:id/mail-call-adopt`
+- `PATCH /veterans/:id/medical-form`
+- `PATCH /veterans/:id/medical-review`
+- `PATCH /veterans/:id/vaccinated`
+- `PATCH /veterans/:id/homecoming-destination`
+- `PATCH /veterans/:id/apparel-shirt-size`
+- `PATCH /veterans/:id/apparel-jacket-size`
+- `PATCH /veterans/:id/apparel-notes`
+- `PATCH /guardians/:id/seat`
+- `PATCH /guardians/:id/bus`
+- `PATCH /guardians/:id/training-notes`
+- `PATCH /guardians/:id/training-complete`
+- `PATCH /guardians/:id/waiver`
+- `PATCH /guardians/:id/training-see-doc`
+- `PATCH /guardians/:id/vaccinated`
+- `PATCH /guardians/:id/medical-form`
+- `PATCH /guardians/:id/paid`
+- `PATCH /guardians/:id/books-ordered`
+- `PATCH /guardians/:id/apparel-shirt-size`
+- `PATCH /guardians/:id/apparel-jacket-size`
+- `PATCH /guardians/:id/apparel-notes`
+
 ## Project Structure
 
 ```

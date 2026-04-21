@@ -756,4 +756,225 @@ export async function updateVeteranBus(req, res) {
         console.error('Error updating veteran bus:', error);
         res.status(500).json({ error: error.message });
     }
-} 
+}
+
+const VALID_VETERAN_APPAREL_SHIRT_SIZES = [
+    'None', 'WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL',
+    'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'
+];
+const VALID_VETERAN_APPAREL_JACKET_SIZES = ['None', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+const HOME_DESTINATION_REGEX = /^[a-zA-Z0-9 ]{0,30}$/;
+
+function getNestedValue(obj, path) {
+    return path.split('.').reduce((acc, key) => (acc && key in acc ? acc[key] : undefined), obj);
+}
+
+function ensureNestedObject(obj, pathParts) {
+    let current = obj;
+    for (const part of pathParts) {
+        if (!current[part] || typeof current[part] !== 'object') {
+            current[part] = {};
+        }
+        current = current[part];
+    }
+}
+
+function setNestedValue(obj, path, value) {
+    const parts = path.split('.');
+    const leaf = parts.pop();
+    ensureNestedObject(obj, parts);
+    let current = obj;
+    for (const part of parts) {
+        current = current[part];
+    }
+    current[leaf] = value;
+}
+
+async function patchVeteranField(req, res, config) {
+    try {
+        const docId = req.params.id;
+        const { value } = req.body;
+        if (value === undefined || value === null) {
+            return res.status(400).json({ error: 'value is required' });
+        }
+        if (config.validate && !config.validate(value)) {
+            return res.status(400).json({ error: config.validationMessage });
+        }
+
+        const url = `${dbUrl}/${dbName}/${docId}`;
+        const getResponse = await dbFetch(req, url);
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) {
+                return res.status(404).json({ error: 'Veteran not found' });
+            }
+            throw new Error('Failed to get veteran for update');
+        }
+        const doc = await getResponse.json();
+        if (doc.type !== 'Veteran') {
+            return res.status(400).json({ error: 'Document is not a veteran record' });
+        }
+
+        const oldValue = getNestedValue(doc, config.docPath);
+        setNestedValue(doc, config.docPath, value);
+
+        const userName = req.user.firstName + ' ' + req.user.lastName;
+        const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+        const historyPath = config.historyPath;
+        const history = getNestedValue(doc, historyPath);
+        if (!Array.isArray(history)) {
+            setNestedValue(doc, historyPath, []);
+        }
+        getNestedValue(doc, historyPath).push({
+            id: timestamp,
+            change: `changed ${config.historyLabel} from: ${oldValue ?? ''} to: ${value} by: ${userName}`
+        });
+
+        if (!doc.metadata || typeof doc.metadata !== 'object') {
+            doc.metadata = {};
+        }
+        doc.metadata.updated_at = timestamp;
+        doc.metadata.updated_by = userName;
+
+        const updateResponse = await dbFetch(req, url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(doc)
+        });
+        if (!updateResponse.ok) {
+            const data = await updateResponse.json();
+            throw new Error(data.reason || config.saveError);
+        }
+
+        const data = await updateResponse.json();
+        return res.json({
+            ok: true,
+            id: data.id,
+            rev: data.rev,
+            [config.responseField]: value
+        });
+    } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
+        console.error(`Error updating veteran ${config.errorLabel}:`, error);
+        return res.status(500).json({ error: error.message });
+    }
+}
+
+export async function updateVeteranMailCallReceived(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'mail_call.received',
+        responseField: 'mail_call_received',
+        historyPath: 'call.history',
+        historyLabel: 'mail call received',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update veteran mail call received',
+        errorLabel: 'mail call received'
+    });
+}
+
+export async function updateVeteranMailCallAdopt(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'mail_call.adopt',
+        responseField: 'mail_call_adopt',
+        historyPath: 'call.history',
+        historyLabel: 'mail call adopt',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update veteran mail call adopt',
+        errorLabel: 'mail call adopt'
+    });
+}
+
+export async function updateVeteranMedicalForm(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'medical.form',
+        responseField: 'medical_form',
+        historyPath: 'flight.history',
+        historyLabel: 'medical form received',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update veteran medical form',
+        errorLabel: 'medical form'
+    });
+}
+
+export async function updateVeteranMedicalReview(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'medical.review',
+        responseField: 'medical_review',
+        historyPath: 'flight.history',
+        historyLabel: 'medical review',
+        validate: (value) => typeof value === 'string',
+        validationMessage: 'value must be a string',
+        saveError: 'Failed to update veteran medical review',
+        errorLabel: 'medical review'
+    });
+}
+
+export async function updateVeteranVaccinated(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'flight.vaccinated',
+        responseField: 'flight_vaccinated',
+        historyPath: 'flight.history',
+        historyLabel: 'vaccinated',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update veteran vaccinated',
+        errorLabel: 'vaccinated'
+    });
+}
+
+export async function updateVeteranHomecomingDestination(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'homecoming.destination',
+        responseField: 'homecoming_destination',
+        historyPath: 'flight.history',
+        historyLabel: 'homecoming destination',
+        validate: (value) => typeof value === 'string' && HOME_DESTINATION_REGEX.test(value),
+        validationMessage: 'value must be an alphanumeric string up to 30 characters',
+        saveError: 'Failed to update veteran homecoming destination',
+        errorLabel: 'homecoming destination'
+    });
+}
+
+export async function updateVeteranApparelShirtSize(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'apparel.shirt_size',
+        responseField: 'apparel_shirt_size',
+        historyPath: 'flight.history',
+        historyLabel: 'apparel shirt size',
+        validate: (value) => typeof value === 'string' && VALID_VETERAN_APPAREL_SHIRT_SIZES.includes(value),
+        validationMessage: 'invalid apparel shirt size',
+        saveError: 'Failed to update veteran apparel shirt size',
+        errorLabel: 'apparel shirt size'
+    });
+}
+
+export async function updateVeteranApparelJacketSize(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'apparel.jacket_size',
+        responseField: 'apparel_jacket_size',
+        historyPath: 'flight.history',
+        historyLabel: 'apparel jacket size',
+        validate: (value) => typeof value === 'string' && VALID_VETERAN_APPAREL_JACKET_SIZES.includes(value),
+        validationMessage: 'invalid apparel jacket size',
+        saveError: 'Failed to update veteran apparel jacket size',
+        errorLabel: 'apparel jacket size'
+    });
+}
+
+export async function updateVeteranApparelNotes(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'apparel.notes',
+        responseField: 'apparel_notes',
+        historyPath: 'flight.history',
+        historyLabel: 'apparel notes',
+        validate: (value) => typeof value === 'string',
+        validationMessage: 'value must be a string',
+        saveError: 'Failed to update veteran apparel notes',
+        errorLabel: 'apparel notes'
+    });
+}

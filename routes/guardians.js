@@ -830,4 +830,239 @@ export async function updateGuardianBus(req, res) {
         console.error('Error updating guardian bus:', error);
         res.status(500).json({ error: error.message });
     }
-} 
+}
+
+const VALID_GUARDIAN_APPAREL_SHIRT_SIZES = [
+    'None', 'WXS', 'WS', 'WM', 'WL', 'WXL', 'W2XL', 'W3XL', 'W4XL', 'W5XL',
+    'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'
+];
+const VALID_GUARDIAN_APPAREL_JACKET_SIZES = ['None', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+
+function getNestedValue(obj, path) {
+    return path.split('.').reduce((acc, key) => (acc && key in acc ? acc[key] : undefined), obj);
+}
+
+function ensureNestedObject(obj, pathParts) {
+    let current = obj;
+    for (const part of pathParts) {
+        if (!current[part] || typeof current[part] !== 'object') {
+            current[part] = {};
+        }
+        current = current[part];
+    }
+}
+
+function setNestedValue(obj, path, value) {
+    const parts = path.split('.');
+    const leaf = parts.pop();
+    ensureNestedObject(obj, parts);
+    let current = obj;
+    for (const part of parts) {
+        current = current[part];
+    }
+    current[leaf] = value;
+}
+
+async function patchGuardianField(req, res, config) {
+    try {
+        const docId = req.params.id;
+        const { value } = req.body;
+        if (value === undefined || value === null) {
+            return res.status(400).json({ error: 'value is required' });
+        }
+        if (config.validate && !config.validate(value)) {
+            return res.status(400).json({ error: config.validationMessage });
+        }
+
+        const url = `${dbUrl}/${dbName}/${docId}`;
+        const getResponse = await dbFetch(req, url);
+        if (!getResponse.ok) {
+            if (getResponse.status === 404) {
+                return res.status(404).json({ error: 'Guardian not found' });
+            }
+            throw new Error('Failed to get guardian for update');
+        }
+        const doc = await getResponse.json();
+        if (doc.type !== 'Guardian') {
+            return res.status(400).json({ error: 'Document is not a guardian record' });
+        }
+
+        const oldValue = getNestedValue(doc, config.docPath);
+        setNestedValue(doc, config.docPath, value);
+
+        const userName = req.user.firstName + ' ' + req.user.lastName;
+        const timestamp = new Date().toISOString().split('.')[0] + 'Z';
+        const historyPath = 'flight.history';
+        const history = getNestedValue(doc, historyPath);
+        if (!Array.isArray(history)) {
+            setNestedValue(doc, historyPath, []);
+        }
+        getNestedValue(doc, historyPath).push({
+            id: timestamp,
+            change: `changed ${config.historyLabel} from: ${oldValue ?? ''} to: ${value} by: ${userName}`
+        });
+
+        if (!doc.metadata || typeof doc.metadata !== 'object') {
+            doc.metadata = {};
+        }
+        doc.metadata.updated_at = timestamp;
+        doc.metadata.updated_by = userName;
+
+        const updateResponse = await dbFetch(req, url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(doc)
+        });
+        if (!updateResponse.ok) {
+            const data = await updateResponse.json();
+            throw new Error(data.reason || config.saveError);
+        }
+
+        const data = await updateResponse.json();
+        return res.json({
+            ok: true,
+            id: data.id,
+            rev: data.rev,
+            [config.responseField]: value
+        });
+    } catch (error) {
+        if (error instanceof DatabaseSessionError) {
+            console.error('Database session error:', error.message);
+            return res.status(503).json({ error: error.message });
+        }
+        console.error(`Error updating guardian ${config.errorLabel}:`, error);
+        return res.status(500).json({ error: error.message });
+    }
+}
+
+export async function updateGuardianTrainingNotes(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'flight.training_notes',
+        responseField: 'training_notes',
+        historyLabel: 'training notes',
+        validate: (value) => typeof value === 'string',
+        validationMessage: 'value must be a string',
+        saveError: 'Failed to update guardian training notes',
+        errorLabel: 'training notes'
+    });
+}
+
+export async function updateGuardianTrainingComplete(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'flight.training_complete',
+        responseField: 'training_complete',
+        historyLabel: 'training complete',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update guardian training complete',
+        errorLabel: 'training complete'
+    });
+}
+
+export async function updateGuardianWaiver(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'flight.waiver',
+        responseField: 'waiver',
+        historyLabel: 'flight waiver received',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update guardian waiver',
+        errorLabel: 'waiver'
+    });
+}
+
+export async function updateGuardianTrainingSeeDoc(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'flight.training_see_doc',
+        responseField: 'training_see_doc',
+        historyLabel: 'training see doctor',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update guardian training see doc',
+        errorLabel: 'training see doc'
+    });
+}
+
+export async function updateGuardianVaccinated(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'flight.vaccinated',
+        responseField: 'vaccinated',
+        historyLabel: 'vaccinated',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update guardian vaccinated',
+        errorLabel: 'vaccinated'
+    });
+}
+
+export async function updateGuardianMedicalForm(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'medical.form',
+        responseField: 'medical_form',
+        historyLabel: 'medical form received',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update guardian medical form',
+        errorLabel: 'medical form'
+    });
+}
+
+export async function updateGuardianPaid(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'flight.paid',
+        responseField: 'paid',
+        historyLabel: 'paid',
+        validate: (value) => typeof value === 'boolean',
+        validationMessage: 'value must be a boolean',
+        saveError: 'Failed to update guardian paid',
+        errorLabel: 'paid'
+    });
+}
+
+export async function updateGuardianBooksOrdered(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'flight.booksOrdered',
+        responseField: 'books_ordered',
+        historyLabel: 'books ordered',
+        validate: (value) => Number.isInteger(value) && value >= 0 && value <= 9,
+        validationMessage: 'value must be an integer between 0 and 9',
+        saveError: 'Failed to update guardian books ordered',
+        errorLabel: 'books ordered'
+    });
+}
+
+export async function updateGuardianApparelShirtSize(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'apparel.shirt_size',
+        responseField: 'apparel_shirt_size',
+        historyLabel: 'apparel shirt size',
+        validate: (value) => typeof value === 'string' && VALID_GUARDIAN_APPAREL_SHIRT_SIZES.includes(value),
+        validationMessage: 'invalid apparel shirt size',
+        saveError: 'Failed to update guardian apparel shirt size',
+        errorLabel: 'apparel shirt size'
+    });
+}
+
+export async function updateGuardianApparelJacketSize(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'apparel.jacket_size',
+        responseField: 'apparel_jacket_size',
+        historyLabel: 'apparel jacket size',
+        validate: (value) => typeof value === 'string' && VALID_GUARDIAN_APPAREL_JACKET_SIZES.includes(value),
+        validationMessage: 'invalid apparel jacket size',
+        saveError: 'Failed to update guardian apparel jacket size',
+        errorLabel: 'apparel jacket size'
+    });
+}
+
+export async function updateGuardianApparelNotes(req, res) {
+    return patchGuardianField(req, res, {
+        docPath: 'apparel.notes',
+        responseField: 'apparel_notes',
+        historyLabel: 'apparel notes',
+        validate: (value) => typeof value === 'string',
+        validationMessage: 'value must be a string',
+        saveError: 'Failed to update guardian apparel notes',
+        errorLabel: 'apparel notes'
+    });
+}

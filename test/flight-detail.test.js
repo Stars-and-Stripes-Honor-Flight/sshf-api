@@ -94,6 +94,8 @@ describe('Flight Detail Route Handlers', () => {
             await getFlightDetail(req, res);
 
             expect(res.json.called).to.be.true;
+            const secondFetchUrl = global.fetch.secondCall.args[0];
+            expect(secondFetchUrl).to.include('include_docs=true');
             const response = res.json.firstCall.args[0];
             expect(response.flight.name).to.equal('SSHF-Nov2024');
             expect(response.flight.capacity).to.equal(100);
@@ -109,6 +111,158 @@ describe('Flight Detail Route Handlers', () => {
             expect(response.stats.buses.Alpha1).to.equal(2);
             expect(response.stats.tours.Alpha).to.equal(2);
             expect(response.stats.flight.Alpha).to.equal(2);
+        });
+
+        it('should include expanded veteran and guardian fields from row doc', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            const mockViewResult = {
+                rows: [
+                    {
+                        key: ['SSHF-Nov2024', 'v1', 0],
+                        value: {
+                            type: 'Veteran',
+                            id: 'v1',
+                            name_first: 'John',
+                            name_last: 'Vet',
+                            bus: 'Alpha1',
+                            pairing: 'g1'
+                        },
+                        doc: {
+                            name: { middle: 'M' },
+                            birth_date: '1940-01-02',
+                            gender: 'M',
+                            address: { phone_mbl: '555-101-1000' },
+                            medical: {
+                                form: true,
+                                level: '3',
+                                alt_level: '2',
+                                limitations: 'walker',
+                                review: 'needs review',
+                                requiresOxygen: true
+                            },
+                            mail_call: { received: true, adopt: false, notes: 'mc note' },
+                            flight: { vaccinated: true },
+                            homecoming: { destination: 'Milwaukee' },
+                            apparel: { shirt_size: 'XL', jacket_size: 'L', notes: 'vet apparel' }
+                        }
+                    },
+                    {
+                        key: ['SSHF-Nov2024', 'v1', 1],
+                        value: {
+                            type: 'Guardian',
+                            id: 'g1',
+                            name_first: 'Jane',
+                            name_last: 'Guard',
+                            bus: 'Alpha1',
+                            pairing: 'v1'
+                        },
+                        doc: {
+                            name: { middle: 'Q' },
+                            birth_date: '1960-03-10',
+                            gender: 'F',
+                            address: { phone_mbl: '555-202-2000' },
+                            medical: { form: true, level: 'A' },
+                            flight: {
+                                training_notes: 'note',
+                                waiver: true,
+                                training_see_doc: false,
+                                vaccinated: true,
+                                paid: true,
+                                booksOrdered: 2
+                            },
+                            apparel: { shirt_size: 'WM', jacket_size: 'M', notes: 'guard apparel' }
+                        }
+                    }
+                ]
+            };
+
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                json: async () => mockViewResult
+            });
+
+            await getFlightDetail(req, res);
+
+            const response = res.json.firstCall.args[0];
+            const veteran = response.pairs[0].people.find(p => p.type === 'Veteran');
+            const guardian = response.pairs[0].people.find(p => p.type === 'Guardian');
+
+            expect(veteran.name_middle).to.equal('M');
+            expect(veteran.birth_date).to.equal('1940-01-02');
+            expect(veteran.gender).to.equal('M');
+            expect(veteran.phone_mbl).to.equal('555-101-1000');
+            expect(veteran.medical_form).to.equal(true);
+            expect(veteran.medical_level).to.equal('3');
+            expect(veteran.mail_call_received).to.equal(true);
+            expect(veteran.mail_call_adopt).to.equal(false);
+            expect(veteran.mail_call_notes).to.equal('mc note');
+            expect(veteran.medical_alt_level).to.equal('2');
+            expect(veteran.medical_limitations).to.equal('walker');
+            expect(veteran.medical_review).to.equal('needs review');
+            expect(veteran.medical_requires_oxygen).to.equal(true);
+            expect(veteran.flight_vaccinated).to.equal(true);
+            expect(veteran.homecoming_destination).to.equal('Milwaukee');
+            expect(veteran.apparel_shirt_size).to.equal('XL');
+            expect(veteran.apparel_jacket_size).to.equal('L');
+            expect(veteran.apparel_notes).to.equal('vet apparel');
+
+            expect(guardian.name_middle).to.equal('Q');
+            expect(guardian.birth_date).to.equal('1960-03-10');
+            expect(guardian.gender).to.equal('F');
+            expect(guardian.phone_mbl).to.equal('555-202-2000');
+            expect(guardian.medical_form).to.equal(true);
+            expect(guardian.medical_level).to.equal('A');
+            expect(guardian.flight_training_notes).to.equal('note');
+            expect(guardian.flight_waiver).to.equal(true);
+            expect(guardian.flight_training_see_doc).to.equal(false);
+            expect(guardian.flight_vaccinated).to.equal(true);
+            expect(guardian.flight_paid).to.equal(true);
+            expect(guardian.flight_books_ordered).to.equal(2);
+            expect(guardian.apparel_shirt_size).to.equal('WM');
+            expect(guardian.apparel_jacket_size).to.equal('M');
+            expect(guardian.apparel_notes).to.equal('guard apparel');
+        });
+
+        it('should not leak veteran-only and guardian-only extended fields across types', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            const mockViewResult = {
+                rows: [
+                    {
+                        key: ['SSHF-Nov2024', 'v1', 0],
+                        value: { type: 'Veteran', id: 'v1', bus: 'Alpha1', pairing: 'g1' },
+                        doc: { mail_call: { notes: 'vet only' }, flight: { vaccinated: true } }
+                    },
+                    {
+                        key: ['SSHF-Nov2024', 'v1', 1],
+                        value: { type: 'Guardian', id: 'g1', bus: 'Alpha1', pairing: 'v1' },
+                        doc: { flight: { training_notes: 'guardian only', paid: true } }
+                    }
+                ]
+            };
+
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                json: async () => mockViewResult
+            });
+
+            await getFlightDetail(req, res);
+
+            const response = res.json.firstCall.args[0];
+            const veteran = response.pairs[0].people.find(p => p.type === 'Veteran');
+            const guardian = response.pairs[0].people.find(p => p.type === 'Guardian');
+
+            expect(veteran).to.not.have.property('flight_training_notes');
+            expect(veteran).to.not.have.property('flight_paid');
+            expect(guardian).to.not.have.property('mail_call_notes');
+            expect(guardian).to.not.have.property('homecoming_destination');
         });
 
         it('should return empty pairs for flight with no assignments', async () => {

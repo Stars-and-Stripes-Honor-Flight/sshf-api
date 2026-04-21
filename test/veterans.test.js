@@ -1,6 +1,22 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran, updateVeteranSeat, updateVeteranBus } from '../routes/veterans.js';
+import {
+    createVeteran,
+    retrieveVeteran,
+    updateVeteran,
+    deleteVeteran,
+    updateVeteranSeat,
+    updateVeteranBus,
+    updateVeteranMailCallReceived,
+    updateVeteranMailCallAdopt,
+    updateVeteranMedicalForm,
+    updateVeteranMedicalReview,
+    updateVeteranVaccinated,
+    updateVeteranHomecomingDestination,
+    updateVeteranApparelShirtSize,
+    updateVeteranApparelJacketSize,
+    updateVeteranApparelNotes
+} from '../routes/veterans.js';
 import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Veterans Route Handlers', () => {
@@ -937,6 +953,279 @@ describe('Veterans Route Handlers', () => {
             await updateVeteranBus(req, res);
 
             expect(res.status.calledWith(503)).to.be.true;
+        });
+    });
+
+    describe('extended veteran patch handlers', () => {
+        const baseDoc = {
+            _id: 'vet-extended-1',
+            _rev: '1-abc',
+            type: 'Veteran',
+            mail_call: { received: false, adopt: false, notes: 'old note' },
+            medical: { form: false, review: 'old review' },
+            flight: { vaccinated: false, history: [] },
+            homecoming: { destination: 'OldTown' },
+            apparel: { shirt_size: 'M', jacket_size: 'L', notes: 'old apparel' },
+            call: { history: [] },
+            metadata: {}
+        };
+
+        const cases = [
+            {
+                name: 'mail-call-received',
+                handler: updateVeteranMailCallReceived,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'mail_call_received',
+                docGetter: (doc) => doc.mail_call.received,
+                historyPath: 'call.history'
+            },
+            {
+                name: 'mail-call-adopt',
+                handler: updateVeteranMailCallAdopt,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'mail_call_adopt',
+                docGetter: (doc) => doc.mail_call.adopt,
+                historyPath: 'call.history'
+            },
+            {
+                name: 'medical-form',
+                handler: updateVeteranMedicalForm,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'medical_form',
+                docGetter: (doc) => doc.medical.form,
+                historyPath: 'flight.history'
+            },
+            {
+                name: 'medical-review',
+                handler: updateVeteranMedicalReview,
+                valid: 'new medical review',
+                invalid: 42,
+                expectedField: 'medical_review',
+                docGetter: (doc) => doc.medical.review,
+                historyPath: 'flight.history'
+            },
+            {
+                name: 'vaccinated',
+                handler: updateVeteranVaccinated,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'flight_vaccinated',
+                docGetter: (doc) => doc.flight.vaccinated,
+                historyPath: 'flight.history'
+            },
+            {
+                name: 'homecoming-destination',
+                handler: updateVeteranHomecomingDestination,
+                valid: 'Madison',
+                invalid: 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+                expectedField: 'homecoming_destination',
+                docGetter: (doc) => doc.homecoming.destination,
+                historyPath: 'flight.history'
+            },
+            {
+                name: 'apparel-shirt-size',
+                handler: updateVeteranApparelShirtSize,
+                valid: 'XL',
+                invalid: 'BAD',
+                expectedField: 'apparel_shirt_size',
+                docGetter: (doc) => doc.apparel.shirt_size,
+                historyPath: 'flight.history'
+            },
+            {
+                name: 'apparel-jacket-size',
+                handler: updateVeteranApparelJacketSize,
+                valid: 'XL',
+                invalid: 'BAD',
+                expectedField: 'apparel_jacket_size',
+                docGetter: (doc) => doc.apparel.jacket_size,
+                historyPath: 'flight.history'
+            },
+            {
+                name: 'apparel-notes',
+                handler: updateVeteranApparelNotes,
+                valid: 'new apparel note',
+                invalid: 42,
+                expectedField: 'apparel_notes',
+                docGetter: (doc) => doc.apparel.notes,
+                historyPath: 'flight.history'
+            }
+        ];
+
+        function getPathValue(obj, path) {
+            return path.split('.').reduce((acc, key) => acc[key], obj);
+        }
+
+        for (const testCase of cases) {
+            it(`should update ${testCase.name} successfully`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => JSON.parse(JSON.stringify(baseDoc))
+                });
+                let savedDoc = null;
+                global.fetch.onSecondCall().callsFake(async (url, options) => {
+                    savedDoc = JSON.parse(options.body);
+                    return { ok: true, json: async () => ({ id: baseDoc._id, rev: '2-new' }) };
+                });
+
+                await testCase.handler(req, res);
+
+                expect(res.json.called).to.be.true;
+                const response = res.json.firstCall.args[0];
+                expect(response.ok).to.equal(true);
+                expect(response[testCase.expectedField]).to.deep.equal(testCase.valid);
+                expect(testCase.docGetter(savedDoc)).to.deep.equal(testCase.valid);
+                expect(savedDoc.metadata.updated_at).to.be.a('string');
+                expect(savedDoc.metadata.updated_by).to.equal('Admin User');
+                const history = getPathValue(savedDoc, testCase.historyPath);
+                expect(history.length).to.equal(1);
+                expect(history[0].change).to.include('changed');
+            });
+
+            it(`should return 400 for invalid value on ${testCase.name}`, async () => {
+                req.body = { value: testCase.invalid };
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(400)).to.be.true;
+            });
+
+            it(`should return 400 when value missing on ${testCase.name}`, async () => {
+                req.body = {};
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(400)).to.be.true;
+                expect(res.json.firstCall.args[0].error).to.include('value is required');
+            });
+
+            it(`should return 404 when veteran missing on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: false,
+                    status: 404,
+                    json: async () => ({ error: 'not_found' })
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(404)).to.be.true;
+            });
+
+            it(`should return 400 for wrong document type on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => ({ _id: 'doc-x', type: 'Guardian' })
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(400)).to.be.true;
+            });
+
+            it(`should return 500 when save fails on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => JSON.parse(JSON.stringify(baseDoc))
+                });
+                global.fetch.onSecondCall().resolves({
+                    ok: false,
+                    json: async () => ({ reason: 'Conflict' })
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(500)).to.be.true;
+            });
+
+            it(`should return 503 when session fails on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.resolves({
+                    ok: false,
+                    status: 401
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(503)).to.be.true;
+            });
+        }
+
+        it('should return 500 for non-404 fetch failure in helper', async () => {
+            req.body = { value: true };
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ error: 'db_error' })
+            });
+
+            await updateVeteranMedicalForm(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran for update');
+        });
+
+        it('should initialize missing history array and metadata object', async () => {
+            req.body = { value: true };
+            const docWithoutHistoryOrMetadata = {
+                _id: 'vet-init-1',
+                _rev: '1-a',
+                type: 'Veteran',
+                mail_call: {},
+                call: {},
+                flight: {}
+            };
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(docWithoutHistoryOrMetadata))
+            });
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'vet-init-1', rev: '2-b' }) };
+            });
+
+            await updateVeteranMailCallReceived(req, res);
+
+            expect(savedDoc.call.history).to.be.an('array');
+            expect(savedDoc.call.history.length).to.equal(1);
+            expect(savedDoc.metadata).to.be.an('object');
+            expect(savedDoc.metadata.updated_by).to.equal('Admin User');
+        });
+
+        it('should create missing nested objects when setting values', async () => {
+            req.body = { value: true };
+            const docWithoutNestedParents = {
+                _id: 'vet-nested-1',
+                _rev: '1-a',
+                type: 'Veteran'
+            };
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(docWithoutNestedParents))
+            });
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'vet-nested-1', rev: '2-b' }) };
+            });
+
+            await updateVeteranMedicalForm(req, res);
+
+            expect(savedDoc.medical).to.be.an('object');
+            expect(savedDoc.medical.form).to.equal(true);
+            expect(savedDoc.flight).to.be.an('object');
+            expect(savedDoc.flight.history).to.be.an('array');
+        });
+
+        it('should use configured save error message when save fails without reason', async () => {
+            req.body = { value: true };
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(baseDoc))
+            });
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({})
+            });
+
+            await updateVeteranMedicalForm(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to update veteran medical form');
         });
     });
 }); 

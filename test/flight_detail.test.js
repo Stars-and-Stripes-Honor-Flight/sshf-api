@@ -181,8 +181,13 @@ describe('Flight Detail Models', () => {
                 });
                 const json = person.toJSON();
                 expect(json).to.have.all.keys([
-                    'type', 'id', 'name_first', 'name_last', 'city', 'bus', 'seat',
-                    'shirt', 'fm_number', 'assigned_to', 'nofly', 'confirmed', 'med_limits', 'group'
+                    'type', 'id', 'name_first', 'name_last', 'name_middle', 'birth_date', 'gender',
+                    'city', 'phone_mbl', 'bus', 'seat', 'shirt', 'fm_number', 'assigned_to',
+                    'nofly', 'confirmed', 'medical_form', 'medical_level', 'flight_vaccinated',
+                    'apparel_shirt_size', 'apparel_jacket_size', 'apparel_notes',
+                    'med_limits', 'group', 'mail_call_received', 'mail_call_adopt',
+                    'mail_call_notes', 'medical_alt_level', 'medical_limitations',
+                    'medical_review', 'medical_requires_oxygen', 'homecoming_destination'
                 ]);
                 expect(json.type).to.equal('Veteran');
                 expect(json.fm_number).to.equal('FM38');
@@ -204,8 +209,12 @@ describe('Flight Detail Models', () => {
                 });
                 const json = person.toJSON();
                 expect(json).to.have.all.keys([
-                    'type', 'id', 'name_first', 'name_last', 'city', 'bus', 'seat',
-                    'shirt', 'fm_number', 'assigned_to', 'nofly', 'confirmed', 'med_exprnc', 'training', 'training_complete'
+                    'type', 'id', 'name_first', 'name_last', 'name_middle', 'birth_date', 'gender',
+                    'city', 'phone_mbl', 'bus', 'seat', 'shirt', 'fm_number', 'assigned_to',
+                    'nofly', 'confirmed', 'medical_form', 'medical_level', 'flight_vaccinated',
+                    'apparel_shirt_size', 'apparel_jacket_size', 'apparel_notes',
+                    'med_exprnc', 'training', 'training_complete', 'flight_training_notes',
+                    'flight_waiver', 'flight_training_see_doc', 'flight_paid', 'flight_books_ordered'
                 ]);
                 expect(json.type).to.equal('Guardian');
                 expect(json.fm_number).to.equal('');
@@ -242,6 +251,114 @@ describe('Flight Detail Models', () => {
                 expect(person.confirmed).to.equal(true);
             });
 
+            it('should extract veteran extended fields from row.doc', () => {
+                const row = {
+                    type: 'Veteran',
+                    id: 'vet-doc-1',
+                    name_first: 'Tom',
+                    name_last: 'Brown',
+                    bus: 'Alpha1',
+                    doc: {
+                        name: { middle: 'Q' },
+                        birth_date: '1945-01-01',
+                        gender: 'M',
+                        address: { phone_mbl: '555-123-9999' },
+                        medical: {
+                            form: true,
+                            level: '3',
+                            alt_level: '2',
+                            limitations: 'uses cane',
+                            review: 'review note',
+                            requiresOxygen: true
+                        },
+                        mail_call: {
+                            received: true,
+                            adopt: false,
+                            notes: 'mail note'
+                        },
+                        flight: { vaccinated: true },
+                        homecoming: { destination: 'Madison' },
+                        apparel: {
+                            shirt_size: 'XL',
+                            jacket_size: 'L',
+                            notes: 'apparel note'
+                        }
+                    }
+                };
+
+                const person = FlightDetailPerson.fromViewRow(row);
+                const json = person.toJSON();
+                expect(json.name_middle).to.equal('Q');
+                expect(json.birth_date).to.equal('1945-01-01');
+                expect(json.gender).to.equal('M');
+                expect(json.phone_mbl).to.equal('555-123-9999');
+                expect(json.medical_form).to.equal(true);
+                expect(json.medical_level).to.equal('3');
+                expect(json.medical_alt_level).to.equal('2');
+                expect(json.medical_limitations).to.equal('uses cane');
+                expect(json.medical_review).to.equal('review note');
+                expect(json.medical_requires_oxygen).to.equal(true);
+                expect(json.mail_call_received).to.equal(true);
+                expect(json.mail_call_adopt).to.equal(false);
+                expect(json.mail_call_notes).to.equal('mail note');
+                expect(json.flight_vaccinated).to.equal(true);
+                expect(json.homecoming_destination).to.equal('Madison');
+                expect(json.apparel_shirt_size).to.equal('XL');
+                expect(json.apparel_jacket_size).to.equal('L');
+                expect(json.apparel_notes).to.equal('apparel note');
+            });
+
+            it('should extract guardian extended fields from row.doc', () => {
+                const row = {
+                    type: 'Guardian',
+                    id: 'guard-doc-1',
+                    name_first: 'Pat',
+                    name_last: 'Jones',
+                    bus: 'Bravo1',
+                    doc: {
+                        name: { middle: 'R' },
+                        birth_date: '1960-03-12',
+                        gender: 'F',
+                        address: { phone_mbl: '555-000-1111' },
+                        medical: {
+                            form: false,
+                            level: 'A'
+                        },
+                        flight: {
+                            training_notes: 'needs follow-up',
+                            waiver: true,
+                            training_see_doc: false,
+                            vaccinated: true,
+                            paid: true,
+                            booksOrdered: 3
+                        },
+                        apparel: {
+                            shirt_size: 'WM',
+                            jacket_size: 'M',
+                            notes: 'guardian apparel note'
+                        }
+                    }
+                };
+
+                const person = FlightDetailPerson.fromViewRow(row);
+                const json = person.toJSON();
+                expect(json.name_middle).to.equal('R');
+                expect(json.birth_date).to.equal('1960-03-12');
+                expect(json.gender).to.equal('F');
+                expect(json.phone_mbl).to.equal('555-000-1111');
+                expect(json.medical_form).to.equal(false);
+                expect(json.medical_level).to.equal('A');
+                expect(json.flight_training_notes).to.equal('needs follow-up');
+                expect(json.flight_waiver).to.equal(true);
+                expect(json.flight_training_see_doc).to.equal(false);
+                expect(json.flight_vaccinated).to.equal(true);
+                expect(json.flight_paid).to.equal(true);
+                expect(json.flight_books_ordered).to.equal(3);
+                expect(json.apparel_shirt_size).to.equal('WM');
+                expect(json.apparel_jacket_size).to.equal('M');
+                expect(json.apparel_notes).to.equal('guardian apparel note');
+            });
+
             it('should handle missing properties with defaults', () => {
                 const row = {};
                 const person = FlightDetailPerson.fromViewRow(row);
@@ -252,6 +369,31 @@ describe('Flight Detail Models', () => {
                 expect(person.nofly).to.equal(false);
             });
 
+            it('should default extended fields when row.doc is missing nested data', () => {
+                const row = {
+                    type: 'Guardian',
+                    id: 'g-empty-doc',
+                    doc: {}
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                const json = person.toJSON();
+                expect(json.name_middle).to.equal('');
+                expect(json.birth_date).to.equal('');
+                expect(json.gender).to.equal('');
+                expect(json.phone_mbl).to.equal('');
+                expect(json.medical_form).to.equal(false);
+                expect(json.medical_level).to.equal('');
+                expect(json.flight_training_notes).to.equal('');
+                expect(json.flight_waiver).to.equal(false);
+                expect(json.flight_training_see_doc).to.equal(false);
+                expect(json.flight_vaccinated).to.equal(false);
+                expect(json.flight_paid).to.equal(false);
+                expect(json.flight_books_ordered).to.equal(0);
+                expect(json.apparel_shirt_size).to.equal('');
+                expect(json.apparel_jacket_size).to.equal('');
+                expect(json.apparel_notes).to.equal('');
+            });
+
             it('should parse confirmed string "confirmed" from view row', () => {
                 const row = {
                     type: 'Veteran',
@@ -260,6 +402,14 @@ describe('Flight Detail Models', () => {
                 };
                 const person = FlightDetailPerson.fromViewRow(row);
                 expect(person.confirmed).to.equal(true);
+            });
+
+            it('should handle undefined row input safely', () => {
+                const person = FlightDetailPerson.fromViewRow(undefined);
+                expect(person).to.be.instanceOf(FlightDetailPerson);
+                expect(person.type).to.equal('');
+                expect(person.id).to.equal('');
+                expect(person.bus).to.equal('None');
             });
         });
     });
