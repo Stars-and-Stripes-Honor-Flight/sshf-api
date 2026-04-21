@@ -1,0 +1,27 @@
+---
+description: Standardize CouchDB access through shared session and fetch utilities
+globs: ["utils/db.js", "routes/**/*.js", "test/**/*.js"]
+alwaysApply: true
+---
+
+# CouchDB access workflow
+
+For any database interaction, use the shared CouchDB session and fetch patterns already established in this repository.
+
+1. Route handlers that call CouchDB should run behind `dbSession` middleware.
+2. Use `dbFetch` for CouchDB requests instead of direct `fetch` calls from routes.
+3. Preserve retry and session-refresh behavior implemented in `utils/db.js`.
+4. Handle `DatabaseSessionError` consistently with `503` responses.
+5. Keep CouchDB URL construction predictable and centralized by using `DB_URL` and `DB_NAME`.
+
+## Session and error expectations
+
+- Maintain auth/session cookie handling in shared utilities, not duplicated in route files
+- Keep database request headers consistent (`Accept`, JSON content type where needed)
+- Return route-specific errors for expected failures (for example 404) and standardized server errors otherwise
+
+## Guardrails
+
+- Do not bypass `dbFetch` in route handlers unless there is a documented exception
+- Do not add per-route custom session caches that duplicate `utils/db.js`
+- Do not leak raw CouchDB credentials or cookie values in logs or responses
