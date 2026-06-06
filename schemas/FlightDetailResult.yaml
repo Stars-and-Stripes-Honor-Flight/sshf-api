@@ -111,9 +111,21 @@ FlightDetailPerson:
     name_last:
       type: string
       description: Last name
+    name_middle:
+      type: string
+      description: Middle name
+    birth_date:
+      type: string
+      description: Birth date
+    gender:
+      type: string
+      description: Gender
     city:
       type: string
       description: City and state
+    phone_mbl:
+      type: string
+      description: Mobile phone number
     bus:
       type: string
       enum: [None, Alpha1, Alpha2, Alpha3, Alpha4, Alpha5, Bravo1, Bravo2, Bravo3, Bravo4, Bravo5]
@@ -137,6 +149,24 @@ FlightDetailPerson:
     confirmed:
       type: boolean
       description: Whether person is confirmed for the flight
+    medical_form:
+      type: boolean
+      description: Whether medical form is received
+    medical_level:
+      type: string
+      description: Medical level
+    flight_vaccinated:
+      type: boolean
+      description: Whether person is marked as vaccinated for flight
+    apparel_shirt_size:
+      type: string
+      description: Apparel shirt size
+    apparel_jacket_size:
+      type: string
+      description: Apparel jacket size
+    apparel_notes:
+      type: string
+      description: Apparel notes
     med_limits:
       type: string
       description: Medical limitations (Veterans only)
@@ -152,3 +182,42 @@ FlightDetailPerson:
     training_complete:
       type: boolean
       description: Whether training is complete (Guardians only)
+    mail_call_received:
+      type: boolean
+      description: Mail call received (Veterans only)
+    mail_call_adopt:
+      type: boolean
+      description: Mail call adopt flag (Veterans only)
+    mail_call_notes:
+      type: string
+      description: Mail call notes (Veterans only)
+    medical_alt_level:
+      type: string
+      description: Alternate medical level (Veterans only)
+    medical_limitations:
+      type: string
+      description: Medical limitations detail (Veterans only)
+    medical_review:
+      type: string
+      description: Medical review notes (Veterans only)
+    medical_requires_oxygen:
+      type: boolean
+      description: Whether oxygen is required (Veterans only)
+    homecoming_destination:
+      type: string
+      description: Homecoming destination (Veterans only)
+    flight_training_notes:
+      type: string
+      description: Training notes (Guardians only)
+    flight_waiver:
+      type: boolean
+      description: Flight waiver flag (Guardians only)
+    flight_training_see_doc:
+      type: boolean
+      description: Training see doctor flag (Guardians only)
+    flight_paid:
+      type: boolean
+      description: Flight paid flag (Guardians only)
+    flight_books_ordered:
+      type: integer
+      description: Number of books ordered (Guardians only)

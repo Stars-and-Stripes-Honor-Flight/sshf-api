@@ -1,6 +1,24 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian, updateGuardianSeat, updateGuardianBus } from '../routes/guardians.js';
+import {
+    createGuardian,
+    retrieveGuardian,
+    updateGuardian,
+    deleteGuardian,
+    updateGuardianSeat,
+    updateGuardianBus,
+    updateGuardianTrainingNotes,
+    updateGuardianTrainingComplete,
+    updateGuardianWaiver,
+    updateGuardianTrainingSeeDoc,
+    updateGuardianVaccinated,
+    updateGuardianMedicalForm,
+    updateGuardianPaid,
+    updateGuardianBooksOrdered,
+    updateGuardianApparelShirtSize,
+    updateGuardianApparelJacketSize,
+    updateGuardianApparelNotes
+} from '../routes/guardians.js';
 import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Guardians Route Handlers', () => {
@@ -1748,6 +1766,287 @@ describe('Guardians Route Handlers', () => {
             await updateGuardianBus(req, res);
 
             expect(res.status.calledWith(503)).to.be.true;
+        });
+    });
+
+    describe('extended guardian patch handlers', () => {
+        const baseDoc = {
+            _id: 'guard-extended-1',
+            _rev: '1-abc',
+            type: 'Guardian',
+            flight: {
+                training_notes: 'old training notes',
+                training_complete: false,
+                waiver: false,
+                training_see_doc: false,
+                vaccinated: false,
+                paid: false,
+                booksOrdered: 0,
+                history: []
+            },
+            medical: { form: false },
+            apparel: { shirt_size: 'M', jacket_size: 'L', notes: 'old notes' },
+            call: { history: [] },
+            metadata: {}
+        };
+
+        const cases = [
+            {
+                name: 'training-notes',
+                handler: updateGuardianTrainingNotes,
+                valid: 'updated training notes',
+                invalid: 42,
+                expectedField: 'training_notes',
+                docGetter: (doc) => doc.flight.training_notes
+            },
+            {
+                name: 'training-complete',
+                handler: updateGuardianTrainingComplete,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'training_complete',
+                docGetter: (doc) => doc.flight.training_complete
+            },
+            {
+                name: 'waiver',
+                handler: updateGuardianWaiver,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'waiver',
+                docGetter: (doc) => doc.flight.waiver
+            },
+            {
+                name: 'training-see-doc',
+                handler: updateGuardianTrainingSeeDoc,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'training_see_doc',
+                docGetter: (doc) => doc.flight.training_see_doc
+            },
+            {
+                name: 'vaccinated',
+                handler: updateGuardianVaccinated,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'vaccinated',
+                docGetter: (doc) => doc.flight.vaccinated
+            },
+            {
+                name: 'medical-form',
+                handler: updateGuardianMedicalForm,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'medical_form',
+                docGetter: (doc) => doc.medical.form
+            },
+            {
+                name: 'paid',
+                handler: updateGuardianPaid,
+                valid: true,
+                invalid: 'bad',
+                expectedField: 'paid',
+                docGetter: (doc) => doc.flight.paid
+            },
+            {
+                name: 'books-ordered',
+                handler: updateGuardianBooksOrdered,
+                valid: 3,
+                invalid: 10,
+                expectedField: 'books_ordered',
+                docGetter: (doc) => doc.flight.booksOrdered
+            },
+            {
+                name: 'apparel-shirt-size',
+                handler: updateGuardianApparelShirtSize,
+                valid: 'WM',
+                invalid: 'BAD',
+                expectedField: 'apparel_shirt_size',
+                docGetter: (doc) => doc.apparel.shirt_size
+            },
+            {
+                name: 'apparel-jacket-size',
+                handler: updateGuardianApparelJacketSize,
+                valid: 'XL',
+                invalid: 'BAD',
+                expectedField: 'apparel_jacket_size',
+                docGetter: (doc) => doc.apparel.jacket_size
+            },
+            {
+                name: 'apparel-notes',
+                handler: updateGuardianApparelNotes,
+                valid: 'new apparel note',
+                invalid: 42,
+                expectedField: 'apparel_notes',
+                docGetter: (doc) => doc.apparel.notes
+            }
+        ];
+
+        for (const testCase of cases) {
+            it(`should update ${testCase.name} successfully`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => JSON.parse(JSON.stringify(baseDoc))
+                });
+                let savedDoc = null;
+                global.fetch.onSecondCall().callsFake(async (url, options) => {
+                    savedDoc = JSON.parse(options.body);
+                    return { ok: true, json: async () => ({ id: baseDoc._id, rev: '2-new' }) };
+                });
+
+                await testCase.handler(req, res);
+
+                expect(res.json.called).to.be.true;
+                const response = res.json.firstCall.args[0];
+                expect(response.ok).to.equal(true);
+                expect(response[testCase.expectedField]).to.deep.equal(testCase.valid);
+                expect(testCase.docGetter(savedDoc)).to.deep.equal(testCase.valid);
+                expect(savedDoc.metadata.updated_at).to.be.a('string');
+                expect(savedDoc.metadata.updated_by).to.equal('Admin User');
+                expect(savedDoc.flight.history.length).to.equal(1);
+                expect(savedDoc.flight.history[0].change).to.include('changed');
+            });
+
+            it(`should return 400 for invalid value on ${testCase.name}`, async () => {
+                req.body = { value: testCase.invalid };
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(400)).to.be.true;
+            });
+
+            it(`should return 400 when value missing on ${testCase.name}`, async () => {
+                req.body = {};
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(400)).to.be.true;
+                expect(res.json.firstCall.args[0].error).to.include('value is required');
+            });
+
+            it(`should return 404 when guardian missing on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: false,
+                    status: 404,
+                    json: async () => ({ error: 'not_found' })
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(404)).to.be.true;
+            });
+
+            it(`should return 400 for wrong document type on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => ({ _id: 'doc-x', type: 'Veteran' })
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(400)).to.be.true;
+            });
+
+            it(`should return 500 when save fails on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => JSON.parse(JSON.stringify(baseDoc))
+                });
+                global.fetch.onSecondCall().resolves({
+                    ok: false,
+                    json: async () => ({ reason: 'Conflict' })
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(500)).to.be.true;
+            });
+
+            it(`should return 503 when session fails on ${testCase.name}`, async () => {
+                req.body = { value: testCase.valid };
+                global.fetch.resolves({
+                    ok: false,
+                    status: 401
+                });
+                await testCase.handler(req, res);
+                expect(res.status.calledWith(503)).to.be.true;
+            });
+        }
+
+        it('should return 500 for non-404 fetch failure in helper', async () => {
+            req.body = { value: true };
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ error: 'db_error' })
+            });
+
+            await updateGuardianWaiver(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian for update');
+        });
+
+        it('should initialize missing flight history and metadata object', async () => {
+            req.body = { value: true };
+            const docWithoutHistoryOrMetadata = {
+                _id: 'guard-init-1',
+                _rev: '1-a',
+                type: 'Guardian',
+                flight: {},
+                medical: {},
+                apparel: {}
+            };
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(docWithoutHistoryOrMetadata))
+            });
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-init-1', rev: '2-b' }) };
+            });
+
+            await updateGuardianTrainingComplete(req, res);
+
+            expect(savedDoc.flight.history).to.be.an('array');
+            expect(savedDoc.flight.history.length).to.equal(1);
+            expect(savedDoc.metadata).to.be.an('object');
+            expect(savedDoc.metadata.updated_by).to.equal('Admin User');
+        });
+
+        it('should create missing nested objects when setting values', async () => {
+            req.body = { value: true };
+            const docWithoutNestedParents = {
+                _id: 'guard-nested-1',
+                _rev: '1-a',
+                type: 'Guardian'
+            };
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(docWithoutNestedParents))
+            });
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-nested-1', rev: '2-b' }) };
+            });
+
+            await updateGuardianPaid(req, res);
+
+            expect(savedDoc.flight).to.be.an('object');
+            expect(savedDoc.flight.paid).to.equal(true);
+            expect(savedDoc.flight.history).to.be.an('array');
+        });
+
+        it('should use configured save error message when save fails without reason', async () => {
+            req.body = { value: true };
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(baseDoc))
+            });
+            global.fetch.onSecondCall().resolves({
+                ok: false,
+                json: async () => ({})
+            });
+
+            await updateGuardianWaiver(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to update guardian waiver');
         });
     });
 }); 

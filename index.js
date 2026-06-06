@@ -12,8 +12,43 @@ import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
-import { createVeteran, retrieveVeteran, updateVeteran, deleteVeteran, searchUnpairedVeterans, updateVeteranSeat, updateVeteranBus } from './routes/veterans.js';
-import { createGuardian, retrieveGuardian, updateGuardian, deleteGuardian, updateGuardianSeat, updateGuardianBus } from './routes/guardians.js';
+import {
+    createVeteran,
+    retrieveVeteran,
+    updateVeteran,
+    deleteVeteran,
+    searchUnpairedVeterans,
+    updateVeteranSeat,
+    updateVeteranBus,
+    updateVeteranMailCallReceived,
+    updateVeteranMailCallAdopt,
+    updateVeteranMedicalForm,
+    updateVeteranMedicalReview,
+    updateVeteranVaccinated,
+    updateVeteranHomecomingDestination,
+    updateVeteranApparelShirtSize,
+    updateVeteranApparelJacketSize,
+    updateVeteranApparelNotes
+} from './routes/veterans.js';
+import {
+    createGuardian,
+    retrieveGuardian,
+    updateGuardian,
+    deleteGuardian,
+    updateGuardianSeat,
+    updateGuardianBus,
+    updateGuardianTrainingNotes,
+    updateGuardianTrainingComplete,
+    updateGuardianWaiver,
+    updateGuardianTrainingSeeDoc,
+    updateGuardianVaccinated,
+    updateGuardianMedicalForm,
+    updateGuardianPaid,
+    updateGuardianBooksOrdered,
+    updateGuardianApparelShirtSize,
+    updateGuardianApparelJacketSize,
+    updateGuardianApparelNotes
+} from './routes/guardians.js';
 import { listFlights, createFlight, retrieveFlight, updateFlight } from './routes/flights.js';
 import { getFlightAssignments, addVeteransToFlight } from './routes/flight-assignments.js';
 import { getFlightDetail } from './routes/flight-detail.js';
@@ -72,6 +107,15 @@ app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
 app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
 app.patch("/veterans/:id/seat", authenticate, dbSession, updateVeteranSeat);
 app.patch("/veterans/:id/bus", authenticate, dbSession, updateVeteranBus);
+app.patch("/veterans/:id/mail-call-received", authenticate, dbSession, updateVeteranMailCallReceived);
+app.patch("/veterans/:id/mail-call-adopt", authenticate, dbSession, updateVeteranMailCallAdopt);
+app.patch("/veterans/:id/medical-form", authenticate, dbSession, updateVeteranMedicalForm);
+app.patch("/veterans/:id/medical-review", authenticate, dbSession, updateVeteranMedicalReview);
+app.patch("/veterans/:id/vaccinated", authenticate, dbSession, updateVeteranVaccinated);
+app.patch("/veterans/:id/homecoming-destination", authenticate, dbSession, updateVeteranHomecomingDestination);
+app.patch("/veterans/:id/apparel-shirt-size", authenticate, dbSession, updateVeteranApparelShirtSize);
+app.patch("/veterans/:id/apparel-jacket-size", authenticate, dbSession, updateVeteranApparelJacketSize);
+app.patch("/veterans/:id/apparel-notes", authenticate, dbSession, updateVeteranApparelNotes);
 app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
 
 // Guardian-specific routes
@@ -80,6 +124,17 @@ app.get("/guardians/:id", authenticate, dbSession, retrieveGuardian);
 app.put("/guardians/:id", authenticate, dbSession, updateGuardian);
 app.patch("/guardians/:id/seat", authenticate, dbSession, updateGuardianSeat);
 app.patch("/guardians/:id/bus", authenticate, dbSession, updateGuardianBus);
+app.patch("/guardians/:id/training-notes", authenticate, dbSession, updateGuardianTrainingNotes);
+app.patch("/guardians/:id/training-complete", authenticate, dbSession, updateGuardianTrainingComplete);
+app.patch("/guardians/:id/waiver", authenticate, dbSession, updateGuardianWaiver);
+app.patch("/guardians/:id/training-see-doc", authenticate, dbSession, updateGuardianTrainingSeeDoc);
+app.patch("/guardians/:id/vaccinated", authenticate, dbSession, updateGuardianVaccinated);
+app.patch("/guardians/:id/medical-form", authenticate, dbSession, updateGuardianMedicalForm);
+app.patch("/guardians/:id/paid", authenticate, dbSession, updateGuardianPaid);
+app.patch("/guardians/:id/books-ordered", authenticate, dbSession, updateGuardianBooksOrdered);
+app.patch("/guardians/:id/apparel-shirt-size", authenticate, dbSession, updateGuardianApparelShirtSize);
+app.patch("/guardians/:id/apparel-jacket-size", authenticate, dbSession, updateGuardianApparelJacketSize);
+app.patch("/guardians/:id/apparel-notes", authenticate, dbSession, updateGuardianApparelNotes);
 app.delete("/guardians/:id", authenticate, dbSession, deleteGuardian);
 
 // Flight-specific routes

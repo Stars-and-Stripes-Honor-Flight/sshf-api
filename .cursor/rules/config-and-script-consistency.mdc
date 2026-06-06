@@ -1,0 +1,27 @@
+---
+description: Keep package scripts, coverage config, and docs aligned with repository structure
+globs: ["package.json", "package-lock.json", "README.md", "index.js", "routes/**/*.js", "models/**/*.js", "test/**/*.js"]
+alwaysApply: true
+---
+
+# Config and script consistency workflow
+
+When project structure or test scope changes, keep scripts and configuration aligned in the same change.
+
+1. Update `package.json` scripts when test commands or workflows change.
+2. Keep coverage include paths aligned with real source layout.
+3. Keep dependency and audit scripts functional after structural changes.
+4. Update README setup, test, and coverage instructions when commands change.
+5. Re-run relevant scripts after config changes and confirm expected behavior.
+
+## Configuration expectations
+
+- Runtime behavior and documented commands should remain in sync
+- New required environment variables should be documented with purpose
+- Dependency updates should follow the repo's existing verify flow
+
+## Guardrails
+
+- Do not leave stale scripts that target removed paths
+- Do not change test or coverage commands without updating README guidance
+- Do not edit lockfile manually; use package manager commands

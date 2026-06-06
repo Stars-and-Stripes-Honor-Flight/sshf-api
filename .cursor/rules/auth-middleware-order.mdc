@@ -1,0 +1,27 @@
+---
+description: Enforce consistent middleware ordering for protected API routes
+globs: ["index.js", "routes/**/*.js", "test/**/*.js"]
+alwaysApply: true
+---
+
+# Auth and middleware order workflow
+
+For protected endpoints, keep middleware ordering predictable so authentication and DB session behavior stays consistent.
+
+1. Apply `authenticate` before any protected route handler.
+2. Apply `dbSession` before handlers that call CouchDB.
+3. Keep middleware order in `index.js` consistent with existing endpoint patterns.
+4. Verify tests cover unauthorized access and authenticated success paths.
+5. Keep public endpoints explicitly defined as public and avoid accidental exposure.
+
+## Protected route expectations
+
+- Protected routes should not execute business logic before auth checks
+- Database routes should not attempt CouchDB access before `dbSession` sets request context
+- Any new middleware should preserve existing auth and db guarantees
+
+## Guardrails
+
+- Do not reorder middleware in ways that bypass authentication
+- Do not add new protected routes without auth tests
+- Do not treat route protection as implicit; middleware must be explicit in route registration

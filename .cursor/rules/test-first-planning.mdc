@@ -1,0 +1,50 @@
+---
+description: Enforce planning and test-first implementation for all feature work
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Plan-first, test-first workflow
+
+For any new feature, bug fix, refactor, or behavior change, follow this workflow by default:
+
+1. Start with a short implementation plan before making code changes.
+2. In the plan, identify:
+   - files likely to change
+   - test files to add or update
+   - acceptance criteria
+   - risks or edge cases
+3. Prefer creating tests first before implementation.
+4. Do not write production implementation code until tests or specs are written.
+5. After writing tests, run or describe running them and confirm they fail for the expected reason.
+6. Only after failing tests are established, implement the production code.
+7. Do not weaken, remove, or rewrite tests just to make implementation pass unless the user asks.
+8. After implementation, run the relevant tests again and confirm they pass.
+9. When possible, summarize work in this order:
+   - Plan
+   - Tests added/changed
+   - Implementation changed
+   - Verification results
+
+## Planning format
+
+When starting work, produce a concise plan like:
+
+- Goal
+- Files to inspect
+- Tests to create/update first
+- Implementation steps after tests fail
+- Validation steps
+
+## Test-first expectations
+
+- Prefer focused unit or integration tests over broad mocks
+- Reuse existing test patterns in the repository
+- Cover happy path, edge cases, and regression cases relevant to the change
+- If no test framework exists, say so explicitly and propose the smallest viable test approach before implementing
+
+## Guardrails
+
+- Never skip straight to implementation unless the user explicitly says to bypass planning or tests
+- If the task is too small for a formal plan, still give a one-to-three bullet mini-plan and note the tests first
+- If the codebase cannot support tests yet, explain the constraint and propose test scaffolding as the first step
