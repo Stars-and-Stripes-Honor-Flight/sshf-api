@@ -2,6 +2,7 @@ import { Guardian } from '../models/guardian.js';
 import { Veteran } from '../models/veteran.js';
 import { VALID_BUSES } from '../models/flight_detail.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { trimIfString } from '../utils/trim_strings.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -602,7 +603,7 @@ export async function updateGuardianSeat(req, res) {
             return res.status(400).json({ error: 'value is required' });
         }
 
-        const newSeat = String(value);
+        const newSeat = trimIfString(String(value));
 
         // Get the current document
         const url = `${dbUrl}/${dbName}/${docId}`;
@@ -747,7 +748,7 @@ export async function updateGuardianBus(req, res) {
             return res.status(400).json({ error: 'value is required' });
         }
 
-        const newBus = String(value);
+        const newBus = trimIfString(String(value));
 
         // Validate bus value
         if (!VALID_BUSES.includes(newBus)) {
@@ -866,10 +867,11 @@ function setNestedValue(obj, path, value) {
 async function patchGuardianField(req, res, config) {
     try {
         const docId = req.params.id;
-        const { value } = req.body;
+        let { value } = req.body;
         if (value === undefined || value === null) {
             return res.status(400).json({ error: 'value is required' });
         }
+        value = trimIfString(value);
         if (config.validate && !config.validate(value)) {
             return res.status(400).json({ error: config.validationMessage });
         }

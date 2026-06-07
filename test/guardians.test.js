@@ -1966,6 +1966,24 @@ describe('Guardians Route Handlers', () => {
             });
         }
 
+        it('should trim padded apparel shirt size before validation', async () => {
+            req.body = { value: '  WM  ' };
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(baseDoc))
+            });
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: baseDoc._id, rev: '2-new' }) };
+            });
+
+            await updateGuardianApparelShirtSize(req, res);
+
+            expect(res.json.firstCall.args[0].apparel_shirt_size).to.equal('WM');
+            expect(savedDoc.apparel.shirt_size).to.equal('WM');
+        });
+
         it('should return 500 for non-404 fetch failure in helper', async () => {
             req.body = { value: true };
             global.fetch.onFirstCall().resolves({

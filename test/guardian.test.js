@@ -52,6 +52,26 @@ describe('Guardian Model', () => {
             expect(guardian.address.city).to.equal('Springfield');
         });
 
+        it('should trim leading and trailing whitespace from string fields', () => {
+            const data = JSON.parse(JSON.stringify(sampleGuardianData));
+            data.name.first = '  Jane  ';
+            data.address.city = ' Springfield ';
+            data.flight.seat = ' 1B ';
+            const guardian = new Guardian(data);
+            expect(guardian.name.first).to.equal('Jane');
+            expect(guardian.address.city).to.equal('Springfield');
+            expect(guardian.flight.seat).to.equal('1B');
+        });
+
+        it('should not trim history array contents', () => {
+            const data = JSON.parse(JSON.stringify(sampleGuardianData));
+            data.name.first = '  Jane  ';
+            data.flight.history = [{ id: 't1', change: '  audit entry  ' }];
+            const guardian = new Guardian(data);
+            expect(guardian.name.first).to.equal('Jane');
+            expect(guardian.flight.history[0].change).to.equal('  audit entry  ');
+        });
+
         it('should create a guardian instance with default values when no data provided', () => {
             const guardian = new Guardian();
             expect(guardian.type).to.equal('Guardian');
