@@ -35,11 +35,15 @@ function filterPhoneSearchResults(searchRequest, dbResult) {
         filteredRows = filteredRows.filter(row => row.value && row.value.flight === searchRequest.flight);
     }
 
+    const rows = searchRequest.needsPhonePostFilter()
+        ? filteredRows.slice(0, searchRequest.limit)
+        : filteredRows;
+
     return {
         ...dbResult,
         total_rows: filteredRows.length,
         offset: 0,
-        rows: filteredRows
+        rows
     };
 }
 

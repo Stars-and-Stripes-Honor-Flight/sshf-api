@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { getSearch } from '../routes/search.js';
+import { SearchRequest } from '../models/search_request.js';
 import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Search Route', () => {
@@ -72,6 +73,168 @@ describe('Search Route', () => {
             const response = res.json.firstCall.args[0];
             expect(response.total_rows).to.equal(1);
             expect(response.rows[0].value.name).to.equal('John Smith');
+        });
+
+        it('should return active phone matches beyond the CouchDB fetch window', async () => {
+            req.query = {
+                limit: 5,
+                lastname: 'Ignored',
+                status: 'Active',
+                flight: 'All',
+                phone_num: '(312) 555-1212'
+            };
+
+            const mockDbResult = {
+                total_rows: 6,
+                offset: 0,
+                rows: [
+                    {
+                        id: '1',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Flown One',
+                            phone: '(312) 555-1212',
+                            status: 'Flown',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    },
+                    {
+                        id: '2',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Flown Two',
+                            phone: '(312) 555-1212',
+                            status: 'Flown',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    },
+                    {
+                        id: '3',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Flown Three',
+                            phone: '(312) 555-1212',
+                            status: 'Flown',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    },
+                    {
+                        id: '4',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Flown Four',
+                            phone: '(312) 555-1212',
+                            status: 'Flown',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    },
+                    {
+                        id: '5',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Flown Five',
+                            phone: '(312) 555-1212',
+                            status: 'Flown',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    },
+                    {
+                        id: '6',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Active Match',
+                            phone: '(312) 555-1212',
+                            status: 'Active',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    }
+                ]
+            };
+
+            global.fetch = sinon.stub().resolves({
+                ok: true,
+                json: async () => mockDbResult
+            });
+
+            await getSearch(req, res, next);
+
+            expect(res.json.calledOnce).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.total_rows).to.equal(1);
+            expect(response.rows).to.have.lengthOf(1);
+            expect(response.rows[0].value.name).to.equal('Active Match');
+            expect(response.rows[0].value.status).to.equal('Active');
+
+            const fetchUrl = global.fetch.firstCall.args[0];
+            expect(fetchUrl).to.include(`limit=${SearchRequest.PHONE_PREFILTER_FETCH_LIMIT}`);
+        });
+
+        it('should apply user limit after phone status and flight filtering', async () => {
+            req.query = {
+                limit: 1,
+                lastname: 'Ignored',
+                status: 'Active',
+                flight: 'All',
+                phone_num: '(312) 555-1212'
+            };
+
+            const mockDbResult = {
+                total_rows: 3,
+                offset: 0,
+                rows: [
+                    {
+                        id: '1',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Active One',
+                            phone: '(312) 555-1212',
+                            status: 'Active',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    },
+                    {
+                        id: '2',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Active Two',
+                            phone: '(312) 555-1212',
+                            status: 'Active',
+                            flight: 'SSHF-Oct2024'
+                        }
+                    },
+                    {
+                        id: '3',
+                        key: ['3125551212'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Flown One',
+                            phone: '(312) 555-1212',
+                            status: 'Flown',
+                            flight: 'SSHF-Nov2024'
+                        }
+                    }
+                ]
+            };
+
+            global.fetch = sinon.stub().resolves({
+                ok: true,
+                json: async () => mockDbResult
+            });
+
+            await getSearch(req, res, next);
+
+            const response = res.json.firstCall.args[0];
+            expect(response.total_rows).to.equal(2);
+            expect(response.rows).to.have.lengthOf(1);
+            expect(response.rows[0].value.name).to.equal('Active One');
         });
 
         it('should filter phone search results by both status and flight', async () => {
