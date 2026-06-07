@@ -58,6 +58,26 @@ describe('Veteran Model', () => {
             expect(veteran.address.city).to.equal('Springfield');
         });
 
+        it('should trim leading and trailing whitespace from string fields', () => {
+            const data = JSON.parse(JSON.stringify(sampleVeteranData));
+            data.name.first = '  John  ';
+            data.address.city = ' Springfield ';
+            data.flight.seat = ' 12A ';
+            const veteran = new Veteran(data);
+            expect(veteran.name.first).to.equal('John');
+            expect(veteran.address.city).to.equal('Springfield');
+            expect(veteran.flight.seat).to.equal('12A');
+        });
+
+        it('should not trim history array contents', () => {
+            const data = JSON.parse(JSON.stringify(sampleVeteranData));
+            data.name.first = '  John  ';
+            data.flight.history = [{ id: 't1', change: '  audit entry  ' }];
+            const veteran = new Veteran(data);
+            expect(veteran.name.first).to.equal('John');
+            expect(veteran.flight.history[0].change).to.equal('  audit entry  ');
+        });
+
         it('should create a veteran instance with default values when no data provided', () => {
             const veteran = new Veteran();
             expect(veteran.type).to.equal('');

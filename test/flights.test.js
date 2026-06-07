@@ -329,6 +329,27 @@ describe('Flights Route Handlers', () => {
             expect(response.type).to.equal('Flight');
         });
 
+        it('should trim padded flight name before saving', async () => {
+            req.body = {
+                ...baseSampleData,
+                name: '  SSHF-Nov2011  '
+            };
+
+            let savedBody = null;
+            global.fetch.callsFake(async (url, options) => {
+                if (options?.method === 'POST') {
+                    savedBody = JSON.parse(options.body);
+                }
+                return { ok: true, json: async () => ({ id: 'new-id', rev: '1-abc' }) };
+            });
+
+            await createFlight(req, res);
+
+            expect(res.status.calledWith(201)).to.be.true;
+            expect(savedBody.name).to.equal('SSHF-Nov2011');
+            expect(res.json.firstCall.args[0].name).to.equal('SSHF-Nov2011');
+        });
+
         it('should set completed to false by default for new flights', async () => {
             // Remove completed from request body
             req.body = {
@@ -568,6 +589,21 @@ describe('Flights Route Handlers', () => {
             expect(res.json.called).to.be.true;
             const response = res.json.firstCall.args[0];
             expect(response._rev).to.equal('2-def');
+        });
+
+        it('should trim padded flight name on update', async () => {
+            req.body.name = '  SSHF-Updated  ';
+
+            let savedBody = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedBody = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'test-id', rev: '2-def' }) };
+            });
+
+            await updateFlight(req, res);
+
+            expect(savedBody.name).to.equal('SSHF-Updated');
+            expect(res.json.firstCall.args[0].name).to.equal('SSHF-Updated');
         });
 
         it('should handle validation errors', async () => {

@@ -73,6 +73,28 @@ describe('Veterans Route Handlers', () => {
             expect(response._id).to.equal('new-id');
         });
 
+        it('should trim padded text fields before saving to CouchDB', async () => {
+            const paddedData = JSON.parse(JSON.stringify(baseSampleData));
+            paddedData.name.first = '  John  ';
+            paddedData.address.city = ' Springfield ';
+            req.body = paddedData;
+
+            let savedBody = null;
+            global.fetch.callsFake(async (url, options) => {
+                if (options?.method === 'POST') {
+                    savedBody = JSON.parse(options.body);
+                }
+                return { ok: true, json: async () => ({ id: 'new-id', rev: '1-abc' }) };
+            });
+
+            await createVeteran(req, res);
+
+            expect(res.status.calledWith(201)).to.be.true;
+            expect(savedBody.name.first).to.equal('John');
+            expect(savedBody.address.city).to.equal('Springfield');
+            expect(res.json.firstCall.args[0].name.first).to.equal('John');
+        });
+
         it('should handle validation errors', async () => {
             const invalidData = JSON.parse(JSON.stringify(baseSampleData));
             invalidData.name.first = '12';
@@ -572,6 +594,26 @@ describe('Veterans Route Handlers', () => {
             expect(savedDoc.flight.seat).to.equal('14B');
             expect(savedDoc.flight.history.length).to.equal(1);
             expect(savedDoc.flight.history[0].change).to.include('changed seat from: 10A to: 14B');
+        });
+
+        it('should trim padded seat value before saving', async () => {
+            req.body = { value: '  14B  ' };
+
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(mockVeteranDoc))
+            });
+
+            let savedDoc = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'vet-123', rev: '2-xyz' }) };
+            });
+
+            await updateVeteranSeat(req, res);
+
+            expect(res.json.firstCall.args[0].seat).to.equal('14B');
+            expect(savedDoc.flight.seat).to.equal('14B');
         });
 
         it('should update veteran seat with empty old value', async () => {

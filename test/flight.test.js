@@ -24,6 +24,12 @@ describe('Flight Model', () => {
             expect(flight.completed).to.equal(true);
         });
 
+        it('should trim leading and trailing whitespace from string fields', () => {
+            const flight = new Flight({ ...baseSampleData, name: '  Spring 2026  ' });
+            expect(flight.name).to.equal('Spring 2026');
+            expect(flight.toJSON().name).to.equal('Spring 2026');
+        });
+
         it('should create a flight instance with default values when no data provided', () => {
             const flight = new Flight();
             expect(flight._id).to.equal('');

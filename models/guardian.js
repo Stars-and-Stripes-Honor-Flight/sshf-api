@@ -1,5 +1,8 @@
+import { trimStringValues } from '../utils/trim_strings.js';
+
 export class Guardian {
     constructor(data = {}) {
+        data = trimStringValues(data);
         this._id = data._id || '';
         this._rev = data._rev || '';
         this.type = data.type || 'Guardian';
