@@ -1,4 +1,6 @@
 export class SearchRequest {
+    static PHONE_PREFILTER_FETCH_LIMIT = 10000;
+
     constructor(data = {}) {
         // Set defaults
         this.limit = data.limit || 25;
@@ -24,6 +26,11 @@ export class SearchRequest {
         }
     }
 
+    needsPhonePostFilter() {
+        return this.getViewName() === 'all_by_phone_number2'
+            && (this.status !== 'All' || this.flight !== 'All');
+    }
+
     getViewName() {
         if (this.digitsOnlyPhone) {
             return 'all_by_phone_number2';
@@ -43,7 +50,10 @@ export class SearchRequest {
         const viewName = this.getViewName();
         
         if (this.limit) {
-            params.append('limit', this.limit);
+            const dbLimit = this.needsPhonePostFilter()
+                ? SearchRequest.PHONE_PREFILTER_FETCH_LIMIT
+                : this.limit;
+            params.append('limit', dbLimit);
         }
 
         // Set startkey and endkey based on view type

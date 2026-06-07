@@ -107,6 +107,29 @@ describe('SearchRequest', () => {
             const params = new URLSearchParams(request.toQueryParams());
             expect(params.get('startkey')).to.equal('["3125551212"]');
             expect(params.get('endkey')).to.equal('["3125551212\ufff0"]');
+            expect(params.get('limit')).to.equal('25');
+        });
+
+        it('should use elevated fetch limit for phone search when status or flight filters apply', () => {
+            const request = new SearchRequest({
+                phone_num: '(312) 555-1212',
+                status: 'Active',
+                flight: 'All',
+                limit: 5
+            });
+            const params = new URLSearchParams(request.toQueryParams());
+            expect(params.get('limit')).to.equal(String(SearchRequest.PHONE_PREFILTER_FETCH_LIMIT));
+        });
+
+        it('should use user limit for phone search when status and flight are All', () => {
+            const request = new SearchRequest({
+                phone_num: '(312) 555-1212',
+                status: 'All',
+                flight: 'All',
+                limit: 5
+            });
+            const params = new URLSearchParams(request.toQueryParams());
+            expect(params.get('limit')).to.equal('5');
         });
 
         it('should ignore lastname for key generation when phone_num is provided', () => {
