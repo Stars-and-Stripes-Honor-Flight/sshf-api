@@ -2,10 +2,12 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { google } from 'googleapis';
+import { OAuth2Client } from 'google-auth-library';
 import { specs } from './swagger/swagger.js';
 import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
+import { assertValidTokenClaims, TokenAudienceError } from './utils/auth.js';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
@@ -67,6 +69,9 @@ app.use(cors(buildCorsOptions()));
 // In-memory cache for user authentication
 const userCache = new Map();
 const userCacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+// Client used only to introspect incoming access tokens (validate audience)
+const tokenInfoClient = new OAuth2Client();
 
 // Route definitions
 app.get('/secure-data', authenticate, getSecureData);
@@ -248,6 +253,35 @@ async function authenticate(req, res, next) {
                 // Remove expired cache entry
                 userCache.delete(token);
             }
+        }
+
+        // Introspect the token so we can confirm it was actually issued for
+        // this application's OAuth client. A valid Google token alone is not
+        // enough: without this check any Google access token from any client
+        // would be accepted.
+        let tokenInfo;
+        try {
+            tokenInfo = await tokenInfoClient.getTokenInfo(token);
+        } catch (introspectionError) {
+            const status = introspectionError?.status ?? introspectionError?.response?.status;
+            if (status && status >= 400 && status < 500) {
+                return res.status(401).json({ message: 'Unauthorized: Invalid token' });
+            }
+            console.error('Token introspection failed:', introspectionError?.message);
+            return res.status(503).json({ message: 'Authentication service unavailable' });
+        }
+
+        try {
+            assertValidTokenClaims({
+                aud: tokenInfo.aud,
+                email: tokenInfo.email,
+                emailVerified: tokenInfo.email_verified
+            });
+        } catch (validationError) {
+            if (validationError instanceof TokenAudienceError) {
+                return res.status(401).json({ message: 'Unauthorized: Token not issued for this application' });
+            }
+            return res.status(403).json({ message: 'Forbidden: Account not permitted' });
         }
 
         // Fetch basic user info

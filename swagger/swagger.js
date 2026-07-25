@@ -65,7 +65,7 @@ const definition = {
   openapi: '3.0.0',
   info: {
     title: 'SSHF API',
-    version: '1.0.1',
+    version: '1.0.2',
     description: 'API for managing veterans documents with Google authentication',
   },
   servers: getServers(),
@@ -73,6 +73,11 @@ const definition = {
     securitySchemes: {
       GoogleAuth: {
         type: 'oauth2',
+        description:
+          'Google OAuth2. The access token must be issued for this API\'s ' +
+          'configured OAuth client; tokens from other clients are rejected ' +
+          'with 401. Protected endpoints return 401 for a missing, invalid, ' +
+          'or wrong-audience token and 403 when the account is not permitted.',
         flows: {
           implicit: {
             authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
