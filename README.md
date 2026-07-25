@@ -46,6 +46,9 @@ Required environment variables:
 | `DB_NAME` | Database name |
 | `DB_USER` | CouchDB username |
 | `DB_PASS` | CouchDB password |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (defaults to `http://localhost:3000,http://localhost:8080`) |
+| `API_URL` | Public API base URL for OpenAPI/Swagger (defaults to `http://localhost:8080`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI authentication |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
@@ -91,6 +94,15 @@ Use a conservative update flow so GitHub alerts can be cleared without pulling i
 8. Use `npm run deps:audit:all` when you want to inspect dev-only warnings separately from production risk.
 
 Avoid manually editing `package-lock.json`. If the lockfile truly needs to be regenerated, delete `node_modules` and `package-lock.json`, run `npm install`, and then re-run the full verification flow before committing the new lockfile.
+
+## Deployment
+
+Deployments are fully automated with GitHub Actions:
+
+- Merging a PR to `main` deploys to the **dev** environment (`sshf-api-dev`).
+- Publishing a GitHub Release tagged `vX.Y.Z` promotes the exact dev-tested image to **production** (`sshf-api-prd`), behind a manual approval gate.
+
+See the [CI/CD and Deployment Guide](docs/DEPLOYMENT.md) for the full process: release preparation, promotion steps, post-release verification, rollback, and environment configuration.
 
 ## API Documentation
 
