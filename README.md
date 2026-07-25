@@ -48,7 +48,9 @@ Required environment variables:
 | `DB_PASS` | CouchDB password |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (defaults to `http://localhost:3000,http://localhost:8080`) |
 | `API_URL` | Public API base URL for OpenAPI/Swagger (defaults to `http://localhost:8080`) |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI authentication |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI auth, and the client whose access tokens the API accepts (audience validation) |
+| `ALLOWED_CLIENT_IDS` | Optional. Comma-separated OAuth client IDs accepted for token audience validation (overrides `GOOGLE_CLIENT_ID` when set) |
+| `ALLOWED_EMAIL_DOMAINS` | Optional. Comma-separated email domains permitted to access the API; unset disables the domain check |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
@@ -103,6 +105,24 @@ Deployments are fully automated with GitHub Actions:
 - Publishing a GitHub Release tagged `vX.Y.Z` promotes the exact dev-tested image to **production** (`sshf-api-prd`), behind a manual approval gate.
 
 See the [CI/CD and Deployment Guide](docs/DEPLOYMENT.md) for the full process: release preparation, promotion steps, post-release verification, rollback, and environment configuration.
+
+## Authentication & Authorization
+
+Protected endpoints require a Google OAuth2 access token as a Bearer token.
+The API enforces two checks before a request proceeds:
+
+1. **Audience validation** — the token is introspected and rejected with `401`
+   unless it was issued for this API's OAuth client (`GOOGLE_CLIENT_ID`, or any
+   ID in `ALLOWED_CLIENT_IDS`). This ensures a valid Google token minted for
+   some other application cannot be replayed against this API.
+2. **Email domain (optional)** — when `ALLOWED_EMAIL_DOMAINS` is set, an
+   authenticated user whose verified email falls outside those domains receives
+   `403`.
+
+Group memberships are attached to the request for endpoints that report them
+(e.g. `GET /user/hasgroup`). Responses: `401` for a missing, invalid, expired,
+or wrong-audience token; `403` for a permitted-token account that is not
+allowed; `503` if token introspection is temporarily unavailable.
 
 ## API Documentation
 
