@@ -95,6 +95,15 @@ Use a conservative update flow so GitHub alerts can be cleared without pulling i
 
 Avoid manually editing `package-lock.json`. If the lockfile truly needs to be regenerated, delete `node_modules` and `package-lock.json`, run `npm install`, and then re-run the full verification flow before committing the new lockfile.
 
+## Deployment
+
+Deployments are fully automated with GitHub Actions:
+
+- Merging a PR to `main` deploys to the **dev** environment (`sshf-api-dev`).
+- Publishing a GitHub Release tagged `vX.Y.Z` promotes the exact dev-tested image to **production** (`sshf-api-prd`), behind a manual approval gate.
+
+See the [CI/CD and Deployment Guide](docs/DEPLOYMENT.md) for the full process: release preparation, promotion steps, post-release verification, rollback, and environment configuration.
+
 ## API Documentation
 
 Interactive API documentation is available at `/api-docs` when the server is running.
