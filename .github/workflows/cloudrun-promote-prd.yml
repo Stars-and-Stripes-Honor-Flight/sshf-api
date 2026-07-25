@@ -1,0 +1,133 @@
+name: Promote to Cloud Run Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing git tag to promote (e.g. v1.0.0)'
+        required: true
+
+concurrency: production-deploy
+
+env:
+  # Dev registry where merge-to-main builds land (tagged sha-<commit>).
+  DEV_IMAGE_REPO: us-central1-docker.pkg.dev/sshf-api-dev/cloud-run-source-deploy/sshf-api
+  # Prod-owned registry that holds promoted, version-tagged images.
+  PROD_IMAGE_REPO: us-central1-docker.pkg.dev/sshf-api-prd/sshf-api/sshf-api
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: ${{ secrets.GCP_SERVICE_NAME }}
+  REGION: ${{ secrets.GCP_REGION }}
+  WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+jobs:
+  promote:
+    runs-on: 'ubuntu-latest'
+    # Requires the "production" GitHub environment (approval gate +
+    # environment-scoped GCP_* secrets pointing at sshf-api-prd).
+    environment: 'production'
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: 'Checkout'
+        uses: 'actions/checkout@v4'
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: 'Resolve version and commit'
+        id: 'version'
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            COMMIT="${{ github.sha }}"
+          else
+            VERSION="${{ inputs.version }}"
+            COMMIT=$(git rev-list -n 1 "$VERSION")
+          fi
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version '$VERSION' must be a semver tag like v1.2.3"
+            exit 1
+          fi
+          # Cloud Run revision tags cannot contain dots.
+          REVISION_TAG="${VERSION//./-}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+          echo "revision_tag=$REVISION_TAG" >> "$GITHUB_OUTPUT"
+
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v3'
+        with:
+          workload_identity_provider: '${{ env.WORKLOAD_IDENTITY_PROVIDER }}'
+          service_account: '${{ env.SERVICE_ACCOUNT }}'
+          token_format: 'access_token'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v3'
+
+      - name: 'Resolve dev image digest for released commit'
+        id: 'digest'
+        run: |
+          COMMIT="${{ steps.version.outputs.commit }}"
+          DIGEST=$(gcloud artifacts docker images describe \
+            "${DEV_IMAGE_REPO}:sha-${COMMIT}" \
+            --format 'value(image_summary.digest)' 2>/dev/null) || true
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::No dev image tagged sha-${COMMIT} in ${DEV_IMAGE_REPO}. Make sure the release commit was merged to main and the dev deploy workflow completed (it tags built images with the commit SHA)."
+            exit 1
+          fi
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: 'Set up crane'
+        uses: 'imjasonh/setup-crane@v0.4'
+
+      - name: 'Copy image digest to production registry'
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          crane cp \
+            "${DEV_IMAGE_REPO}@${{ steps.digest.outputs.digest }}" \
+            "${PROD_IMAGE_REPO}:${{ steps.version.outputs.version }}"
+
+      - name: 'Deploy to Cloud Run (no traffic)'
+        id: 'deploy'
+        uses: 'google-github-actions/deploy-cloudrun@v3'
+        with:
+          project_id: '${{ env.PROJECT_ID }}'
+          service: '${{ env.SERVICE_NAME }}'
+          region: '${{ env.REGION }}'
+          image: '${{ env.PROD_IMAGE_REPO }}@${{ steps.digest.outputs.digest }}'
+          no_traffic: true
+          tag: '${{ steps.version.outputs.revision_tag }}'
+
+      - name: 'Smoke test tagged revision'
+        run: |
+          TAG="${{ steps.version.outputs.revision_tag }}"
+          TAG_URL=$(gcloud run services describe "${SERVICE_NAME}" \
+            --region "${REGION}" --project "${PROJECT_ID}" --format json \
+            | jq -r --arg t "$TAG" '.status.traffic[] | select(.tag==$t) | .url')
+          if [[ -z "$TAG_URL" || "$TAG_URL" == "null" ]]; then
+            echo "::error::Could not resolve URL for revision tag $TAG"
+            exit 1
+          fi
+          echo "Smoke testing $TAG_URL"
+          # /api-docs is public; a successful response proves the revision boots.
+          curl -fsSL --retry 3 --retry-delay 5 "$TAG_URL/api-docs/" -o /dev/null
+          echo "Smoke test passed"
+
+      - name: 'Shift 100% traffic to new revision'
+        run: |
+          gcloud run services update-traffic "${SERVICE_NAME}" \
+            --region "${REGION}" --project "${PROJECT_ID}" --to-latest
+
+      - name: 'Show output'
+        run: |-
+          echo "Promoted ${{ steps.version.outputs.version }} (${{ steps.digest.outputs.digest }})"
+          echo ${{ steps.deploy.outputs.url }}

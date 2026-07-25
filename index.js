@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import { specs } from './swagger/swagger.js';
 import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession } from './utils/db.js';
+import { buildCorsOptions } from './utils/cors.js';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
@@ -60,27 +61,8 @@ import { exportFlightCsv, exportCallCenterFollowUpCsv, exportTourLeadCsv } from 
 const app = express();
 const port = 8080;
 
-// Define allowed origins for CORS
-const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:8080',
-    'https://sshf-ui-593951006010.us-central1.run.app',
-    'https://sshf-api-330507742215.us-central1.run.app'
-];
-
-// Configure CORS options
-const corsOptions = {
-    origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    }
-};
-
 // Enable CORS for all routes with specific options
-app.use(cors(corsOptions));
+app.use(cors(buildCorsOptions()));
 
 // In-memory cache for user authentication
 const userCache = new Map();

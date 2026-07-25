@@ -46,6 +46,9 @@ Required environment variables:
 | `DB_NAME` | Database name |
 | `DB_USER` | CouchDB username |
 | `DB_PASS` | CouchDB password |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (defaults to `http://localhost:3000,http://localhost:8080`) |
+| `API_URL` | Public API base URL for OpenAPI/Swagger (defaults to `http://localhost:8080`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI authentication |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 

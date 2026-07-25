@@ -52,6 +52,15 @@ const extractSwaggerPaths = (dir) => {
   return paths;
 };
 
+export function getServers() {
+  return [
+    {
+      url: process.env.API_URL || 'http://localhost:8080',
+      description: 'API Server',
+    },
+  ];
+}
+
 const definition = {
   openapi: '3.0.0',
   info: {
@@ -59,20 +68,7 @@ const definition = {
     version: '1.0.0',
     description: 'API for managing veterans documents with Google authentication',
   },
-  servers: [
-    {
-      url: process.env.API_URL || 'http://localhost:8080',
-      description: 'API Server',
-    },
-    {
-      url: 'http://localhost:8080',
-      description: 'Force local API Server',
-    },
-    {
-      url: 'https://sshf-api-330507742215.us-central1.run.app',
-      description: 'Force Dev Environment API Server',
-    },
-  ],
+  servers: getServers(),
   components: {
     securitySchemes: {
       GoogleAuth: {
