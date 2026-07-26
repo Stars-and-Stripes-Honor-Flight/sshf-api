@@ -51,6 +51,7 @@ Required environment variables:
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI auth, and the client whose access tokens the API accepts (audience validation) |
 | `ALLOWED_CLIENT_IDS` | Optional. Comma-separated OAuth client IDs accepted for token audience validation (overrides `GOOGLE_CLIENT_ID` when set) |
 | `ALLOWED_EMAIL_DOMAINS` | Optional. Comma-separated email domains permitted to access the API; unset disables the domain check |
+| `ALLOWED_GROUP_EMAILS` | Optional. Comma-separated Workspace group emails required for data routes; unset disables the group gate. Dev: `sshf_app_dev_full_access@…`; prod: `sshf_app_prd_full_access@…` |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
@@ -109,7 +110,7 @@ See the [CI/CD and Deployment Guide](docs/DEPLOYMENT.md) for the full process: r
 ## Authentication & Authorization
 
 Protected endpoints require a Google OAuth2 access token as a Bearer token.
-The API enforces two checks before a request proceeds:
+The API enforces these checks before a request proceeds:
 
 1. **Audience validation** — the token is introspected and rejected with `401`
    unless it was issued for this API's OAuth client (`GOOGLE_CLIENT_ID`, or any
@@ -118,11 +119,15 @@ The API enforces two checks before a request proceeds:
 2. **Email domain (optional)** — when `ALLOWED_EMAIL_DOMAINS` is set, an
    authenticated user whose verified email falls outside those domains receives
    `403`.
+3. **Workspace group membership (optional, required in deployed envs)** — when
+   `ALLOWED_GROUP_EMAILS` is set, data routes require membership in at least
+   one listed group (`403` otherwise, including when Admin SDK returns no
+   roles). `GET /user/hasgroup` stays auth-only so the UI can probe membership
+   during sign-in.
 
-Group memberships are attached to the request for endpoints that report them
-(e.g. `GET /user/hasgroup`). Responses: `401` for a missing, invalid, expired,
-or wrong-audience token; `403` for a permitted-token account that is not
-allowed; `503` if token introspection is temporarily unavailable.
+Responses: `401` for a missing, invalid, expired, or wrong-audience token;
+`403` for a permitted-token account that is not allowed (domain or group);
+`503` if token introspection is temporarily unavailable.
 
 ## API Documentation
 
