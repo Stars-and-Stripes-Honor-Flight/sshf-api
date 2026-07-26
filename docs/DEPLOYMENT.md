@@ -207,6 +207,22 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
   --update-env-vars "ALLOWED_EMAIL_DOMAINS=starsandstripeshonorflight.org"
 ```
 
+- **Workspace group membership (required for deployed envs).** Set
+  `ALLOWED_GROUP_EMAILS` so data routes reject authenticated users who are not
+  in the environment full-access group. Without this env var the group check
+  is disabled. Set it in the same release window as the authorize middleware
+  ships. `GET /user/hasgroup` remains auth-only for UI login probes.
+
+```bash
+# Dev
+gcloud run services update sshf-api --region us-central1 --project sshf-api-dev \
+  --update-env-vars "ALLOWED_GROUP_EMAILS=sshf_app_dev_full_access@starsandstripeshonorflight.org"
+
+# Prod
+gcloud run services update sshf-api --region us-central1 --project sshf-api-prd \
+  --update-env-vars "ALLOWED_GROUP_EMAILS=sshf_app_prd_full_access@starsandstripeshonorflight.org"
+```
+
 ## Infrastructure reference (administrators)
 
 One-time setup that the pipeline depends on. If any of this is removed, the
@@ -240,8 +256,8 @@ promotion workflow breaks:
 | Promote never asks for approval | The `production` GitHub environment or its required reviewer is missing. |
 | Auth step fails with a token/OIDC error | Workload Identity Federation provider, its attribute condition, or the SA binding was changed. Compare against the Infrastructure reference above. |
 | Smoke test fails, traffic unchanged | The new revision does not boot or `/api-docs/` errors. Check revision logs in the prod project; production users are unaffected. Fix and release again. |
-| Users authenticate but have no roles | Admin SDK API disabled in the project, runtime SA missing the Workspace Groups Reader role, or a cached token (30-minute cache — re-sign-in). |
+| Users authenticate but have no roles | Admin SDK API disabled in the project, runtime SA missing the Workspace Groups Reader role, or a cached token (30-minute cache — re-sign-in). With `ALLOWED_GROUP_EMAILS` set this becomes data-route `403` (fail closed). |
 | Every authenticated request returns 401 after a deploy | The token audience no longer matches. `GOOGLE_CLIENT_ID` on the service must equal the OAuth client the UI/Swagger mint tokens with; if the UI uses a different client, add it to `ALLOWED_CLIENT_IDS`. |
-| Some users get 403 | `ALLOWED_EMAIL_DOMAINS` is set and their verified email is outside it (or email scope/verification is missing). |
+| Some users get 403 | `ALLOWED_EMAIL_DOMAINS` rejects their verified email, or `ALLOWED_GROUP_EMAILS` is set and they are not in a listed Workspace group (or Admin SDK returned no roles). |
 | New secret value not taking effect | Revisions pin secret versions at deploy time. Force a new revision (see Configuration and secrets). |
 | CORS errors from the UI | The UI origin is missing from the service's `ALLOWED_ORIGINS` env var. |

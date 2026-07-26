@@ -65,7 +65,7 @@ const definition = {
   openapi: '3.0.0',
   info: {
     title: 'SSHF API',
-    version: '1.0.2',
+    version: '1.0.3',
     description: 'API for managing veterans documents with Google authentication',
   },
   servers: getServers(),
@@ -76,8 +76,11 @@ const definition = {
         description:
           'Google OAuth2. The access token must be issued for this API\'s ' +
           'configured OAuth client; tokens from other clients are rejected ' +
-          'with 401. Protected endpoints return 401 for a missing, invalid, ' +
-          'or wrong-audience token and 403 when the account is not permitted.',
+          'with 401. Protected data endpoints return 401 for a missing, ' +
+          'invalid, or wrong-audience token and 403 when the account email ' +
+          'domain or Workspace group membership is not permitted ' +
+          '(ALLOWED_EMAIL_DOMAINS / ALLOWED_GROUP_EMAILS). ' +
+          'GET /user/hasgroup is auth-only so clients can probe group membership.',
         flows: {
           implicit: {
             authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',

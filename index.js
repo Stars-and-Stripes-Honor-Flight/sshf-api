@@ -7,7 +7,7 @@ import { specs } from './swagger/swagger.js';
 import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
-import { assertValidTokenClaims, TokenAudienceError } from './utils/auth.js';
+import { assertValidTokenClaims, TokenAudienceError, authorize } from './utils/auth.js';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
@@ -74,80 +74,80 @@ const userCacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
 const tokenInfoClient = new OAuth2Client();
 
 // Route definitions
-app.get('/secure-data', authenticate, getSecureData);
+app.get('/secure-data', authenticate, authorize, getSecureData);
 app.get('/user/hasgroup', authenticate, getHasGroup);
 app.get("/msg", getMessage);
-app.get("/search", authenticate, dbSession, getSearch);
+app.get("/search", authenticate, authorize, dbSession, getSearch);
 app.use(express.json()); // for parsing application/json
 app.post("/msg", postMessage);
 
 // Generic document routes
-app.post("/docs", authenticate, dbSession, createDocument);
-app.get("/docs/:id", authenticate, dbSession, retrieveDocument);
-app.put("/docs/:id", authenticate, dbSession, updateDocument);
-app.delete("/docs/:id", authenticate, dbSession, deleteDocument);
+app.post("/docs", authenticate, authorize, dbSession, createDocument);
+app.get("/docs/:id", authenticate, authorize, dbSession, retrieveDocument);
+app.put("/docs/:id", authenticate, authorize, dbSession, updateDocument);
+app.delete("/docs/:id", authenticate, authorize, dbSession, deleteDocument);
 
 // Veteran-specific routes
-app.post("/veterans", authenticate, dbSession, createVeteran);
-app.get("/veterans/search", authenticate, dbSession, searchUnpairedVeterans);
-app.get("/veterans/:id", authenticate, dbSession, retrieveVeteran);
-app.put("/veterans/:id", authenticate, dbSession, updateVeteran);
-app.patch("/veterans/:id/seat", authenticate, dbSession, updateVeteranSeat);
-app.patch("/veterans/:id/bus", authenticate, dbSession, updateVeteranBus);
-app.patch("/veterans/:id/mail-call-received", authenticate, dbSession, updateVeteranMailCallReceived);
-app.patch("/veterans/:id/mail-call-adopt", authenticate, dbSession, updateVeteranMailCallAdopt);
-app.patch("/veterans/:id/medical-form", authenticate, dbSession, updateVeteranMedicalForm);
-app.patch("/veterans/:id/medical-review", authenticate, dbSession, updateVeteranMedicalReview);
-app.patch("/veterans/:id/vaccinated", authenticate, dbSession, updateVeteranVaccinated);
-app.patch("/veterans/:id/homecoming-destination", authenticate, dbSession, updateVeteranHomecomingDestination);
-app.patch("/veterans/:id/apparel-shirt-size", authenticate, dbSession, updateVeteranApparelShirtSize);
-app.patch("/veterans/:id/apparel-jacket-size", authenticate, dbSession, updateVeteranApparelJacketSize);
-app.patch("/veterans/:id/apparel-notes", authenticate, dbSession, updateVeteranApparelNotes);
-app.delete("/veterans/:id", authenticate, dbSession, deleteVeteran);
+app.post("/veterans", authenticate, authorize, dbSession, createVeteran);
+app.get("/veterans/search", authenticate, authorize, dbSession, searchUnpairedVeterans);
+app.get("/veterans/:id", authenticate, authorize, dbSession, retrieveVeteran);
+app.put("/veterans/:id", authenticate, authorize, dbSession, updateVeteran);
+app.patch("/veterans/:id/seat", authenticate, authorize, dbSession, updateVeteranSeat);
+app.patch("/veterans/:id/bus", authenticate, authorize, dbSession, updateVeteranBus);
+app.patch("/veterans/:id/mail-call-received", authenticate, authorize, dbSession, updateVeteranMailCallReceived);
+app.patch("/veterans/:id/mail-call-adopt", authenticate, authorize, dbSession, updateVeteranMailCallAdopt);
+app.patch("/veterans/:id/medical-form", authenticate, authorize, dbSession, updateVeteranMedicalForm);
+app.patch("/veterans/:id/medical-review", authenticate, authorize, dbSession, updateVeteranMedicalReview);
+app.patch("/veterans/:id/vaccinated", authenticate, authorize, dbSession, updateVeteranVaccinated);
+app.patch("/veterans/:id/homecoming-destination", authenticate, authorize, dbSession, updateVeteranHomecomingDestination);
+app.patch("/veterans/:id/apparel-shirt-size", authenticate, authorize, dbSession, updateVeteranApparelShirtSize);
+app.patch("/veterans/:id/apparel-jacket-size", authenticate, authorize, dbSession, updateVeteranApparelJacketSize);
+app.patch("/veterans/:id/apparel-notes", authenticate, authorize, dbSession, updateVeteranApparelNotes);
+app.delete("/veterans/:id", authenticate, authorize, dbSession, deleteVeteran);
 
 // Guardian-specific routes
-app.post("/guardians", authenticate, dbSession, createGuardian);
-app.get("/guardians/:id", authenticate, dbSession, retrieveGuardian);
-app.put("/guardians/:id", authenticate, dbSession, updateGuardian);
-app.patch("/guardians/:id/seat", authenticate, dbSession, updateGuardianSeat);
-app.patch("/guardians/:id/bus", authenticate, dbSession, updateGuardianBus);
-app.patch("/guardians/:id/training-notes", authenticate, dbSession, updateGuardianTrainingNotes);
-app.patch("/guardians/:id/training-complete", authenticate, dbSession, updateGuardianTrainingComplete);
-app.patch("/guardians/:id/waiver", authenticate, dbSession, updateGuardianWaiver);
-app.patch("/guardians/:id/training-see-doc", authenticate, dbSession, updateGuardianTrainingSeeDoc);
-app.patch("/guardians/:id/vaccinated", authenticate, dbSession, updateGuardianVaccinated);
-app.patch("/guardians/:id/medical-form", authenticate, dbSession, updateGuardianMedicalForm);
-app.patch("/guardians/:id/paid", authenticate, dbSession, updateGuardianPaid);
-app.patch("/guardians/:id/books-ordered", authenticate, dbSession, updateGuardianBooksOrdered);
-app.patch("/guardians/:id/apparel-shirt-size", authenticate, dbSession, updateGuardianApparelShirtSize);
-app.patch("/guardians/:id/apparel-jacket-size", authenticate, dbSession, updateGuardianApparelJacketSize);
-app.patch("/guardians/:id/apparel-notes", authenticate, dbSession, updateGuardianApparelNotes);
-app.delete("/guardians/:id", authenticate, dbSession, deleteGuardian);
+app.post("/guardians", authenticate, authorize, dbSession, createGuardian);
+app.get("/guardians/:id", authenticate, authorize, dbSession, retrieveGuardian);
+app.put("/guardians/:id", authenticate, authorize, dbSession, updateGuardian);
+app.patch("/guardians/:id/seat", authenticate, authorize, dbSession, updateGuardianSeat);
+app.patch("/guardians/:id/bus", authenticate, authorize, dbSession, updateGuardianBus);
+app.patch("/guardians/:id/training-notes", authenticate, authorize, dbSession, updateGuardianTrainingNotes);
+app.patch("/guardians/:id/training-complete", authenticate, authorize, dbSession, updateGuardianTrainingComplete);
+app.patch("/guardians/:id/waiver", authenticate, authorize, dbSession, updateGuardianWaiver);
+app.patch("/guardians/:id/training-see-doc", authenticate, authorize, dbSession, updateGuardianTrainingSeeDoc);
+app.patch("/guardians/:id/vaccinated", authenticate, authorize, dbSession, updateGuardianVaccinated);
+app.patch("/guardians/:id/medical-form", authenticate, authorize, dbSession, updateGuardianMedicalForm);
+app.patch("/guardians/:id/paid", authenticate, authorize, dbSession, updateGuardianPaid);
+app.patch("/guardians/:id/books-ordered", authenticate, authorize, dbSession, updateGuardianBooksOrdered);
+app.patch("/guardians/:id/apparel-shirt-size", authenticate, authorize, dbSession, updateGuardianApparelShirtSize);
+app.patch("/guardians/:id/apparel-jacket-size", authenticate, authorize, dbSession, updateGuardianApparelJacketSize);
+app.patch("/guardians/:id/apparel-notes", authenticate, authorize, dbSession, updateGuardianApparelNotes);
+app.delete("/guardians/:id", authenticate, authorize, dbSession, deleteGuardian);
 
 // Flight-specific routes
-app.get("/flights", authenticate, dbSession, listFlights);
-app.post("/flights", authenticate, dbSession, createFlight);
-app.get("/flights/:id", authenticate, dbSession, retrieveFlight);
-app.put("/flights/:id", authenticate, dbSession, updateFlight);
+app.get("/flights", authenticate, authorize, dbSession, listFlights);
+app.post("/flights", authenticate, authorize, dbSession, createFlight);
+app.get("/flights/:id", authenticate, authorize, dbSession, retrieveFlight);
+app.put("/flights/:id", authenticate, authorize, dbSession, updateFlight);
 
 // Flight assignment routes
-app.get("/flights/:id/assignments", authenticate, dbSession, getFlightAssignments);
-app.post("/flights/:id/assignments", authenticate, dbSession, addVeteransToFlight);
+app.get("/flights/:id/assignments", authenticate, authorize, dbSession, getFlightAssignments);
+app.post("/flights/:id/assignments", authenticate, authorize, dbSession, addVeteransToFlight);
 
 // Flight detail routes
-app.get("/flights/:id/detail", authenticate, dbSession, getFlightDetail);
+app.get("/flights/:id/detail", authenticate, authorize, dbSession, getFlightDetail);
 
 // Waitlist routes
-app.get("/waitlist", authenticate, dbSession, getWaitlist);
-app.get("/waitlist/veteran-groups", authenticate, dbSession, getWaitlistVeteranGroups);
+app.get("/waitlist", authenticate, authorize, dbSession, getWaitlist);
+app.get("/waitlist/veteran-groups", authenticate, authorize, dbSession, getWaitlistVeteranGroups);
 
 // Recent Activity routes
-app.get("/recent-activity", authenticate, dbSession, getRecentActivity);
+app.get("/recent-activity", authenticate, authorize, dbSession, getRecentActivity);
 
 // Export routes
-app.get("/exports/flight", authenticate, dbSession, exportFlightCsv);
-app.get("/exports/callcenterfollowup", authenticate, dbSession, exportCallCenterFollowUpCsv);
-app.get("/exports/tourlead", authenticate, dbSession, exportTourLeadCsv);
+app.get("/exports/flight", authenticate, authorize, dbSession, exportFlightCsv);
+app.get("/exports/callcenterfollowup", authenticate, authorize, dbSession, exportCallCenterFollowUpCsv);
+app.get("/exports/tourlead", authenticate, authorize, dbSession, exportTourLeadCsv);
 
 // Expose OpenAPI spec at custom endpoint
 app.get('/openapi.json', (req, res) => {

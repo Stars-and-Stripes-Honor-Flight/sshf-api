@@ -23,6 +23,14 @@ export class DomainNotAllowedError extends Error {
     }
 }
 
+/** Token is valid and for this app, but the user is not in an allowed Workspace group. */
+export class GroupNotAllowedError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'GroupNotAllowedError';
+    }
+}
+
 function parseList(raw) {
     if (!raw || raw.trim() === '') {
         return [];
@@ -51,6 +59,15 @@ export function getAllowedClientIds(env = process.env) {
  */
 export function getAllowedEmailDomains(env = process.env) {
     return parseList(env.ALLOWED_EMAIL_DOMAINS).map((domain) => domain.toLowerCase());
+}
+
+/**
+ * Workspace group emails permitted to access protected data routes. Empty
+ * (the default) disables the group check so local development can omit it.
+ * When set, membership is required (fail closed if Admin SDK returns no roles).
+ */
+export function getAllowedGroupEmails(env = process.env) {
+    return parseList(env.ALLOWED_GROUP_EMAILS).map((email) => email.toLowerCase());
 }
 
 function isEmailVerified(value) {
@@ -88,5 +105,46 @@ export function assertValidTokenClaims(claims = {}, options = {}) {
         if (!domain || !allowedEmailDomains.includes(domain)) {
             throw new DomainNotAllowedError('Account email domain is not permitted');
         }
+    }
+}
+
+/**
+ * Require the authenticated user to belong to at least one configured
+ * Workspace group. When the allow-list is empty the check is disabled.
+ *
+ * @param {Array<{email?: string}>|undefined|null} roles
+ * @param {{allowedGroupEmails?: string[]}} [options]
+ * @throws {GroupNotAllowedError} when the user is not in an allowed group
+ */
+export function assertUserInAllowedGroups(roles, options = {}) {
+    const allowedGroupEmails = options.allowedGroupEmails ?? getAllowedGroupEmails();
+
+    if (allowedGroupEmails.length === 0) {
+        return;
+    }
+
+    const userEmails = (Array.isArray(roles) ? roles : [])
+        .map((role) => (typeof role?.email === 'string' ? role.email.toLowerCase() : ''))
+        .filter((email) => email.length > 0);
+
+    const isMember = userEmails.some((email) => allowedGroupEmails.includes(email));
+    if (!isMember) {
+        throw new GroupNotAllowedError('Account is not a member of an allowed group');
+    }
+}
+
+/**
+ * Express middleware: enforce ALLOWED_GROUP_EMAILS against req.user.roles.
+ * Intended to run after authenticate on data routes (not on /user/hasgroup).
+ */
+export function authorize(req, res, next) {
+    try {
+        assertUserInAllowedGroups(req.user?.roles);
+        next();
+    } catch (error) {
+        if (error instanceof GroupNotAllowedError) {
+            return res.status(403).json({ message: 'Forbidden: Account not permitted' });
+        }
+        throw error;
     }
 }
