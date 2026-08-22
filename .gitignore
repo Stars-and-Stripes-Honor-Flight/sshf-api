@@ -41,3 +41,7 @@ coverage/
 
 # AI Tools
 .cursor/skills/
+
+# Postman
+postman/
+.postman/
