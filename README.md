@@ -77,6 +77,32 @@ The server starts at `http://localhost:8080`.
 npm test
 ```
 
+Parity comparer and deny-list tests are included in `npm test`. They do not contact CouchDB.
+
+### Data parity harness (optional, live databases)
+
+Compares write-path results between hf-basic on living `test` and the new API on the sshf-db-prd copy. Never points at production `hf`. Not part of default CI.
+
+```bash
+# Optional one-shot align (dry-run first). Overwrites the sshf-db-prd copy only.
+npm run parity:align
+npm run parity:align -- --apply
+
+# Operation-layer scenarios. Pass unused people; do not re-replicate between runs.
+npm run parity -- 00-empty-clone
+npm run parity -- 01-edit-vet-note --veteran <id>
+npm run parity -- 02-pair-guardian --veteran <id> --guardian <id>
+```
+
+| Variable | Description |
+| --- | --- |
+| `PARITY_LEGACY_DB_URL` | Full URL of living `test` (hf-basic), e.g. `https://db.starsandstripeshonorflight.org/test` |
+| `PARITY_MODERN_DB_URL` | Full URL of the sshf-db-prd copy |
+| `PARITY_API_URL` | Base URL of an API whose `DB_NAME` is that copy (local process or `sshf-api-prd`, never `sshf-api-dev`) |
+| `PARITY_API_TOKEN` | Bearer token for that API |
+| `PARITY_USER_NAME` | Actor string written into history on both adapters |
+| `PARITY_SOURCE_URL` / `PARITY_TARGET_URL` | Align-only; source is living `test`, target is the sshf-db-prd copy |
+
 ### Test Coverage
 
 ```bash

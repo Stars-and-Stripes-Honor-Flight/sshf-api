@@ -5,6 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha --experimental-modules --es-module-specifier-resolution=node test/**/*.test.js",
+    "parity": "node scripts/parity/run-scenario.mjs",
+    "parity:align": "node scripts/parity/align-dbs.mjs",
     "coverage": "c8 npm run test",
     "report": "c8 report --reporter=text --reporter=html",
     "deps:outdated": "npm outdated",

@@ -1565,7 +1565,9 @@ describe('Veteran Model', () => {
             newVeteran.updateHistory(currentVeteran, user);
             
             expect(newVeteran.flight.history).to.have.lengthOf(1);
-            expect(newVeteran.flight.history[0].change).to.include('changed bus from Alpha1 to Bravo1');
+            expect(newVeteran.flight.history[0].change).to.equal(
+                'changed bus from: Alpha1 to: Bravo1 by: Admin User'
+            );
         });
 
         it('should track mail call changes', () => {
@@ -1589,7 +1591,9 @@ describe('Veteran Model', () => {
             newVeteran.updateHistory(currentVeteran, user);
 
             expect(newVeteran.call.history).to.have.lengthOf(1);
-            expect(newVeteran.call.history[0].change).to.include('changed how heard about from Unknown to family or friend by: Admin User');
+            expect(newVeteran.call.history[0].change).to.equal(
+                'changed how heard about from: Unknown to: family or friend by: Admin User'
+            );
         });
     });
 
@@ -1625,13 +1629,31 @@ describe('Veteran Model', () => {
     });
 
     describe('checkForChanges', () => {
+        it('should write Evently-style from:/to: history strings', () => {
+            const currentVeteran = new Veteran(sampleVeteranData);
+            const newVeteran = new Veteran(sampleVeteranData);
+            newVeteran.flight.bus = 'Bravo1';
+            const timestamp = '2026-08-22T18:00:00Z';
+
+            newVeteran.checkForChanges(
+                currentVeteran,
+                'flight.history',
+                { property: 'flight.bus', name: 'bus' },
+                'Admin User',
+                timestamp
+            );
+
+            expect(newVeteran.flight.history[0]).to.deep.equal({
+                id: timestamp,
+                change: 'changed bus from: Alpha1 to: Bravo1 by: Admin User'
+            });
+        });
+
         it('should track multiple types of changes', () => {
             const currentVeteran = new Veteran(sampleVeteranData);
             const newVeteran = new Veteran(sampleVeteranData);
-            const user = { firstName: 'Admin', lastName: 'User' };
             const timestamp = new Date().toISOString().split('.')[0] + 'Z';
 
-            // Test flight changes
             newVeteran.checkForChanges(
                 currentVeteran,
                 'flight.history',
@@ -1640,7 +1662,6 @@ describe('Veteran Model', () => {
                 timestamp
             );
 
-            // Test mail call changes
             newVeteran.mail_call.received = true;
             newVeteran.checkForChanges(
                 currentVeteran,

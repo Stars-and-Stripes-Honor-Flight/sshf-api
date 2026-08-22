@@ -1,0 +1,11 @@
+{
+  "id": "07-add-to-flight",
+  "operation": "addToFlight",
+  "legacyScreen": "hf-basic flightassign addVets",
+  "args": {
+    "veteranCount": 1,
+    "flightName": "SSHF-ParityHarness",
+    "flightDate": "2026-11-01",
+    "capacity": 20
+  }
+}
