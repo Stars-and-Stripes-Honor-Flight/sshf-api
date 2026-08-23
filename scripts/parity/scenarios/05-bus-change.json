@@ -1,0 +1,8 @@
+{
+  "id": "05-bus-change",
+  "operation": "changeBus",
+  "legacyScreen": "hf-basic assignToBus",
+  "args": {
+    "bus": "Bravo5"
+  }
+}

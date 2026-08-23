@@ -1,0 +1,6 @@
+{
+  "id": "02-pair-guardian",
+  "operation": "pairGuardian",
+  "legacyScreen": "hf-basic guardian edit PairGuardianToVeteran",
+  "args": {}
+}

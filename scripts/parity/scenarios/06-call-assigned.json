@@ -1,0 +1,8 @@
+{
+  "id": "06-call-assigned",
+  "operation": "changeCaller",
+  "legacyScreen": "hf-basic flight-assign changeCaller",
+  "args": {
+    "caller": "Parity Caller"
+  }
+}

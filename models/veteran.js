@@ -482,7 +482,7 @@ export class Veteran {
         if (currentValue !== newValue) {
             this.getValue(this, historyProperty).push({
                 id: timestamp,
-                change: `changed ${trackedProperty.name} from ${currentValue} to ${newValue} by: ${userName}`
+                change: `changed ${trackedProperty.name} from: ${currentValue} to: ${newValue} by: ${userName}`
             });
         }
     }

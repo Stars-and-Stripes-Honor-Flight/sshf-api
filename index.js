@@ -189,7 +189,7 @@ async function getGroupMemberships(userData) {
     } catch (error) {
 
         try{
-            if (error.message.includes('Could not load the default credentials')) {
+            if (error.message.includes('Could not load the default credentials') || error.message.includes('Request had insufficient authentication scopes')) {
 
                 console.log('ADC authentication failed, falling back to JWT with env vars:', error.message);
                 

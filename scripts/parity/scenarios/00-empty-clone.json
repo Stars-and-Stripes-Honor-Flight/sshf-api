@@ -1,0 +1,6 @@
+{
+  "id": "00-empty-clone",
+  "operation": "baseline",
+  "allDocs": true,
+  "legacyScreen": "none"
+}

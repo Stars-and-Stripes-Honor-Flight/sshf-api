@@ -1,0 +1,8 @@
+{
+  "id": "01-edit-vet-note",
+  "operation": "editVetNote",
+  "legacyScreen": "hf-basic veteran edit form (#form-Vet flight_status_note)",
+  "args": {
+    "note": "parity-harness status note"
+  }
+}
