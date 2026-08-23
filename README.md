@@ -92,6 +92,10 @@ npm run parity:align -- --apply
 npm run parity -- 00-empty-clone
 npm run parity -- 01-edit-vet-note --veteran <id>
 npm run parity -- 02-pair-guardian --veteran <id> --guardian <id>
+
+# Compare two full Couch documents that may have different _ids (manual dual-entry).
+# Legacy id is living test; modern id is the sshf-db-prd copy the API writes.
+npm run parity:docs -- --legacy <oldId> --modern <newId>
 ```
 
 | Variable | Description |
@@ -104,6 +108,8 @@ npm run parity -- 02-pair-guardian --veteran <id> --guardian <id>
 | `PARITY_API_TOKEN` | Bearer token for that API |
 | `PARITY_USER_NAME` | Actor string written into history on both adapters |
 | `PARITY_SOURCE_URL` / `PARITY_TARGET_URL` | Align-only; source is living `test`, target is the sshf-db-prd copy |
+
+`parity:docs` compares **raw Couch JSON** from the two databases (the same documents the API stored), not `GET /veterans/:id` response shapes. `_id` and pairing foreign keys are listed as expected id references. `ok` is field-data only; history is reported separately as `historyMatch` because independently entered docs almost never share Evently history strings.
 
 ### Test Coverage
 
