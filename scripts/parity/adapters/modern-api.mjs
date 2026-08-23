@@ -73,18 +73,15 @@ export function createModernAdapter({
             return requestJson(fetchImpl, `${base}/veterans/${id}/seat`, {
                 method: 'PATCH',
                 headers,
-                body: JSON.stringify({ seat })
+                body: JSON.stringify({ value: seat })
             });
         },
 
         async changeBus(id, bus) {
-            const veteran = await requestJson(fetchImpl, `${base}/veterans/${id}`, { headers });
-            veteran.flight = veteran.flight || {};
-            veteran.flight.bus = bus;
-            return requestJson(fetchImpl, `${base}/veterans/${id}`, {
-                method: 'PUT',
+            return requestJson(fetchImpl, `${base}/veterans/${id}/bus`, {
+                method: 'PATCH',
                 headers,
-                body: JSON.stringify(veteran)
+                body: JSON.stringify({ value: bus })
             });
         },
 

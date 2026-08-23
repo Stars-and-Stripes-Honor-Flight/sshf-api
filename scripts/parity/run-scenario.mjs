@@ -1,9 +1,11 @@
+import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { compareDocMaps, compareScenario } from './compare-docs.mjs';
 import { createRawCouchClient } from './couch-raw.mjs';
+import { resolveParityCredentials } from './credentials.mjs';
 import { parseDbRef } from './db-guards.mjs';
 import { createLegacyCouchAdapter } from './adapters/legacy-couch.mjs';
 import { createModernAdapter } from './adapters/modern-api.mjs';
@@ -44,17 +46,34 @@ export async function runScenario(scenario, {
     const legacyUrl = env.PARITY_LEGACY_DB_URL;
     const modernUrl = env.PARITY_MODERN_DB_URL;
     if (!legacyUrl || !modernUrl) {
-        throw new Error('Set PARITY_LEGACY_DB_URL and PARITY_MODERN_DB_URL');
+        throw new Error('Set PARITY_LEGACY_DB_URL and PARITY_MODERN_DB_URL in .env');
     }
 
-    const user = env.DB_USER;
-    const pass = env.DB_PASS;
+    const { legacy: legacyCreds, modern: modernCreds } = resolveParityCredentials(env, {
+        requireLegacy: true,
+        requireModern: true
+    });
     const ctx = harnessContext(env);
     let ids = resolveIds(scenario, cli);
 
-    const legacyRaw = createRawCouchClient({ dbUrl: legacyUrl, user, pass, fetchImpl });
-    const modernRaw = createRawCouchClient({ dbUrl: modernUrl, user: env.PARITY_MODERN_DB_USER || user, pass: env.PARITY_MODERN_DB_PASS || pass, fetchImpl });
-    const legacy = createLegacyCouchAdapter({ dbUrl: legacyUrl, user, pass, fetchImpl });
+    const legacyRaw = createRawCouchClient({
+        dbUrl: legacyUrl,
+        user: legacyCreds.user,
+        pass: legacyCreds.pass,
+        fetchImpl
+    });
+    const modernRaw = createRawCouchClient({
+        dbUrl: modernUrl,
+        user: modernCreds.user,
+        pass: modernCreds.pass,
+        fetchImpl
+    });
+    const legacy = createLegacyCouchAdapter({
+        dbUrl: legacyUrl,
+        user: legacyCreds.user,
+        pass: legacyCreds.pass,
+        fetchImpl
+    });
     const modern = createModernAdapter({
         apiBase: env.PARITY_API_URL,
         token: env.PARITY_API_TOKEN,
@@ -139,12 +158,12 @@ async function applyOperation(scenario, { legacy, modern, ctx, cli, legacyRaw })
             await modern.unpairGuardian(guardianId);
             break;
         case 'changeSeat':
-            await legacy.changeSeat(veteranId, scenario.args.seat, ctx);
             await modern.changeSeat(veteranId, scenario.args.seat);
+            await legacy.changeSeat(veteranId, scenario.args.seat, ctx);
             break;
         case 'changeBus':
-            await legacy.changeBus(veteranId, scenario.args.bus, ctx);
             await modern.changeBus(veteranId, scenario.args.bus);
+            await legacy.changeBus(veteranId, scenario.args.bus, ctx);
             break;
         case 'changeCaller':
             await legacy.changeCaller(veteranId, scenario.args.caller, ctx, guardianId);

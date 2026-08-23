@@ -3,6 +3,6 @@
   "operation": "changeBus",
   "legacyScreen": "hf-basic assignToBus",
   "args": {
-    "bus": "Zulu9"
+    "bus": "Bravo5"
   }
 }
