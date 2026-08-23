@@ -17,6 +17,7 @@ describe('CORS utilities', () => {
             delete process.env.ALLOWED_ORIGINS;
             expect(getAllowedOrigins()).to.deep.equal([
                 'http://localhost:3000',
+                'http://127.0.0.1:3000',
                 'http://localhost:8080'
             ]);
         });
@@ -25,6 +26,7 @@ describe('CORS utilities', () => {
             process.env.ALLOWED_ORIGINS = '';
             expect(getAllowedOrigins()).to.deep.equal([
                 'http://localhost:3000',
+                'http://127.0.0.1:3000',
                 'http://localhost:8080'
             ]);
         });
@@ -33,6 +35,7 @@ describe('CORS utilities', () => {
             process.env.ALLOWED_ORIGINS = '   ';
             expect(getAllowedOrigins()).to.deep.equal([
                 'http://localhost:3000',
+                'http://127.0.0.1:3000',
                 'http://localhost:8080'
             ]);
         });

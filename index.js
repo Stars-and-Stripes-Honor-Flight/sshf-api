@@ -8,6 +8,7 @@ import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
 import { assertValidTokenClaims, TokenAudienceError, authorize } from './utils/auth.js';
+import { shouldFallbackToServiceAccountJwt, shouldPreferServiceAccountJwt } from './utils/groups.js';
 
 // Import route handlers
 import { getMessage, postMessage } from './routes/msg.js';
@@ -162,72 +163,79 @@ app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
 
+const DIRECTORY_GROUP_SCOPE = 'https://www.googleapis.com/auth/admin.directory.group.readonly';
+
+function createDirectoryJwtAuth() {
+    return new google.auth.JWT({
+        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        scopes: [DIRECTORY_GROUP_SCOPE]
+    });
+}
+
+async function listGroupsForUser(userData, auth) {
+    const admin = google.admin({ version: 'directory_v1', auth });
+    const domain = userData.email.split('@')[1];
+    const response = await admin.groups.list({
+        userKey: userData.email,
+        domain,
+        maxResults: 100
+    });
+    return response.data.groups || [];
+}
+
+function logGroupFetchError(label, error) {
+    console.error(`${label}:`, error.message);
+    if (error.response) {
+        console.error('Error details:', {
+            status: error.response.status,
+            data: error.response.data
+        });
+    }
+}
+
 async function getGroupMemberships(userData) {
-    try {
-        
-        // First try using Application Default Credentials (will work in Cloud Run)
+    const tryJwt = async () => {
+        console.log('Using service-account JWT for Directory group lookup');
+        return listGroupsForUser(userData, createDirectoryJwtAuth());
+    };
+
+    const tryAdc = async () => {
         const auth = new google.auth.GoogleAuth({
-            scopes: ['https://www.googleapis.com/auth/admin.directory.group.readonly']
+            scopes: [DIRECTORY_GROUP_SCOPE]
         });
         console.log('Using Application Default Credentials for authentication');
+        return listGroupsForUser(userData, auth);
+    };
 
-        // Create the Admin Directory API client with the delegated service account
-        const admin = google.admin({ version: 'directory_v1', auth });
-
-        // Extract domain from user's email
-        const domain = userData.email.split('@')[1];
-
-        // Fetch all groups the user is a member of
-        const response = await admin.groups.list({
-            userKey: userData.email,
-            domain: domain,
-            maxResults: 100
-        });
-
-        return response.data.groups || [];
-
-    } catch (error) {
-
-        try{
-            if (error.message.includes('Could not load the default credentials') || error.message.includes('Request had insufficient authentication scopes')) {
-
-                console.log('ADC authentication failed, falling back to JWT with env vars:', error.message);
-                
-                // Fall back to JWT with explicit credentials (for local development)
-                const auth = new google.auth.JWT({
-                    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-                    key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
-                    scopes: [
-                        'https://www.googleapis.com/auth/admin.directory.group.readonly'
-                    ]
-                });
-
-                // Create the Admin Directory API client with the delegated service account
-                const admin = google.admin({ version: 'directory_v1', auth });
-
-                // Extract domain from user's email
-                const domain = userData.email.split('@')[1];
-
-                // Fetch all groups the user is a member of
-                const response = await admin.groups.list({
-                    userKey: userData.email,
-                    domain: domain,
-                    maxResults: 100
-                });
-
-                return response.data.groups || [];
-            }
+    if (shouldPreferServiceAccountJwt()) {
+        try {
+            return await tryJwt();
         } catch (error) {
-            console.error('Error fetching groups:', error.message);
-            if (error.response) {
-                console.error('Error details:', {
-                    status: error.response.status,
-                    data: error.response.data
-                });
+            logGroupFetchError('JWT group fetch failed, trying ADC', error);
+            try {
+                return await tryAdc();
+            } catch (adcError) {
+                logGroupFetchError('Error fetching groups', adcError);
+                return [];
             }
+        }
+    }
 
+    try {
+        return await tryAdc();
+    } catch (error) {
+        if (shouldFallbackToServiceAccountJwt(error)) {
+            console.log('ADC authentication failed, falling back to JWT with env vars:', error.message);
+            try {
+                return await tryJwt();
+            } catch (jwtError) {
+                logGroupFetchError('Error fetching groups', jwtError);
+                return [];
+            }
         }
 
+        logGroupFetchError('Error fetching groups', error);
         return [];
     }
 }
