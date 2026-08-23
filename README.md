@@ -46,7 +46,7 @@ Required environment variables:
 | `DB_NAME` | Database name |
 | `DB_USER` | CouchDB username |
 | `DB_PASS` | CouchDB password |
-| `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (defaults to `http://localhost:3000,http://localhost:8080`) |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins (defaults to `http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080`) |
 | `API_URL` | Public API base URL for OpenAPI/Swagger (defaults to `http://localhost:8080`) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI auth, and the client whose access tokens the API accepts (audience validation) |
 | `ALLOWED_CLIENT_IDS` | Optional. Comma-separated OAuth client IDs accepted for token audience validation (overrides `GOOGLE_CLIENT_ID` when set) |
@@ -55,7 +55,7 @@ Required environment variables:
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
-> **Note**: In Cloud Run, Application Default Credentials are used automatically. The service account variables are only needed for local development.
+> **Note**: In Cloud Run, Application Default Credentials are used automatically. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership.
 
 ### Installation
 
