@@ -117,6 +117,12 @@ export class QueryRequest {
         // Convert to number if string
         const numLimit = Number(this.limit);
         
+        // If non-numeric (NaN), use default
+        if (isNaN(numLimit)) {
+            this.limit = QueryRequest.DEFAULT_LIMIT;
+            return;
+        }
+        
         // Clamp to valid range
         if (numLimit < QueryRequest.MIN_LIMIT) {
             this.limit = QueryRequest.MIN_LIMIT;

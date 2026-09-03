@@ -83,6 +83,13 @@ describe('QueryRequest', () => {
             })).to.throw('Validation failed: forbidden keys detected: update');
         });
 
+        it('should allow type field inside selector', () => {
+            const request = new QueryRequest({
+                selector: { type: 'Veteran', status: 'Active' }
+            });
+            expect(request.selector.type).to.equal('Veteran');
+        });
+
         it('should throw when mutation operator is present in selector', () => {
             expect(() => new QueryRequest({
                 selector: { type: 'veteran', '$set': { status: 'Active' } }
@@ -133,6 +140,16 @@ describe('QueryRequest', () => {
         it('should clamp negative limit to 1', () => {
             const request = new QueryRequest({ selector: { type: 'veteran' }, limit: -10 });
             expect(request.limit).to.equal(1);
+        });
+
+        it('should use default limit for non-numeric limit', () => {
+            const request = new QueryRequest({ selector: { type: 'veteran' }, limit: 'foo' });
+            expect(request.limit).to.equal(25);
+        });
+
+        it('should use default limit for NaN limit', () => {
+            const request = new QueryRequest({ selector: { type: 'veteran' }, limit: NaN });
+            expect(request.limit).to.equal(25);
         });
     });
 

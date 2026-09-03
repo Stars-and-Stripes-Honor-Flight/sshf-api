@@ -37,7 +37,7 @@ const dbName = process.env.DB_NAME;
  *       content:
  *         application/json:
  *           schema:
- *             \$ref: '#/components/schemas/QueryRequest'
+ *             $ref: '#/components/schemas/QueryRequest'
  *           examples:
  *             basicQuery:
  *               summary: Basic query with selector
@@ -74,7 +74,7 @@ const dbName = process.env.DB_NAME;
  *         content:
  *           application/json:
  *             schema:
- *               \$ref: '#/components/schemas/QueryResults'
+ *               $ref: '#/components/schemas/QueryResults'
  *             examples:
  *               success:
  *                 summary: Successful query result
@@ -120,7 +120,7 @@ const dbName = process.env.DB_NAME;
  *               mutationAttempt:
  *                 summary: Mutation operator detected
  *                 value:
- *                   error: "Validation failed: mutation operator not allowed: \$set"
+ *                   error: "Validation failed: mutation operator not allowed: $set"
  *               skipNotAllowed:
  *                 summary: Skip pagination not allowed
  *                 value:
@@ -161,7 +161,7 @@ export async function postQuery(req, res, next) {
         const requestBody = queryRequest.toRequestBody();
         
         // Execute the query via dbFetch
-        const url = `\${dbUrl}/\${dbName}/_find`;
+        const url = `${dbUrl}/${dbName}/_find`;
         const response = await dbFetch(req, url, {
             method: 'POST',
             headers: {
@@ -175,6 +175,13 @@ export async function postQuery(req, res, next) {
             const errorData = await response.json();
             const errorMessage = errorData.reason || errorData.error || 'Invalid query';
             return res.status(400).json({ error: errorMessage });
+        }
+
+        // Handle other non-OK responses from CouchDB
+        if (!response.ok) {
+            const errorData = await response.json();
+            const errorMessage = errorData.reason || errorData.error || 'Database error';
+            return res.status(500).json({ error: errorMessage });
         }
 
         // Parse and return the result

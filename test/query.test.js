@@ -467,6 +467,38 @@ describe('Query Route', () => {
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
 
+        it('should return 500 when CouchDB returns non-OK non-400 status', async () => {
+            global.fetch = sinon.stub().resolves({
+                ok: false,
+                status: 404,
+                json: async () => ({
+                    error: 'not_found',
+                    reason: 'Database does not exist'
+                })
+            });
+
+            await postQuery(req, res, next);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database does not exist');
+        });
+
+        it('should return 500 when CouchDB returns 500 error', async () => {
+            global.fetch = sinon.stub().resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({
+                    error: 'internal_server_error',
+                    reason: 'Internal server error'
+                })
+            });
+
+            await postQuery(req, res, next);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Internal server error');
+        });
+
         it('should return 500 for non-session, non-validation errors', async () => {
             global.fetch = sinon.stub().resolves({
                 ok: true,
@@ -525,6 +557,27 @@ describe('Query Route', () => {
 
             const fetchCall = global.fetch.firstCall;
             const url = fetchCall.args[0];
+            expect(url).to.match(/\/_find$/);
+        });
+
+        it('should verify URL contains actual environment values not literal template', async () => {
+            global.fetch = sinon.stub().resolves({
+                ok: true,
+                status: 200,
+                json: async () => ({ docs: [] })
+            });
+
+            await postQuery(req, res, next);
+
+            const fetchCall = global.fetch.firstCall;
+            const url = fetchCall.args[0];
+            
+            // Verify the URL does not contain literal ${...} template syntax
+            expect(url).to.not.include('${');
+            expect(url).to.not.include('dbUrl');
+            expect(url).to.not.include('dbName');
+            
+            // Verify it ends with /_find
             expect(url).to.match(/\/_find$/);
         });
 
