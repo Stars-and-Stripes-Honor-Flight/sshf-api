@@ -112,7 +112,9 @@ const definition = {
       'UnpairedVeteranResults',
       'RecentActivityEntry',
       'FlightDetailResult',
-      'WaitlistVeteranGroup'
+      'WaitlistVeteranGroup',
+      'MangoFindRequest',
+      'MangoFindResponse'
     )
   },
   security: [

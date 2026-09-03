@@ -1,0 +1,29 @@
+type: object
+required:
+  - docs
+properties:
+  docs:
+    type: array
+    items:
+      type: object
+    description: Array of documents matching the query
+  bookmark:
+    type: string
+    description: Pagination bookmark for retrieving the next page of results
+  warning:
+    type: string
+    description: Warning message from CouchDB (e.g., "no matching index found")
+  execution_stats:
+    type: object
+    description: Query execution statistics (only present if requested)
+    properties:
+      total_keys_examined:
+        type: integer
+      total_docs_examined:
+        type: integer
+      total_quorum_docs_examined:
+        type: integer
+      results_returned:
+        type: integer
+      execution_time_ms:
+        type: number
