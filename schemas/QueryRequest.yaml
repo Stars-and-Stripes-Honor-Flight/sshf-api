@@ -1,0 +1,42 @@
+type: object
+required:
+  - selector
+properties:
+  selector:
+    type: object
+    description: |
+      MongoDB-style query selector. An empty object {} matches all documents (subject to limit).
+      Must not contain mutation operators like $set, $update, etc.
+    example:
+      type: veteran
+      status: Active
+  fields:
+    type: array
+    items:
+      type: string
+    description: Array of field names to include in results. If omitted, all fields are returned.
+    example: ["_id", "name", "status", "phone"]
+  sort:
+    type: array
+    items:
+      type: object
+    description: Sort specification as an array of field-direction objects
+    example:
+      - name: asc
+  limit:
+    type: integer
+    minimum: 1
+    maximum: 100
+    default: 25
+    description: Maximum number of results to return. Defaults to 25, clamped to 100.
+  bookmark:
+    type: string
+    description: Pagination bookmark from a previous query result
+    example: "g1AAAAG3eJzLYWBg4M"
+  use_index:
+    type: string
+    description: Index to use for the query (design doc name or array of [design_doc, index_name])
+    example: "_design/my-index"
+  execution_stats:
+    type: boolean
+    description: If true, return execution statistics with the result

@@ -15,6 +15,7 @@ import { getMessage, postMessage } from './routes/msg.js';
 import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
+import { postQuery } from './routes/query.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
 import {
     createVeteran,
@@ -81,6 +82,7 @@ app.get("/msg", getMessage);
 app.get("/search", authenticate, authorize, dbSession, getSearch);
 app.use(express.json()); // for parsing application/json
 app.post("/msg", postMessage);
+app.post("/query", authenticate, authorize, dbSession, postQuery);
 
 // Generic document routes
 app.post("/docs", authenticate, authorize, dbSession, createDocument);
