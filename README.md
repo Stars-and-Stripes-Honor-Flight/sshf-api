@@ -128,7 +128,8 @@ Use a conservative update flow so GitHub alerts can be cleared without pulling i
 5. Refresh packages within the existing semver ranges with `npm run deps:update`.
 6. Re-run `npm run deps:audit` and `npm run deps:verify`.
 7. If a GitHub alert remains, upgrade only the direct parent package that pulls in the vulnerable dependency, then re-run the audit and tests.
-8. Use `npm run deps:audit:all` when you want to inspect dev-only warnings separately from production risk.
+8. If the parent cannot yet take a patched child (for example mocha 11 still depending on `serialize-javascript` 6.x), pin the patched version with `package.json` `overrides` scoped to that parent, then re-run the audit and tests. Prefer waiting for the parent when a compatible release exists; do not override across incompatible majors (for example do not force `brace-expansion` 5.x onto mocha's `minimatch` 9.x).
+9. Use `npm run deps:audit:all` when you want to inspect dev-only warnings separately from production risk.
 
 Avoid manually editing `package-lock.json`. If the lockfile truly needs to be regenerated, delete `node_modules` and `package-lock.json`, run `npm install`, and then re-run the full verification flow before committing the new lockfile.
 
