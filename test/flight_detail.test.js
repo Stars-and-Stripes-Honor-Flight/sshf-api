@@ -411,6 +411,97 @@ describe('Flight Detail Models', () => {
                 expect(person.id).to.equal('');
                 expect(person.bus).to.equal('None');
             });
+
+            it('should use view value for assigned_to when present', () => {
+                const row = {
+                    type: 'Veteran',
+                    id: 'vet-1',
+                    assigned_to: 'Caller From View',
+                    doc: {
+                        call: {
+                            assigned_to: 'Caller From Doc'
+                        }
+                    }
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                expect(person.assigned_to).to.equal('Caller From View');
+            });
+
+            it('should fallback to doc.call.assigned_to when view value is empty', () => {
+                const row = {
+                    type: 'Veteran',
+                    id: 'vet-1',
+                    assigned_to: '',
+                    doc: {
+                        call: {
+                            assigned_to: 'Caller From Doc'
+                        }
+                    }
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                expect(person.assigned_to).to.equal('Caller From Doc');
+            });
+
+            it('should use view value for fm_number when present', () => {
+                const row = {
+                    type: 'Veteran',
+                    id: 'vet-1',
+                    fm_number: 'FM123',
+                    doc: {
+                        call: {
+                            fm_number: 'FM999'
+                        }
+                    }
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                expect(person.fm_number).to.equal('FM123');
+            });
+
+            it('should fallback to doc.call.fm_number when view value is empty', () => {
+                const row = {
+                    type: 'Veteran',
+                    id: 'vet-1',
+                    fm_number: '',
+                    doc: {
+                        call: {
+                            fm_number: 'FM999'
+                        }
+                    }
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                expect(person.fm_number).to.equal('FM999');
+            });
+
+            it('should extract guardian call fields with fallback', () => {
+                const row = {
+                    type: 'Guardian',
+                    id: 'guard-1',
+                    assigned_to: '',
+                    fm_number: '',
+                    doc: {
+                        call: {
+                            assigned_to: 'Guardian Caller',
+                            fm_number: 'FM456'
+                        }
+                    }
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                expect(person.assigned_to).to.equal('Guardian Caller');
+                expect(person.fm_number).to.equal('FM456');
+            });
+
+            it('should handle missing doc.call object gracefully', () => {
+                const row = {
+                    type: 'Veteran',
+                    id: 'vet-1',
+                    assigned_to: '',
+                    fm_number: '',
+                    doc: {}
+                };
+                const person = FlightDetailPerson.fromViewRow(row);
+                expect(person.assigned_to).to.equal('');
+                expect(person.fm_number).to.equal('');
+            });
         });
     });
 
