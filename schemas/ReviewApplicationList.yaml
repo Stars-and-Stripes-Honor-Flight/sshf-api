@@ -1,0 +1,12 @@
+type: object
+properties:
+  total_rows:
+    type: integer
+    description: 'Total number of rows in the result set'
+  offset:
+    type: integer
+    description: 'Starting offset of the result set'
+  rows:
+    type: array
+    items:
+      $ref: '#/components/schemas/ReviewApplicationSummary'

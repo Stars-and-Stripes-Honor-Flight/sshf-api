@@ -1,6 +1,16 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { dbFetch, dbSession, DatabaseSessionError, clearSessionCache } from '../utils/db.js';
+import {
+    dbFetch,
+    dbSession,
+    DatabaseSessionError,
+    clearSessionCache,
+    createDbClient,
+    reviewDbSession,
+    reviewDbFetch,
+    clearReviewSessionCache,
+    getReviewDbConfig
+} from '../utils/db.js';
 
 describe('Database Utilities', () => {
     let req, res, next;
@@ -374,6 +384,335 @@ describe('Database Utilities', () => {
             expect(global.fetch.callCount).to.equal(3);
             expect(response.ok).to.be.true;
             expect(req.dbCookie).to.equal('AuthSession=refreshed-after-error');
+        });
+    });
+});
+
+describe('Database client factory', () => {
+    let req, res, next;
+
+    beforeEach(() => {
+        clearSessionCache();
+        clearReviewSessionCache();
+
+        req = {};
+        res = {
+            status: sinon.stub().returnsThis(),
+            json: sinon.spy()
+        };
+        next = sinon.spy();
+        global.fetch = sinon.stub();
+    });
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    it('should return session, fetch, and clearSessionCache functions from createDbClient', () => {
+        const client = createDbClient({
+            url: 'http://db-a.example.com',
+            user: 'db-user',
+            pass: 'db-pass',
+            cookieProperty: 'otherCookie'
+        });
+
+        expect(client.session).to.be.a('function');
+        expect(client.fetch).to.be.a('function');
+        expect(client.clearSessionCache).to.be.a('function');
+    });
+
+    describe('createDbClient session middleware', () => {
+        it('should set req.otherCookie from set-cookie, call next, and POST session credentials', async () => {
+            const client = createDbClient({
+                url: 'http://db-a.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+            const mockCookieHeader = 'AuthSession=custom-session; Path=/';
+
+            global.fetch.resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns(mockCookieHeader)
+                }
+            });
+
+            await client.session(req, res, next);
+
+            expect(next.calledOnce).to.be.true;
+            expect(req.otherCookie).to.equal('AuthSession=custom-session');
+            expect(req.dbCookie).to.be.undefined;
+
+            expect(global.fetch.calledOnce).to.be.true;
+            const [url, options] = global.fetch.firstCall.args;
+            expect(url).to.equal('http://db-a.example.com/_session');
+            expect(options.method).to.equal('POST');
+            expect(JSON.parse(options.body)).to.deep.equal({
+                name: 'db-user',
+                password: 'db-pass'
+            });
+        });
+
+        it('should respond with 500 and not call next when session POST is not ok', async () => {
+            const client = createDbClient({
+                url: 'http://db-a.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+
+            global.fetch.resolves({
+                ok: false
+            });
+
+            await client.session(req, res, next);
+
+            expect(res.status.calledOnceWith(500)).to.be.true;
+            expect(res.json.calledOnceWith({ message: 'Database session error' })).to.be.true;
+            expect(next.called).to.be.false;
+        });
+    });
+
+    describe('createDbClient session cache isolation', () => {
+        it('should keep independent caches for clients with different urls', async () => {
+            const clientA = createDbClient({
+                url: 'http://db-a.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+            const clientB = createDbClient({
+                url: 'http://db-b.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=session-a; Path=/')
+                }
+            });
+
+            await clientA.session({}, res, next);
+            expect(global.fetch.calledOnce).to.be.true;
+
+            next.resetHistory();
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=session-b; Path=/')
+                }
+            });
+
+            await clientB.session({}, res, next);
+
+            expect(next.calledOnce).to.be.true;
+            expect(global.fetch.calledTwice).to.be.true;
+        });
+
+        it('should clear only the targeted client cache', async () => {
+            const clientA = createDbClient({
+                url: 'http://db-a.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+            const clientB = createDbClient({
+                url: 'http://db-b.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+            const mockResponse = {
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=cached; Path=/')
+                }
+            };
+
+            global.fetch.resolves(mockResponse);
+
+            await clientA.session({}, res, next);
+            await clientB.session({}, res, next);
+            expect(global.fetch.callCount).to.equal(2);
+
+            global.fetch.resetHistory();
+            clientA.clearSessionCache();
+
+            await clientB.session({}, res, next);
+            expect(global.fetch.called).to.be.false;
+
+            global.fetch.resolves(mockResponse);
+            await clientA.session({}, res, next);
+            expect(global.fetch.calledOnce).to.be.true;
+        });
+    });
+
+    describe('createDbClient fetch', () => {
+        it('should send cookie and Accept headers, refresh on 401, and retry successfully', async () => {
+            const client = createDbClient({
+                url: 'http://db-a.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+            req.otherCookie = 'AuthSession=initial-cookie';
+
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 401
+            });
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=refreshed-cookie; Path=/')
+                }
+            });
+            global.fetch.onThirdCall().resolves({
+                ok: true,
+                status: 200
+            });
+
+            const response = await client.fetch(req, 'http://db-a.example.com/doc');
+
+            expect(global.fetch.callCount).to.equal(3);
+            expect(response.ok).to.be.true;
+            expect(req.otherCookie).to.equal('AuthSession=refreshed-cookie');
+
+            const [, firstFetchOptions] = global.fetch.firstCall.args;
+            expect(firstFetchOptions.headers.Cookie).to.equal('AuthSession=initial-cookie');
+            expect(firstFetchOptions.headers.Accept).to.equal('application/json');
+
+            const [, retryFetchOptions] = global.fetch.thirdCall.args;
+            expect(retryFetchOptions.headers.Cookie).to.equal('AuthSession=refreshed-cookie');
+        });
+
+        it('should throw DatabaseSessionError after three consecutive 401 responses', async () => {
+            const client = createDbClient({
+                url: 'http://db-a.example.com',
+                user: 'db-user',
+                pass: 'db-pass',
+                cookieProperty: 'otherCookie'
+            });
+            req.otherCookie = 'AuthSession=initial-cookie';
+
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            try {
+                await client.fetch(req, 'http://db-a.example.com/doc');
+                expect.fail('Expected DatabaseSessionError to be thrown');
+            } catch (error) {
+                expect(error).to.be.instanceof(DatabaseSessionError);
+                expect(error.message).to.include('could not be established after 3 attempts');
+            }
+        });
+    });
+
+    describe('review database client exports', () => {
+        it('should expose review session, fetch, and clearReviewSessionCache helpers', () => {
+            expect(reviewDbSession).to.be.a('function');
+            expect(reviewDbFetch).to.be.a('function');
+            expect(clearReviewSessionCache).to.be.a('function');
+
+            expect(() => clearReviewSessionCache()).to.not.throw();
+        });
+
+        it('should set req.reviewDbCookie in reviewDbSession and use it in reviewDbFetch', async () => {
+            const mockCookieHeader = 'AuthSession=review-session; Path=/';
+
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns(mockCookieHeader)
+                }
+            });
+
+            await reviewDbSession(req, res, next);
+
+            expect(next.calledOnce).to.be.true;
+            expect(req.reviewDbCookie).to.equal('AuthSession=review-session');
+
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                status: 200
+            });
+
+            await reviewDbFetch(req, 'http://review.example.com/doc');
+
+            const [, fetchOptions] = global.fetch.secondCall.args;
+            expect(fetchOptions.headers.Cookie).to.equal('AuthSession=review-session');
+            expect(fetchOptions.headers.Accept).to.equal('application/json');
+        });
+    });
+
+    describe('default database client regression', () => {
+        it('should still set req.dbCookie and keep cache independent from the review client', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=review-session; Path=/')
+                }
+            });
+
+            await reviewDbSession({}, res, next);
+            expect(global.fetch.calledOnce).to.be.true;
+
+            global.fetch.resetHistory();
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=main-session; Path=/')
+                }
+            });
+
+            const mainReq = {};
+            await dbSession(mainReq, res, next);
+
+            expect(global.fetch.calledOnce).to.be.true;
+            expect(mainReq.dbCookie).to.equal('AuthSession=main-session');
+            expect(mainReq.reviewDbCookie).to.be.undefined;
+        });
+    });
+
+    describe('getReviewDbConfig', () => {
+        it('should fall back url, user, and pass to DB_* when REVIEW_DB_* are unset', () => {
+            const config = getReviewDbConfig({
+                DB_URL: 'http://main.example.com',
+                DB_USER: 'main-user',
+                DB_PASS: 'main-pass'
+            });
+
+            expect(config).to.deep.equal({
+                url: 'http://main.example.com',
+                name: undefined,
+                user: 'main-user',
+                pass: 'main-pass'
+            });
+        });
+
+        it('should use REVIEW_DB_* values and REVIEW_DB_NAME when set', () => {
+            const config = getReviewDbConfig({
+                DB_URL: 'http://main.example.com',
+                DB_USER: 'main-user',
+                DB_PASS: 'main-pass',
+                REVIEW_DB_URL: 'http://review.example.com',
+                REVIEW_DB_USER: 'review-user',
+                REVIEW_DB_PASS: 'review-pass',
+                REVIEW_DB_NAME: 'review-db'
+            });
+
+            expect(config).to.deep.equal({
+                url: 'http://review.example.com',
+                name: 'review-db',
+                user: 'review-user',
+                pass: 'review-pass'
+            });
         });
     });
 });

@@ -5,8 +5,9 @@ import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { specs } from './swagger/swagger.js';
 import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
-import { dbSession } from './utils/db.js';
+import { dbSession, reviewDbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
+import { authenticateIntake } from './utils/intake_auth.js';
 import { assertValidTokenClaims, TokenAudienceError, authorize } from './utils/auth.js';
 import { shouldFallbackToServiceAccountJwt, shouldPreferServiceAccountJwt } from './utils/groups.js';
 
@@ -61,6 +62,14 @@ import { getWaitlist } from './routes/waitlist.js';
 import { getWaitlistVeteranGroups } from './routes/waitlist-veteran-groups.js';
 import { getRecentActivity } from './routes/recent-activity.js';
 import { exportFlightCsv, exportCallCenterFollowUpCsv, exportTourLeadCsv } from './routes/exports.js';
+import {
+    createReviewApplication,
+    listReviewApplications,
+    retrieveReviewApplication,
+    updateReviewApplication,
+    updateReviewApplicationStatus,
+    acceptReviewApplication
+} from './routes/review-applications.js';
 
 const app = express();
 const port = 8080;
@@ -151,6 +160,16 @@ app.get("/recent-activity", authenticate, authorize, dbSession, getRecentActivit
 app.get("/exports/flight", authenticate, authorize, dbSession, exportFlightCsv);
 app.get("/exports/callcenterfollowup", authenticate, authorize, dbSession, exportCallCenterFollowUpCsv);
 app.get("/exports/tourlead", authenticate, authorize, dbSession, exportTourLeadCsv);
+
+// Application review routes (separate review database)
+// Intake is called by the hf_appcollector Cloud Function with a service-account ID token.
+app.post("/review/applications", authenticateIntake, reviewDbSession, createReviewApplication);
+app.get("/review/applications", authenticate, authorize, reviewDbSession, listReviewApplications);
+app.get("/review/applications/:id", authenticate, authorize, reviewDbSession, retrieveReviewApplication);
+app.put("/review/applications/:id", authenticate, authorize, reviewDbSession, updateReviewApplication);
+app.patch("/review/applications/:id/status", authenticate, authorize, reviewDbSession, updateReviewApplicationStatus);
+// Accept copies into the logistics database, so it needs both database sessions.
+app.post("/review/applications/:id/accept", authenticate, authorize, dbSession, reviewDbSession, acceptReviewApplication);
 
 // Expose OpenAPI spec at custom endpoint
 app.get('/openapi.json', (req, res) => {

@@ -1,0 +1,140 @@
+type: object
+description: >
+  Raw legacy form payload accepted by POST /review/applications. Field names
+  match the online application form. Additional unknown keys are preserved in
+  the stored CouchDB document. The keys `cburi`, `cbusr`, `cbpwd`, and
+  `full_message` are stripped on intake and never stored.
+additionalProperties: true
+required: ['type', 'First-Name', 'Last-Name']
+properties:
+  type:
+    type: string
+    enum: ['VeteranApp', 'GuardianApp']
+    description: 'Application type'
+  date_time:
+    type: string
+    description: 'Submission timestamp (defaults to now if omitted)'
+  ip_address:
+    type: string
+    description: 'Submitter IP address'
+  First-Name:
+    type: string
+    description: 'First name'
+  Middle-Name:
+    type: string
+    description: 'Middle name'
+  Last-Name:
+    type: string
+    description: 'Last name'
+  Nickname:
+    type: string
+    description: 'Nickname'
+  Street:
+    type: string
+    description: 'Street address'
+  City:
+    type: string
+    description: 'City'
+  County:
+    type: string
+    description: 'County'
+  State:
+    type: string
+    description: 'State (two-letter code; upper-cased on storage)'
+  Zip:
+    type: string
+    description: 'ZIP code'
+  Primary-Phone:
+    type: string
+    description: 'Primary/day phone'
+  Mobile-Phone:
+    type: string
+    description: 'Mobile phone'
+  from_email:
+    type: string
+    description: 'Email address'
+  Date-Of-Birth:
+    type: string
+    description: 'Birth date (MM/DD/YYYY)'
+  Gender:
+    type: string
+    enum: ['Male', 'Female']
+    description: 'Gender'
+  Shirt-Size:
+    type: string
+    description: 'Shirt size'
+  Conflict:
+    type: string
+    description: 'War/conflict served (VeteranApp only; maps to vet_type)'
+  Branch-of-Service:
+    type: string
+    description: 'Military branch (VeteranApp only)'
+  Service-Dates:
+    type: string
+    description: 'Service dates (VeteranApp only)'
+  Rank:
+    type: string
+    description: 'Rank at discharge (VeteranApp only)'
+  Emergency-Contact-Name:
+    type: string
+    description: 'Emergency contact name'
+  Emergency-Contact-Phone:
+    type: string
+    description: 'Emergency contact phone'
+  Emergency-Contact-Email:
+    type: string
+    description: 'Emergency contact email'
+  medical-wheelchair:
+    type: string
+    enum: ['Yes', 'No']
+    description: 'Uses wheelchair (VeteranApp only)'
+  medical-oxygen:
+    type: string
+    enum: ['Yes', 'No']
+    description: 'Requires oxygen (VeteranApp only)'
+  Guardian-Preference:
+    type: string
+    description: 'Preferred guardian notes (VeteranApp only)'
+  Preferred-Guardian-Phone-Number:
+    type: string
+    description: 'Preferred guardian phone (VeteranApp only)'
+  Preferred-Guardian-Email:
+    type: string
+    description: 'Preferred guardian email (VeteranApp only)'
+  Veteran-Preference:
+    type: string
+    description: 'Veteran preference notes (GuardianApp only)'
+example:
+  type: 'VeteranApp'
+  date_time: '2024-03-05 14:22:01'
+  ip_address: '203.0.113.9'
+  First-Name: 'John'
+  Middle-Name: 'Q'
+  Last-Name: 'Public'
+  Nickname: 'Jack'
+  Street: '123 Main St'
+  City: 'Madison'
+  County: 'Dane'
+  State: 'wi'
+  Zip: '53703'
+  Primary-Phone: '(608) 555-1234'
+  Mobile-Phone: '6085555678'
+  from_email: 'john@example.com'
+  Date-Of-Birth: '05/17/1948'
+  Gender: 'Male'
+  Shirt-Size: 'XL'
+  Conflict: 'Vietnam'
+  Branch-of-Service: 'Army'
+  Service-Dates: '1966-1968'
+  Rank: 'SGT'
+  Emergency-Contact-Name: 'Jane Public'
+  Emergency-Contact-Phone: '608-555-9999'
+  Emergency-Contact-Email: 'jane@example.com'
+  medical-wheelchair: 'Yes'
+  medical-oxygen: 'No'
+  Guardian-Preference: 'Son Bob'
+  Preferred-Guardian-Phone-Number: '6085550000'
+  Preferred-Guardian-Email: 'bob@example.com'
+  app_status: 'New'
+  app_status_note: ''
+  full_message: 'raw text'

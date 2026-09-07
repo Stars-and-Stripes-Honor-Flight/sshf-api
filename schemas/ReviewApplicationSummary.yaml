@@ -1,0 +1,31 @@
+type: object
+properties:
+  id:
+    type: string
+    description: 'Document ID'
+  type:
+    type: string
+    enum: ['VeteranApp', 'GuardianApp']
+    description: 'Application type'
+  name:
+    type: string
+    description: 'Applicant display name'
+  city:
+    type: string
+    description: 'City of residence'
+  app_date:
+    type: string
+    description: 'Application date (YYYY-MM-DD)'
+  app_status:
+    type: string
+    enum: ['New', 'Hold', 'Accepted', 'Rejected', 'Trash']
+    description: 'Review workflow status'
+  pairing:
+    type: string
+    description: 'Pairing information from the review view'
+  email:
+    type: string
+    description: 'Applicant email address'
+  ip_address:
+    type: string
+    description: 'Submitter IP address'
