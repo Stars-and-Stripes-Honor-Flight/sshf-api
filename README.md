@@ -184,12 +184,12 @@ design document; its `new_apps` view backs the list endpoint.
 
 | Method | Path | Description | Status codes |
 | --- | --- | --- | --- |
-| `POST` | `/review/applications` | Intake: create application from legacy form JSON (service-account ID token) | 201, 400, 401, 403, 503 |
+| `POST` | `/review/applications` | Intake: create application from legacy form JSON (service-account ID token). Permissive — only `type` is required; incomplete payloads are stored for review. | 201, 400, 401, 403, 503 |
 | `GET` | `/review/applications` | List applications by status (query: `status`, `limit`) | 200, 400, 401, 403, 503 |
 | `GET` | `/review/applications/:id` | Retrieve one application (normalized shape) | 200, 400, 401, 403, 404, 503 |
 | `PUT` | `/review/applications/:id` | Update application fields (cannot set Accepted; use accept endpoint) | 200, 400, 401, 403, 404, 503 |
 | `PATCH` | `/review/applications/:id/status` | Update status and optional note (cannot set Accepted) | 200, 400, 401, 403, 404, 503 |
-| `POST` | `/review/applications/:id/accept` | Accept application into logistics DB (same `_id`) | 200, 400, 401, 403, 404, 409, 503 |
+| `POST` | `/review/applications/:id/accept` | Accept application into logistics DB (same `_id`). Enforces Veteran/Guardian model validation before any write. | 200, 400, 401, 403, 404, 409, 503 |
 
 ### Cloud Function (hf_appcollector) changes
 

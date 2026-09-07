@@ -114,7 +114,10 @@ function parseLimit(rawLimit) {
  *       payload. Requires a Google-signed service-account ID token whose email is
  *       listed in REVIEW_INTAKE_SERVICE_ACCOUNTS. Legacy credential fields
  *       (cburi, cbusr, cbpwd) and full_message are stripped before storage. The
- *       application is stored with app_status "New".
+ *       application is stored with app_status "New". Intake is permissive: only
+ *       `type` (VeteranApp or GuardianApp) is required; incomplete form payloads
+ *       are stored as-is for reviewers to fix in the UI. Logistics model
+ *       validation runs only on accept.
  *     tags: [Review Applications]
  *     security:
  *       - IntakeIdToken: []
@@ -132,7 +135,7 @@ function parseLimit(rawLimit) {
  *             schema:
  *               $ref: '#/components/schemas/ReviewApplication'
  *       400:
- *         description: Invalid application type or validation failure
+ *         description: Invalid or missing application type (must be VeteranApp or GuardianApp)
  *         content:
  *           application/json:
  *             schema:
@@ -158,7 +161,6 @@ export async function createReviewApplication(req, res) {
         }
 
         const application = ApplicationClass.fromIntakePayload(body);
-        application.validate();
 
         const response = await reviewDbFetch(req, reviewDbBase(), {
             method: 'POST',

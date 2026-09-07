@@ -284,15 +284,39 @@ describe('Review Applications Route Handlers', () => {
             );
         });
 
-        it('should return 400 when Last-Name is missing', async () => {
-            req.body = buildVeteranIntakePayload();
-            delete req.body['Last-Name'];
+        it('should create a sparse VeteranApp intake payload with missing fields', async () => {
+            req.body = {
+                type: 'VeteranApp',
+                'First-Name': 'John'
+            };
+
+            let savedBody = null;
+            global.fetch.callsFake(async (url, options) => {
+                expect(url).to.equal('http://review:5984/hf_apps');
+                expect(options.method).to.equal('POST');
+                savedBody = JSON.parse(options.body);
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ id: 'sparse-id', rev: '1-abc' })
+                };
+            });
 
             await createReviewApplication(req, res);
 
-            expect(global.fetch.called).to.be.false;
-            expect(res.status.calledWith(400)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Validation failed');
+            expect(global.fetch.calledOnce).to.be.true;
+            expect(savedBody.type).to.equal('VeteranApp');
+            expect(savedBody.app_status).to.equal('New');
+            expect(savedBody['First-Name']).to.equal('John');
+            expect(savedBody['Last-Name']).to.equal('');
+            expect(savedBody.County).to.equal('');
+
+            expect(res.status.calledWith(201)).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response._id).to.equal('sparse-id');
+            expect(response.name.first).to.equal('John');
+            expect(response.name.last).to.equal('');
+            expect(response.address.county).to.equal('');
         });
 
         it('should return 503 when review database session is exhausted', async () => {
