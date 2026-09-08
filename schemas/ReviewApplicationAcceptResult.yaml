@@ -1,0 +1,16 @@
+type: object
+description: >
+  Result of accepting an application. The applicant is copied into the logistics
+  database under the same `_id`. `accepted_as_rev` on the review application
+  records the logistics document revision at accept time. If the logistics
+  document has changed since that revision, a subsequent accept returns 409
+  Conflict without modifying the review document.
+properties:
+  application:
+    $ref: '#/components/schemas/ReviewApplication'
+    description: 'Updated review application with app_status Accepted'
+  record:
+    oneOf:
+      - $ref: '#/components/schemas/Veteran'
+      - $ref: '#/components/schemas/Guardian'
+    description: 'Veteran or Guardian record written to the logistics database'

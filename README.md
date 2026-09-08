@@ -52,6 +52,12 @@ Required environment variables:
 | `ALLOWED_CLIENT_IDS` | Optional. Comma-separated OAuth client IDs accepted for token audience validation (overrides `GOOGLE_CLIENT_ID` when set) |
 | `ALLOWED_EMAIL_DOMAINS` | Optional. Comma-separated email domains permitted to access the API; unset disables the domain check |
 | `ALLOWED_GROUP_EMAILS` | Optional. Comma-separated Workspace group emails required for data routes; unset disables the group gate. Dev: `sshf_app_dev_full_access@…`; prod: `sshf_app_prd_full_access@…` |
+| `REVIEW_DB_NAME` | CouchDB database name for online applications (VeteranApp/GuardianApp); required for `/review/applications` routes |
+| `REVIEW_DB_URL` | Optional. CouchDB URL for the review database; defaults to `DB_URL` |
+| `REVIEW_DB_USER` | Optional. CouchDB username for the review database; defaults to `DB_USER` |
+| `REVIEW_DB_PASS` | Optional. CouchDB password for the review database; defaults to `DB_PASS` |
+| `REVIEW_INTAKE_SERVICE_ACCOUNTS` | Optional. Comma-separated service-account emails permitted to POST applications; unset disables intake (401) |
+| `REVIEW_INTAKE_AUDIENCE` | Optional. Expected Google ID-token audience for intake auth; defaults to `API_URL` |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
@@ -169,6 +175,36 @@ Responses: `401` for a missing, invalid, expired, or wrong-audience token;
 Interactive API documentation is available at `/api-docs` when the server is running.
 
 The OpenAPI specification can be accessed directly at `/openapi.json`.
+
+### Application review
+
+Online veteran and guardian applications are stored in a separate review CouchDB
+database (`REVIEW_DB_NAME`). The database must contain the legacy `hf-app-review`
+design document; its `new_apps` view backs the list endpoint.
+
+| Method | Path | Description | Status codes |
+| --- | --- | --- | --- |
+| `POST` | `/review/applications` | Intake: create application from legacy form JSON (service-account ID token). Permissive — only `type` is required; incomplete payloads are stored for review. | 201, 400, 401, 403, 503 |
+| `GET` | `/review/applications` | List applications by status (query: `status`, `limit`) | 200, 400, 401, 403, 503 |
+| `GET` | `/review/applications/:id` | Retrieve one application (normalized shape) | 200, 400, 401, 403, 404, 503 |
+| `PUT` | `/review/applications/:id` | Update application fields (cannot set Accepted; use accept endpoint) | 200, 400, 401, 403, 404, 503 |
+| `PATCH` | `/review/applications/:id/status` | Update status and optional note (cannot set Accepted) | 200, 400, 401, 403, 404, 503 |
+| `POST` | `/review/applications/:id/accept` | Accept application into logistics DB (same `_id`). Enforces Veteran/Guardian model validation before any write. | 200, 400, 401, 403, 404, 409, 503 |
+
+### Cloud Function (hf_appcollector) changes
+
+The `hf_appcollector` Cloud Function should obtain a Google identity token from
+the metadata server:
+
+```
+GET http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=<API_URL>
+Metadata-Flavor: Google
+```
+
+Send the token as `Authorization: Bearer <token>` when posting the form JSON
+to `POST <API_URL>/review/applications`. Remove the `cburi`, `cbusr`, and
+`cbpwd` form fields — CouchDB credentials are no longer passed through the
+intake payload.
 
 ### Key Flight Detail Endpoints
 

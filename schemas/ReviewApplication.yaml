@@ -1,0 +1,227 @@
+type: object
+description: >
+  Normalized online application stored in the review database. When `type` is
+  `VeteranApp`, veteran-only fields (`vet_type`, `service`, `guardian`, `medical`)
+  are present. When `type` is `GuardianApp`, the guardian-only `veteran` object
+  is present instead.
+required: ['type', 'name', 'address']
+properties:
+  _id:
+    type: string
+    readOnly: true
+    description: 'Document ID'
+  _rev:
+    type: string
+    readOnly: true
+    description: 'Document revision'
+  type:
+    type: string
+    enum: ['VeteranApp', 'GuardianApp']
+    description: 'Application type'
+  app_status:
+    type: string
+    enum: ['New', 'Hold', 'Accepted', 'Rejected', 'Trash']
+    default: 'New'
+    description: 'Review workflow status'
+  app_status_note:
+    type: string
+    description: 'Optional note about the current status'
+  date_time:
+    type: string
+    readOnly: true
+    description: 'Submission timestamp from the online form'
+  app_date:
+    type: string
+    readOnly: true
+    description: 'Application date derived from date_time (YYYY-MM-DD)'
+  ip_address:
+    type: string
+    readOnly: true
+    description: 'Submitter IP address'
+  accepted_as_rev:
+    type: string
+    readOnly: true
+    description: 'Logistics database _rev when the application was last accepted'
+  name:
+    type: object
+    required: ['first', 'last']
+    properties:
+      first:
+        type: string
+        description: 'First name'
+      middle:
+        type: string
+        description: 'Middle name'
+      last:
+        type: string
+        description: 'Last name'
+      nickname:
+        type: string
+        description: 'Nickname'
+  address:
+    type: object
+    properties:
+      street:
+        type: string
+      city:
+        type: string
+      county:
+        type: string
+      state:
+        type: string
+        description: 'Two-letter state code (upper-cased on intake)'
+      zip:
+        type: string
+      phone_day:
+        type: string
+        description: 'Primary/day phone'
+      phone_mbl:
+        type: string
+        description: 'Mobile phone'
+      email:
+        type: string
+        format: email
+  birth_date:
+    type: string
+    format: date
+    description: 'Birth date (YYYY-MM-DD)'
+  gender:
+    type: string
+    enum: ['M', 'F']
+    default: 'M'
+    description: 'Gender'
+  shirt:
+    type: object
+    properties:
+      size:
+        type: string
+        default: 'None'
+        description: 'Shirt size from the online form'
+  emerg_contact:
+    type: object
+    properties:
+      name:
+        type: string
+        description: 'Emergency contact name'
+      address:
+        type: object
+        properties:
+          phone:
+            type: string
+          email:
+            type: string
+            format: email
+  metadata:
+    type: object
+    readOnly: true
+    properties:
+      created_at:
+        type: string
+        format: date-time
+      created_by:
+        type: string
+      updated_at:
+        type: string
+        format: date-time
+      updated_by:
+        type: string
+  vet_type:
+    type: string
+    enum: ['WWII', 'Korea', 'Vietnam', 'Afghanistan', 'Iraq', 'Other']
+    default: 'WWII'
+    description: 'War/conflict served (VeteranApp only)'
+  service:
+    type: object
+    description: 'Military service details (VeteranApp only)'
+    properties:
+      branch:
+        type: string
+        enum: ['', 'Unknown', 'Army', 'Air Force', 'Navy', 'Marines', 'Coast Guard']
+        description: 'Branch of service'
+      dates:
+        type: string
+        description: 'Service dates'
+      rank:
+        type: string
+        description: 'Rank at discharge'
+  guardian:
+    type: object
+    description: 'Preferred guardian contact (VeteranApp only)'
+    properties:
+      pref_notes:
+        type: string
+        description: 'Guardian preference notes'
+      pref_phone:
+        type: string
+        description: 'Preferred guardian phone'
+      pref_email:
+        type: string
+        format: email
+        description: 'Preferred guardian email'
+  medical:
+    type: object
+    description: 'Medical mobility needs (VeteranApp only)'
+    properties:
+      usesWheelchair:
+        type: boolean
+        default: false
+      requiresOxygen:
+        type: boolean
+        default: false
+  veteran:
+    type: object
+    description: 'Veteran the guardian wishes to accompany (GuardianApp only)'
+    properties:
+      pref_notes:
+        type: string
+        description: 'Veteran preference notes'
+example:
+  _id: 'a1b2c3'
+  _rev: '3-xyz'
+  type: 'VeteranApp'
+  app_status: 'New'
+  app_status_note: ''
+  date_time: '2024-03-05 14:22:01'
+  app_date: '2024-03-05'
+  ip_address: '203.0.113.9'
+  accepted_as_rev: ''
+  name:
+    first: 'John'
+    middle: 'Q'
+    last: 'Public'
+    nickname: 'Jack'
+  address:
+    street: '123 Main St'
+    city: 'Madison'
+    county: 'Dane'
+    state: 'WI'
+    zip: '53703'
+    phone_day: '608-555-1234'
+    phone_mbl: '608-555-5678'
+    email: 'john@example.com'
+  birth_date: '1948-05-17'
+  gender: 'M'
+  shirt:
+    size: 'XL'
+  emerg_contact:
+    name: 'Jane Public'
+    address:
+      phone: '608-555-9999'
+      email: 'jane@example.com'
+  metadata:
+    created_at: '2024-03-05T14:22:01Z'
+    created_by: 'Online App'
+    updated_at: '2024-03-05T14:22:01Z'
+    updated_by: 'Online App'
+  vet_type: 'Vietnam'
+  service:
+    branch: 'Army'
+    dates: '1966-1968'
+    rank: 'SGT'
+  guardian:
+    pref_notes: 'Son Bob'
+    pref_phone: '608-555-0000'
+    pref_email: 'bob@example.com'
+  medical:
+    usesWheelchair: true
+    requiresOxygen: false

@@ -171,6 +171,12 @@ gcloud run services update-traffic sshf-api --region us-central1 --project sshf-
 | `API_URL` | `sshf-api-url-dev` | `sshf-api-url-prd` |
 | `GOOGLE_CLIENT_ID` | `sshf-api-auth-clientid-dev` | `sshf-api-auth-clientid-prd` |
 | `ALLOWED_ORIGINS` | plain env var on the service | plain env var on the service |
+| `REVIEW_DB_NAME` | plain env var on the service | plain env var on the service |
+| `REVIEW_DB_URL` | `sshf-api-review-db-url-dev` (if set) | `sshf-api-review-db-url-prd` (if set) |
+| `REVIEW_DB_USER` | `sshf-api-review-db-user-dev` (if set) | `sshf-api-review-db-user-prd` (if set) |
+| `REVIEW_DB_PASS` | `sshf-api-review-db-pass-dev` (if set) | `sshf-api-review-db-pass-prd` (if set) |
+| `REVIEW_INTAKE_SERVICE_ACCOUNTS` | plain env var on the service | plain env var on the service |
+| `REVIEW_INTAKE_AUDIENCE` | plain env var on the service | plain env var on the service |
 
 - Secrets are referenced as `:latest`, but a running revision does **not**
   pick up new secret versions. After adding a secret version, force a new

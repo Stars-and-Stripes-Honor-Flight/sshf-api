@@ -97,6 +97,17 @@ const definition = {
           clientId: process.env.GOOGLE_CLIENT_ID,
           appName: 'SSHF API'
         }
+      },
+      IntakeIdToken: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description:
+          'Google-signed service-account ID token used only by POST /review/applications ' +
+          '(website intake via the hf_appcollector Cloud Function). The token audience must ' +
+          'match REVIEW_INTAKE_AUDIENCE (defaults to API_URL) and the service-account email ' +
+          'must be listed in REVIEW_INTAKE_SERVICE_ACCOUNTS. Returns 401 for a missing or ' +
+          'invalid token and 403 for an unlisted account.'
       }
     },
     schemas: loadAllSchemas(
@@ -114,7 +125,13 @@ const definition = {
       'FlightDetailResult',
       'WaitlistVeteranGroup',
       'QueryRequest',
-      'QueryResults'
+      'QueryResults',
+      'ReviewApplication',
+      'ReviewApplicationIntake',
+      'ReviewApplicationSummary',
+      'ReviewApplicationList',
+      'ReviewApplicationStatusUpdate',
+      'ReviewApplicationAcceptResult'
     )
   },
   security: [

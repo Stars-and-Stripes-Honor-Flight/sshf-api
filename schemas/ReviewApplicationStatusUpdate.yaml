@@ -1,0 +1,12 @@
+type: object
+required: ['app_status']
+properties:
+  app_status:
+    type: string
+    enum: ['New', 'Hold', 'Rejected', 'Trash']
+    description: >
+      New review status. Accepted is not allowed here; use POST
+      /review/applications/:id/accept instead (returns 400 if Accepted is sent).
+  app_status_note:
+    type: string
+    description: 'Optional note about the status change'
