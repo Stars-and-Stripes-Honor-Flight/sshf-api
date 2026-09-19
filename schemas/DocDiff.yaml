@@ -1,0 +1,30 @@
+type: object
+required:
+  - id
+  - from
+  - to
+  - changes
+  - fromDoc
+  - toDoc
+properties:
+  id:
+    type: string
+    description: CouchDB document ID
+  from:
+    $ref: '#/components/schemas/DocRevision'
+  to:
+    $ref: '#/components/schemas/DocRevision'
+  changes:
+    type: array
+    items:
+      $ref: '#/components/schemas/DocDiffChange'
+  fromDoc:
+    type: object
+    description: Raw older document snapshot
+  toDoc:
+    type: object
+    description: Raw newer document snapshot
+  warning:
+    type: string
+    description: Present when older revisions were removed by compaction
+    example: Older revisions were removed by database compaction.

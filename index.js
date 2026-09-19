@@ -17,7 +17,7 @@ import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { postQuery } from './routes/query.js';
-import { createDocument, retrieveDocument, updateDocument, deleteDocument } from './routes/docs.js';
+import { createDocument, retrieveDocument, updateDocument, deleteDocument, listDocumentRevisions, diffDocument } from './routes/docs.js';
 import {
     createVeteran,
     retrieveVeteran,
@@ -94,6 +94,8 @@ app.post("/msg", postMessage);
 app.post("/query", authenticate, authorize, dbSession, postQuery);
 
 // Generic document routes
+app.get("/docs/:id/revisions", authenticate, authorize, dbSession, listDocumentRevisions);
+app.get("/docs/:id/diff", authenticate, authorize, dbSession, diffDocument);
 app.post("/docs", authenticate, authorize, dbSession, createDocument);
 app.get("/docs/:id", authenticate, authorize, dbSession, retrieveDocument);
 app.put("/docs/:id", authenticate, authorize, dbSession, updateDocument);

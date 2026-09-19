@@ -131,7 +131,11 @@ const definition = {
       'ReviewApplicationSummary',
       'ReviewApplicationList',
       'ReviewApplicationStatusUpdate',
-      'ReviewApplicationAcceptResult'
+      'ReviewApplicationAcceptResult',
+      'DocRevision',
+      'DocRevisionList',
+      'DocDiffChange',
+      'DocDiff'
     )
   },
   security: [

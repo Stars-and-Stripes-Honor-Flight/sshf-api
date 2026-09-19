@@ -1,0 +1,25 @@
+type: object
+required:
+  - id
+  - currentRev
+  - revisions
+  - availableCount
+properties:
+  id:
+    type: string
+    description: CouchDB document ID
+  currentRev:
+    type: string
+    description: Winning current revision token
+  revisions:
+    type: array
+    description: Revision history newest first, including compacted entries
+    items:
+      $ref: '#/components/schemas/DocRevision'
+  availableCount:
+    type: integer
+    description: Number of revisions whose bodies are still stored
+  warning:
+    type: string
+    description: Present when older revisions were removed by compaction
+    example: Older revisions were removed by database compaction.
