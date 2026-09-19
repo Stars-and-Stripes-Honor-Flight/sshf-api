@@ -1,0 +1,13 @@
+type: object
+required:
+  - rev
+  - status
+properties:
+  rev:
+    type: string
+    description: Full CouchDB revision token
+    example: 5-aaa111aaa111aaa111aaa111aaa111aa
+  status:
+    type: string
+    enum: [available, missing, deleted]
+    description: Whether the revision body can still be retrieved

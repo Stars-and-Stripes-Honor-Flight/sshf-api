@@ -1,0 +1,16 @@
+type: object
+required:
+  - path
+  - op
+properties:
+  path:
+    type: string
+    description: Dotted object path with array indexes in brackets
+    example: name.first
+  op:
+    type: string
+    enum: [add, remove, replace]
+  from:
+    description: Previous value for replace and remove operations
+  to:
+    description: New value for replace and add operations

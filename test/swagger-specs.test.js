@@ -13,7 +13,16 @@ describe('OpenAPI spec generation', () => {
         const schemas = specs.components?.schemas;
         expect(schemas).to.be.an('object');
 
-        for (const name of ['Veteran', 'Guardian', 'Flight', 'Error']) {
+        for (const name of [
+            'Veteran',
+            'Guardian',
+            'Flight',
+            'Error',
+            'DocRevision',
+            'DocRevisionList',
+            'DocDiffChange',
+            'DocDiff'
+        ]) {
             expect(schemas[name], `missing schema ${name}`).to.be.an('object');
             expect(schemas[name].type).to.equal('object');
         }
@@ -65,5 +74,24 @@ describe('OpenAPI spec generation', () => {
             expect(specs.paths[path], `missing path ${path}`).to.be.an('object');
             expect(Object.keys(specs.paths[path]).length).to.be.greaterThan(0);
         }
+    });
+
+    it('documents document revision list and diff endpoints', () => {
+        const revisions = specs.paths['/docs/{id}/revisions']?.get;
+        const diff = specs.paths['/docs/{id}/diff']?.get;
+
+        expect(revisions, 'missing /docs/{id}/revisions').to.be.an('object');
+        expect(diff, 'missing /docs/{id}/diff').to.be.an('object');
+
+        expect(revisions.security).to.deep.equal([{ GoogleAuth: [] }]);
+        expect(diff.security).to.deep.equal([{ GoogleAuth: [] }]);
+        expect(revisions.responses).to.include.all.keys('200', '401', '403', '404', '503');
+        expect(diff.responses).to.include.all.keys('200', '400', '401', '403', '404', '503');
+
+        expect(diff.parameters.map((param) => param.name)).to.include.members(['from', 'to']);
+        expect(revisions.responses['200'].content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/DocRevisionList');
+        expect(diff.responses['200'].content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/DocDiff');
     });
 });
