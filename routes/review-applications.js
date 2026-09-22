@@ -1,4 +1,5 @@
 import { dbFetch, reviewDbFetch, getReviewDbConfig, DatabaseSessionError } from '../utils/db.js';
+import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 import { REVIEW_APPLICATION_STATUSES } from '../models/review_application.js';
 import { VeteranApplication } from '../models/veteran_application.js';
 import { GuardianApplication } from '../models/guardian_application.js';
@@ -60,7 +61,11 @@ async function readErrorReason(response, fallback) {
  * the appropriate 404/400 response and returns null.
  */
 async function loadReviewDocument(req, res, docId) {
-    const response = await reviewDbFetch(req, `${reviewDbBase()}/${docId}`);
+    const url = buildCouchDocumentUrlOrRespond(res, reviewDbBase(), docId);
+    if (url === null) {
+        return null;
+    }
+    const response = await reviewDbFetch(req, url);
 
     if (!response.ok) {
         if (response.status === 404) {
@@ -81,7 +86,11 @@ async function loadReviewDocument(req, res, docId) {
 }
 
 async function saveReviewDocument(req, docId, couchDoc) {
-    const response = await reviewDbFetch(req, `${reviewDbBase()}/${docId}`, {
+    const built = buildCouchDocumentUrl(reviewDbBase(), docId);
+    if (built.error) {
+        throw new Error(built.error);
+    }
+    const response = await reviewDbFetch(req, built.url, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json'
@@ -293,7 +302,7 @@ export async function listReviewApplications(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/ReviewApplication'
  *       400:
- *         description: Document is not a review application
+ *         description: Invalid document id or document is not a review application
  *       401:
  *         description: Unauthorized
  *       403:
@@ -352,7 +361,7 @@ export async function retrieveReviewApplication(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/ReviewApplication'
  *       400:
- *         description: Validation failure, not a review application, or attempted accept via update
+ *         description: Invalid document id, validation failure, not a review application, or attempted accept via update
  *         content:
  *           application/json:
  *             schema:
@@ -443,7 +452,7 @@ export async function updateReviewApplication(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/ReviewApplication'
  *       400:
- *         description: Invalid status, attempted accept via status endpoint, or not a review application
+ *         description: Invalid document id, invalid status, attempted accept via status endpoint, or not a review application
  *         content:
  *           application/json:
  *             schema:
@@ -536,7 +545,7 @@ export async function updateReviewApplicationStatus(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/ReviewApplicationAcceptResult'
  *       400:
- *         description: Logistics record validation failed (edit the application first) or not a review application
+ *         description: Invalid document id, logistics record validation failed (edit the application first), or not a review application
  *         content:
  *           application/json:
  *             schema:
@@ -575,7 +584,11 @@ export async function acceptReviewApplication(req, res) {
         const application = ApplicationClass.fromCouchDoc(doc);
 
         // Look for an existing logistics record with the same id
-        const mainUrl = `${mainDbBase()}/${docId}`;
+        const mainBuilt = buildCouchDocumentUrl(mainDbBase(), docId);
+        if (mainBuilt.error) {
+            return res.status(400).json({ error: mainBuilt.error });
+        }
+        const mainUrl = mainBuilt.url;
         const existingResponse = await dbFetch(req, mainUrl);
         let existing = null;
         if (existingResponse.ok) {

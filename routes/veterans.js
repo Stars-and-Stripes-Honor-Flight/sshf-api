@@ -3,10 +3,12 @@ import { UnpairedVeteranRequest } from '../models/unpaired_veteran_request.js';
 import { UnpairedVeteranResults } from '../models/unpaired_veteran_results.js';
 import { VALID_BUSES } from '../models/flight_detail.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 import { trimIfString } from '../utils/trim_strings.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
+const dbBase = `${dbUrl}/${dbName}`;
 
 /**
  * @swagger
@@ -109,7 +111,7 @@ export async function createVeteran(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/Veteran'
  *       400:
- *         description: Document is not a veteran record
+ *         description: Invalid document id or document is not a veteran record
  *       404:
  *         description: Veteran not found
  *       401:
@@ -119,9 +121,11 @@ export async function createVeteran(req, res) {
  */
 export async function retrieveVeteran(req, res) {
     try {
-        const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         const response = await dbFetch(req, url);
 
         const data = await response.json();
@@ -178,7 +182,7 @@ export async function retrieveVeteran(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/Veteran'
  *       400:
- *         description: Invalid veteran data or document is not a veteran record
+ *         description: Invalid document id, invalid veteran data, or document is not a veteran record
  *       404:
  *         description: Veteran not found
  *       401:
@@ -189,8 +193,11 @@ export async function retrieveVeteran(req, res) {
 export async function updateVeteran(req, res) {
     try {
         const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, docId);
+        if (url === null) {
+            return;
+        }
+
         // First, get the current document
         const getResponse = await dbFetch(req, url);
 
@@ -295,7 +302,7 @@ export async function updateVeteran(req, res) {
  *                 rev:
  *                   type: string
  *       400:
- *         description: Document is not a veteran record
+ *         description: Invalid document id or document is not a veteran record
  *       404:
  *         description: Veteran not found
  *       401:
@@ -305,10 +312,13 @@ export async function updateVeteran(req, res) {
  */
 export async function deleteVeteran(req, res) {
     try {
-        const docId = req.params.id;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         // First, get the current document
-        const getResponse = await dbFetch(req, `${dbUrl}/${dbName}/${docId}`);
+        const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -324,9 +334,9 @@ export async function deleteVeteran(req, res) {
             return res.status(400).json({ error: 'Document is not a veteran record' });
         }
 
-        const url = `${dbUrl}/${dbName}/${docId}?rev=${currentDoc._rev}`;
+        const deleteUrl = `${url}?rev=${encodeURIComponent(currentDoc._rev)}`;
 
-        const deleteResponse = await dbFetch(req, url, {
+        const deleteResponse = await dbFetch(req, deleteUrl, {
             method: 'DELETE'
         });
 
@@ -531,8 +541,10 @@ export async function updateVeteranSeat(req, res) {
 
         const newSeat = trimIfString(String(value));
 
-        // Get the current document
-        const url = `${dbUrl}/${dbName}/${docId}`;
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
         const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
@@ -684,7 +696,10 @@ export async function updateVeteranBus(req, res) {
         }
 
         // Get the current document
-        const url = `${dbUrl}/${dbName}/${docId}`;
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
         const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
@@ -803,7 +818,10 @@ async function patchVeteranField(req, res, config) {
             return res.status(400).json({ error: config.validationMessage });
         }
 
-        const url = `${dbUrl}/${dbName}/${docId}`;
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
         const getResponse = await dbFetch(req, url);
         if (!getResponse.ok) {
             if (getResponse.status === 404) {

@@ -6,9 +6,11 @@ import {
     resolveRevisionPair
 } from '../models/doc_diff.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
+const dbBase = `${dbUrl}/${dbName}`;
 
 // Create a new document
 export async function createDocument(req, res) {
@@ -41,9 +43,11 @@ export async function createDocument(req, res) {
 // Get a document by ID
 export async function retrieveDocument(req, res) {
     try {
-        const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         const response = await dbFetch(req, url);
 
         const data = await response.json();
@@ -68,9 +72,11 @@ export async function retrieveDocument(req, res) {
 // Update a document
 export async function updateDocument(req, res) {
     try {
-        const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         // First, get the current revision
         const getResponse = await dbFetch(req, url);
 
@@ -112,10 +118,13 @@ export async function updateDocument(req, res) {
 // Delete a document
 export async function deleteDocument(req, res) {
     try {
-        const docId = req.params.id;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         // First, get the current revision
-        const getResponse = await dbFetch(req, `${dbUrl}/${dbName}/${docId}`);
+        const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -125,9 +134,9 @@ export async function deleteDocument(req, res) {
         }
 
         const currentDoc = await getResponse.json();
-        const url = `${dbUrl}/${dbName}/${docId}?rev=${currentDoc._rev}`;
+        const deleteUrl = `${url}?rev=${encodeURIComponent(currentDoc._rev)}`;
 
-        const deleteResponse = await dbFetch(req, url, {
+        const deleteResponse = await dbFetch(req, deleteUrl, {
             method: 'DELETE'
         });
 
@@ -173,6 +182,15 @@ export async function deleteDocument(req, res) {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/DocRevisionList'
+ *       400:
+ *         description: Invalid document id
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *       401:
  *         description: Unauthorized
  *       403:
@@ -200,9 +218,11 @@ export async function deleteDocument(req, res) {
  */
 export async function listDocumentRevisions(req, res) {
     try {
-        const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}?revs_info=true`;
-        const response = await dbFetch(req, url);
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+        const response = await dbFetch(req, `${url}?revs_info=true`);
         const data = await response.json();
 
         if (!response.ok) {
@@ -262,7 +282,7 @@ export async function listDocumentRevisions(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/DocDiff'
  *       400:
- *         description: Invalid revision parameters or no previous revision
+ *         description: Invalid document id, invalid revision parameters, or no previous revision
  *         content:
  *           application/json:
  *             schema:
@@ -295,9 +315,12 @@ export async function listDocumentRevisions(req, res) {
  */
 export async function diffDocument(req, res) {
     try {
+        const baseUrl = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (baseUrl === null) {
+            return;
+        }
         const request = new DocDiffRequest(req.query);
         const docId = req.params.id;
-        const baseUrl = `${dbUrl}/${dbName}/${docId}`;
 
         const infoResponse = await dbFetch(req, `${baseUrl}?revs_info=true`);
         const infoData = await infoResponse.json();

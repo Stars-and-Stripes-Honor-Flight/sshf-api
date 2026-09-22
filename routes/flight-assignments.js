@@ -2,9 +2,11 @@ import { FlightAssignment, AddVeteransResult } from '../models/flight_assignment
 import { Veteran } from '../models/veteran.js';
 import { Guardian } from '../models/guardian.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
+const dbBase = `${dbUrl}/${dbName}`;
 
 /**
  * @swagger
@@ -37,7 +39,7 @@ const dbName = process.env.DB_NAME;
  *             schema:
  *               $ref: '#/components/schemas/FlightAssignment'
  *       400:
- *         description: Document is not a flight record
+ *         description: Invalid document id or document is not a flight record
  *       404:
  *         description: Flight not found
  *       401:
@@ -47,10 +49,10 @@ const dbName = process.env.DB_NAME;
  */
 export async function getFlightAssignments(req, res) {
     try {
-        const flightId = req.params.id;
-
-        // First, get the flight document
-        const flightUrl = `${dbUrl}/${dbName}/${flightId}`;
+        const flightUrl = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (flightUrl === null) {
+            return;
+        }
         const flightResponse = await dbFetch(req, flightUrl);
 
         const flightData = await flightResponse.json();
@@ -172,7 +174,10 @@ export async function addVeteransToFlight(req, res) {
         }
 
         // Get the flight document
-        const flightUrl = `${dbUrl}/${dbName}/${flightId}`;
+        const flightUrl = buildCouchDocumentUrlOrRespond(res, dbBase, flightId);
+        if (flightUrl === null) {
+            return;
+        }
         const flightResponse = await dbFetch(req, flightUrl);
 
         const flightData = await flightResponse.json();
@@ -291,7 +296,12 @@ export async function addVeteransToFlight(req, res) {
                 vetDoc.metadata.updated_by = userName;
 
                 // Save the veteran document
-                const saveVetUrl = `${dbUrl}/${dbName}/${vetDoc._id}`;
+                const vetUrlBuilt = buildCouchDocumentUrl(dbBase, vetDoc._id);
+                if (vetUrlBuilt.error) {
+                    result.addError(`Invalid veteran document id ${vetDoc._id}: ${vetUrlBuilt.error}`);
+                    continue;
+                }
+                const saveVetUrl = vetUrlBuilt.url;
                 const saveVetResponse = await dbFetch(req, saveVetUrl, {
                     method: 'PUT',
                     headers: {
@@ -309,8 +319,12 @@ export async function addVeteransToFlight(req, res) {
                         processedGuardians.add(guardianId);
 
                         try {
-                            // Get the guardian document
-                            const guardianUrl = `${dbUrl}/${dbName}/${guardianId}`;
+                            const guardianBuilt = buildCouchDocumentUrl(dbBase, guardianId);
+                            if (guardianBuilt.error) {
+                                result.addError(`Invalid guardian document id ${guardianId}: ${guardianBuilt.error}`);
+                                continue;
+                            }
+                            const guardianUrl = guardianBuilt.url;
                             const guardianResponse = await dbFetch(req, guardianUrl);
 
                             if (guardianResponse.ok) {
