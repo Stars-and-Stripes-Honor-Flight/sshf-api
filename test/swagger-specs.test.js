@@ -151,9 +151,9 @@ describe('OpenAPI spec generation', () => {
         expect(remove, 'missing DELETE /docs/{id}').to.be.an('object');
 
         expect(create.security).to.deep.equal([{ GoogleAuth: [] }]);
-        expect(create.responses).to.include.all.keys('201', '400', '401', '403', '500', '503');
-        expect(update.responses).to.include.all.keys('200', '400', '401', '403', '404', '500', '503');
-        expect(remove.responses).to.include.all.keys('200', '400', '401', '403', '404', '500', '503');
+        expect(create.responses).to.include.all.keys('201', '400', '401', '403', '409', '500', '503');
+        expect(update.responses).to.include.all.keys('200', '400', '401', '403', '404', '409', '500', '503');
+        expect(remove.responses).to.include.all.keys('200', '400', '401', '403', '404', '409', '500', '503');
 
         expect(create.requestBody.content['application/json'].schema.$ref)
             .to.equal('#/components/schemas/GenericDocumentWrite');
@@ -165,6 +165,10 @@ describe('OpenAPI spec generation', () => {
         expect(create.responses['400'].description).to.include('Invalid document id');
         expect(update.responses['400'].description).to.match(/match the URL id/i);
         expect(update.responses['400'].description).to.match(/design or system/i);
+        expect(update.responses['400'].description).to.match(/match the stored document type/i);
+        expect(update.responses['400'].description).to.match(/stored document type is not allowed/i);
+        expect(update.responses['400'].description).to.match(/validation/i);
+        expect(create.responses['409'].description).to.match(/conflict/i);
         expect(remove.responses['400'].description).to.match(/not allowed/i);
     });
 });

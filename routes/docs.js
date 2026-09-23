@@ -8,6 +8,7 @@ import {
 import {
     GenericDocumentError,
     assertStoredDocumentType,
+    buildLogisticsDocument,
     prepareGenericDocumentWrite
 } from '../models/generic_document.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
@@ -17,6 +18,33 @@ const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
 const dbBase = `${dbUrl}/${dbName}`;
 
+function throwIfCouchWriteFailed(response, data, fallback) {
+    if (response.status === 409) {
+        const error = new Error(data.reason || 'Document update conflict.');
+        error.statusCode = 409;
+        throw error;
+    }
+    throw new Error(data.reason || fallback);
+}
+
+function sendDocumentError(res, error, logLabel) {
+    if (error instanceof DatabaseSessionError) {
+        console.error('Database session error:', error.message);
+        return res.status(503).json({ error: error.message });
+    }
+    if (error instanceof GenericDocumentError) {
+        return res.status(error.status).json({ error: error.message });
+    }
+    if (error.message && error.message.includes('Validation failed')) {
+        return res.status(400).json({ error: error.message });
+    }
+    if (error.statusCode === 409) {
+        return res.status(409).json({ error: error.message });
+    }
+    console.error(logLabel, error);
+    return res.status(500).json({ error: error.message });
+}
+
 /**
  * @swagger
  * /docs:
@@ -24,9 +52,11 @@ const dbBase = `${dbUrl}/${dbName}`;
  *     summary: Create an allowlisted logistics document
  *     description: |
  *       Stores a new CouchDB document whose type is Flight, Guardian, or Veteran.
- *       The body `_id` is required and must not refer to a design or system document.
- *       Client-supplied `_rev`, `_deleted`, and design-document fields are not stored.
- *       Veteran, guardian, and flight schema validation remains on those typed routes.
+ *       The body is validated with that type's model. The body `_id` is required
+ *       and must not refer to a design or system document. Client-supplied
+ *       `_rev`, `_deleted`, design-document fields, and audit metadata are not
+ *       stored. Creation and update metadata are set from the authenticated user.
+ *       A new flight is stored with completed false.
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
@@ -51,7 +81,7 @@ const dbBase = `${dbUrl}/${dbName}`;
  *                 rev:
  *                   type: string
  *       400:
- *         description: Invalid document id, missing _id, a design or system document id, or a type that is not allowlisted
+ *         description: Invalid document id, missing _id, a design or system document id, a type that is not allowlisted, or data that fails Flight, Guardian, or Veteran validation
  *         content:
  *           application/json:
  *             schema:
@@ -63,6 +93,15 @@ const dbBase = `${dbUrl}/${dbName}`;
  *         description: Unauthorized
  *       403:
  *         description: Forbidden
+ *       409:
+ *         description: Document update conflict
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *       500:
  *         description: Server error
  *       503:
@@ -77,7 +116,7 @@ const dbBase = `${dbUrl}/${dbName}`;
  */
 export async function createDocument(req, res) {
     try {
-        const document = prepareGenericDocumentWrite(req.body);
+        const document = buildLogisticsDocument(req.body, { user: req.user });
         const url = `${dbUrl}/${dbName}`;
         const response = await dbFetch(req, url, {
             method: 'POST',
@@ -89,20 +128,12 @@ export async function createDocument(req, res) {
 
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.reason || 'Failed to create document');
+            throwIfCouchWriteFailed(response, data, 'Failed to create document');
         }
 
         res.status(201).json(data);
     } catch (error) {
-        if (error instanceof DatabaseSessionError) {
-            console.error('Database session error:', error.message);
-            return res.status(503).json({ error: error.message });
-        }
-        if (error instanceof GenericDocumentError) {
-            return res.status(error.status).json({ error: error.message });
-        }
-        console.error('Error creating document:', error);
-        res.status(500).json({ error: error.message });
+        sendDocumentError(res, error, 'Error creating document:');
     }
 }
 
@@ -143,12 +174,14 @@ export async function createDocument(req, res) {
  *   put:
  *     summary: Update an allowlisted logistics document by ID
  *     description: |
- *       Replaces a Flight, Guardian, or Veteran document. The body `_id` is
- *       required and must match the URL id. Design or system document ids are
- *       rejected. The stored type cannot be changed, and a document whose
- *       stored type is not allowlisted cannot be replaced. Client-supplied
- *       `_rev`, `_deleted`, and design-document fields are not stored; the
- *       current CouchDB revision is sent instead.
+ *       Replaces a Flight, Guardian, or Veteran document using that type's model
+ *       validation. The body `_id` is required and must match the URL id.
+ *       Design or system document ids are rejected. The stored type cannot be
+ *       changed, and a document whose stored type is not allowlisted cannot be
+ *       replaced. Creation metadata and history stay as stored. The
+ *       authenticated user is recorded as the updater. Client-supplied `_rev`,
+ *       `_deleted`, design-document fields, and audit metadata are not stored;
+ *       the current CouchDB revision is sent instead.
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
@@ -173,13 +206,15 @@ export async function createDocument(req, res) {
  *             schema:
  *               type: object
  *       400:
- *         description: Invalid document id, missing _id, a body _id that does not match the URL id, a design or system document id, or a type that is not allowlisted
+ *         description: Invalid document id, missing _id, a body _id that does not match the URL id, a design or system document id, a type that is not allowlisted, a type that does not match the stored document type, stored document type is not allowed, or data that fails Flight, Guardian, or Veteran validation
  *       401:
  *         description: Unauthorized
  *       403:
  *         description: Forbidden
  *       404:
  *         description: Document not found
+ *       409:
+ *         description: Document update conflict
  *       500:
  *         description: Server error
  *       503:
@@ -215,6 +250,8 @@ export async function createDocument(req, res) {
  *         description: Forbidden
  *       404:
  *         description: Document not found
+ *       409:
+ *         description: Document update conflict
  *       500:
  *         description: Server error
  *       503:
@@ -269,7 +306,11 @@ export async function updateDocument(req, res) {
 
         const currentDoc = await getResponse.json();
         assertStoredDocumentType(currentDoc, document.type);
-        const updatedDoc = { ...document, _rev: currentDoc._rev };
+        const updatedDoc = buildLogisticsDocument(req.body, {
+            urlId: req.params.id,
+            user: req.user,
+            currentDoc
+        });
 
         // Then, update the document
         const updateResponse = await dbFetch(req, url, {
@@ -282,20 +323,12 @@ export async function updateDocument(req, res) {
 
         const data = await updateResponse.json();
         if (!updateResponse.ok) {
-            throw new Error(data.reason || 'Failed to update document');
+            throwIfCouchWriteFailed(updateResponse, data, 'Failed to update document');
         }
 
         res.json(data);
     } catch (error) {
-        if (error instanceof DatabaseSessionError) {
-            console.error('Database session error:', error.message);
-            return res.status(503).json({ error: error.message });
-        }
-        if (error instanceof GenericDocumentError) {
-            return res.status(error.status).json({ error: error.message });
-        }
-        console.error('Error updating document:', error);
-        res.status(500).json({ error: error.message });
+        sendDocumentError(res, error, 'Error updating document:');
     }
 }
 
@@ -327,20 +360,12 @@ export async function deleteDocument(req, res) {
 
         const data = await deleteResponse.json();
         if (!deleteResponse.ok) {
-            throw new Error(data.reason || 'Failed to delete document');
+            throwIfCouchWriteFailed(deleteResponse, data, 'Failed to delete document');
         }
 
         res.json(data);
     } catch (error) {
-        if (error instanceof DatabaseSessionError) {
-            console.error('Database session error:', error.message);
-            return res.status(503).json({ error: error.message });
-        }
-        if (error instanceof GenericDocumentError) {
-            return res.status(error.status).json({ error: error.message });
-        }
-        console.error('Error deleting document:', error);
-        res.status(500).json({ error: error.message });
+        sendDocumentError(res, error, 'Error deleting document:');
     }
 }
 

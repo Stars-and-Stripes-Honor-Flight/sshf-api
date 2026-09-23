@@ -257,16 +257,18 @@ describe('Generic document writes', () => {
         _deleted: true,
         type: 'Flight',
         name: 'Spring 2026',
+        flight_date: '2026-04-15',
+        capacity: 100,
+        completed: true,
+        metadata: {
+            created_at: '1999-01-01T00:00:00Z',
+            created_by: 'Attacker',
+            updated_by: 'Attacker'
+        },
         language: 'javascript',
         views: { all: { map: 'function () { emit(null, null); }' } },
         validate_doc_update: 'function (newDoc) { throw({ forbidden: "no" }); }',
         filters: { none: 'function () { return false; }' }
-    };
-
-    const storedDocument = {
-        _id: 'flight-2026-spring',
-        type: 'Flight',
-        name: 'Spring 2026'
     };
 
     let req;
@@ -276,6 +278,7 @@ describe('Generic document writes', () => {
         req = {
             params: { id: 'flight-2026-spring' },
             body: JSON.parse(JSON.stringify(allowedDocument)),
+            user: { firstName: 'Admin', lastName: 'User' },
             dbCookie: 'auth-cookie'
         };
         res = {
@@ -356,8 +359,14 @@ describe('Generic document writes', () => {
             expect(res.status.calledWith(201)).to.be.true;
             expect(global.fetch.calledOnce).to.be.true;
             expect(global.fetch.firstCall.args[1].method).to.equal('POST');
-            expect(sentBody()).to.deep.equal(storedDocument);
-            expect(sentBody()).to.not.have.any.keys(
+            const written = sentBody();
+            expect(written._id).to.equal('flight-2026-spring');
+            expect(written.type).to.equal('Flight');
+            expect(written.name).to.equal('Spring 2026');
+            expect(written.completed).to.equal(false);
+            expect(written.metadata.created_by).to.equal('Admin User');
+            expect(written.metadata.updated_by).to.equal('Admin User');
+            expect(written).to.not.have.any.keys(
                 '_rev',
                 '_deleted',
                 'language',
@@ -365,6 +374,28 @@ describe('Generic document writes', () => {
                 'validate_doc_update',
                 'filters'
             );
+        });
+
+        it('rejects a flight that fails model validation before writing', async () => {
+            req.body.name = '';
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Validation failed');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('returns 409 when CouchDB reports a conflict', async () => {
+            global.fetch.resolves(mockResponse(
+                { error: 'conflict', reason: 'Document update conflict.' },
+                { ok: false, status: 409 }
+            ));
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(409)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
         });
     });
 
@@ -461,17 +492,62 @@ describe('Generic document writes', () => {
         });
 
         it('replaces an allowlisted document using the server revision and stripped fields', async () => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: serverRev,
+                type: 'Flight',
+                name: 'Old name',
+                flight_date: '2026-04-15',
+                capacity: 80,
+                completed: false,
+                metadata: {
+                    created_at: '2020-01-01T00:00:00Z',
+                    created_by: 'Original Author'
+                }
+            }));
+
             await updateDocument(req, res);
 
             expect(res.json.calledOnce).to.be.true;
             expect(res.status.called).to.be.false;
             const written = sentBody(1);
-            expect(written).to.deep.equal({
-                ...storedDocument,
-                _rev: serverRev
-            });
+            expect(written._rev).to.equal(serverRev);
             expect(written._rev).to.not.equal(allowedDocument._rev);
+            expect(written.metadata.created_by).to.equal('Original Author');
+            expect(written.metadata.created_at).to.equal('2020-01-01T00:00:00Z');
+            expect(written.metadata.updated_by).to.equal('Admin User');
             expect(written).to.not.have.any.keys('_deleted', 'language', 'views', 'validate_doc_update', 'filters');
+        });
+
+        it('rejects an incomplete veteran update without putting the document', async () => {
+            req.params.id = 'veteran-1';
+            req.body = { _id: 'veteran-1', type: 'Veteran' };
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'veteran-1',
+                _rev: serverRev,
+                type: 'Veteran',
+                name: { first: 'John', last: 'Smith' }
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Validation failed');
+            expect(global.fetch.calledOnce).to.be.true;
+            expect(global.fetch.firstCall.args[1]?.method).to.equal(undefined);
+        });
+
+        it('returns 409 when the replacement conflicts', async () => {
+            global.fetch.onCall(1).resolves(mockResponse(
+                { error: 'conflict', reason: 'Document update conflict.' },
+                { ok: false, status: 409 }
+            ));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(409)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
+            expect(global.fetch.secondCall.args[1].method).to.equal('PUT');
         });
     });
 
@@ -504,6 +580,23 @@ describe('Generic document writes', () => {
             expect(res.json.calledOnce).to.be.true;
             expect(global.fetch.secondCall.args[1].method).to.equal('DELETE');
             expect(global.fetch.secondCall.args[0]).to.include('rev=2-server-rev');
+        });
+
+        it('returns 409 when the delete conflicts', async () => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: '2-server-rev',
+                type: 'Flight'
+            }));
+            global.fetch.onCall(1).resolves(mockResponse(
+                { error: 'conflict', reason: 'Document update conflict.' },
+                { ok: false, status: 409 }
+            ));
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(409)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
         });
     });
 });
