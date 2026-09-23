@@ -3,14 +3,37 @@ import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { specs } from '../swagger/swagger.js';
 
+const PROBE_ROUTE = /\.(?:get|post|put|patch|delete)\(\s*['"`]\/(?:msg|secure-data)(?:\/|['"`])/;
+const BASIC_AUTH_HEADER = /Authorization['"`]?\]?\s*[:=]\s*['"`]Basic\b/;
+
+function javascriptFilesUnder(directory) {
+    const files = [];
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) {
+            files.push(...javascriptFilesUnder(path));
+        } else if (entry.name.endsWith('.js')) {
+            files.push(path);
+        }
+    }
+    return files;
+}
+
 describe('removed legacy probe routes (#100, #107)', () => {
-    it('does not register /msg or /secure-data in index.js', () => {
+    const sources = [
+        join(process.cwd(), 'index.js'),
+        ...javascriptFilesUnder(join(process.cwd(), 'routes'))
+    ];
+
+    it('does not register /msg or /secure-data from index.js or route modules', () => {
         const indexSource = readFileSync(join(process.cwd(), 'index.js'), 'utf8');
-        expect(indexSource).to.not.include("app.get('/secure-data'");
-        expect(indexSource).to.not.include('app.get("/msg"');
-        expect(indexSource).to.not.include('app.post("/msg"');
         expect(indexSource).to.not.include('./routes/msg.js');
         expect(indexSource).to.not.include('./routes/secure.js');
+
+        for (const path of sources) {
+            const source = readFileSync(path, 'utf8');
+            expect(source, `${path} must not register /msg or /secure-data`).to.not.match(PROBE_ROUTE);
+        }
     });
 
     it('does not document /msg or /secure-data in OpenAPI', () => {
@@ -25,12 +48,9 @@ describe('removed legacy probe routes (#100, #107)', () => {
     });
 
     it('does not send CouchDB credentials via Authorization Basic from route handlers', () => {
-        const routesDir = join(process.cwd(), 'routes');
-        for (const file of readdirSync(routesDir).filter((name) => name.endsWith('.js'))) {
-            const source = readFileSync(join(routesDir, file), 'utf8');
-            expect(source, `${file} must not use Basic auth for CouchDB`).to.not.match(
-                /Authorization['`]\s*:\s*[`'"]Basic/
-            );
+        for (const path of javascriptFilesUnder(join(process.cwd(), 'routes'))) {
+            const source = readFileSync(path, 'utf8');
+            expect(source, `${path} must not use Basic auth for CouchDB`).to.not.match(BASIC_AUTH_HEADER);
         }
     });
 });
