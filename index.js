@@ -12,8 +12,6 @@ import { assertValidTokenClaims, TokenAudienceError, authorize } from './utils/a
 import { shouldFallbackToServiceAccountJwt, shouldPreferServiceAccountJwt } from './utils/groups.js';
 
 // Import route handlers
-import { getMessage, postMessage } from './routes/msg.js';
-import { getSecureData } from './routes/secure.js';
 import { getHasGroup } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { postQuery } from './routes/query.js';
@@ -85,12 +83,9 @@ const userCacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
 const tokenInfoClient = new OAuth2Client();
 
 // Route definitions
-app.get('/secure-data', authenticate, authorize, getSecureData);
 app.get('/user/hasgroup', authenticate, getHasGroup);
-app.get("/msg", getMessage);
 app.get("/search", authenticate, authorize, dbSession, getSearch);
 app.use(express.json()); // for parsing application/json
-app.post("/msg", postMessage);
 app.post("/query", authenticate, authorize, dbSession, postQuery);
 
 // Generic document routes
