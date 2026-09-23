@@ -132,4 +132,39 @@ describe('OpenAPI spec generation', () => {
             ).to.include('Invalid document id');
         }
     });
+
+    it('documents generic document writes with an allowlisted type and 400 constraints', () => {
+        const schema = specs.components?.schemas?.GenericDocumentWrite;
+        expect(schema, 'missing GenericDocumentWrite schema').to.be.an('object');
+        expect(schema.required).to.include.members(['_id', 'type']);
+        expect(schema.properties.type.enum).to.deep.equal(['Flight', 'Guardian', 'Veteran']);
+        expect(schema.description).to.match(/_rev/);
+        expect(schema.description).to.match(/_deleted/);
+        expect(schema.description).to.match(/design/i);
+
+        const create = specs.paths['/docs']?.post;
+        const update = specs.paths['/docs/{id}']?.put;
+        const remove = specs.paths['/docs/{id}']?.delete;
+
+        expect(create, 'missing POST /docs').to.be.an('object');
+        expect(update, 'missing PUT /docs/{id}').to.be.an('object');
+        expect(remove, 'missing DELETE /docs/{id}').to.be.an('object');
+
+        expect(create.security).to.deep.equal([{ GoogleAuth: [] }]);
+        expect(create.responses).to.include.all.keys('201', '400', '401', '403', '500', '503');
+        expect(update.responses).to.include.all.keys('200', '400', '401', '403', '404', '500', '503');
+        expect(remove.responses).to.include.all.keys('200', '400', '401', '403', '404', '500', '503');
+
+        expect(create.requestBody.content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/GenericDocumentWrite');
+        expect(update.requestBody.content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/GenericDocumentWrite');
+
+        expect(create.responses['400'].description).to.match(/design or system/i);
+        expect(create.responses['400'].description).to.match(/type/i);
+        expect(create.responses['400'].description).to.include('Invalid document id');
+        expect(update.responses['400'].description).to.match(/match the URL id/i);
+        expect(update.responses['400'].description).to.match(/design or system/i);
+        expect(remove.responses['400'].description).to.match(/not allowed/i);
+    });
 });

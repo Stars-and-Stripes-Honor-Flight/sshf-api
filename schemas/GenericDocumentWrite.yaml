@@ -1,0 +1,27 @@
+type: object
+description: >
+  Logistics document written through POST /docs or PUT /docs/{id}.
+  type must be Flight, Guardian, or Veteran. _id is required and must not
+  refer to a design or system document. On update, _id must match the URL id.
+  Client-supplied _rev, _deleted, other underscore fields, and design-document
+  fields (language, views, filters, shows, lists, updates, validate_doc_update,
+  rewrites, libs, indexes, options) are ignored and are not stored. Update
+  uses the revision currently stored in CouchDB.
+required:
+  - _id
+  - type
+properties:
+  _id:
+    type: string
+    description: >
+      CouchDB document id. Rejected when empty, when it starts with an
+      underscore (design or system documents), when it contains a slash or
+      backslash, or when it is the dot-dot path segment.
+  type:
+    type: string
+    enum:
+      - Flight
+      - Guardian
+      - Veteran
+    description: Allowlisted logistics document type.
+additionalProperties: true
