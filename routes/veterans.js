@@ -521,7 +521,7 @@ export async function searchUnpairedVeterans(req, res) {
  *                 seat:
  *                   type: string
  *       400:
- *         description: Invalid request or document is not a veteran record
+ *         description: Invalid document id, invalid request, or document is not a veteran record
  *       404:
  *         description: Veteran not found
  *       401:
@@ -668,7 +668,7 @@ export async function updateVeteranSeat(req, res) {
  *                 bus:
  *                   type: string
  *       400:
- *         description: Invalid request, invalid bus value, or document is not a veteran record
+ *         description: Invalid document id, invalid request, invalid bus value, or document is not a veteran record
  *       404:
  *         description: Veteran not found
  *       401:

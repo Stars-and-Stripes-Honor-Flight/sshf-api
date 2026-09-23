@@ -40,7 +40,109 @@ export async function createDocument(req, res) {
     }
 }
 
-// Get a document by ID
+/**
+ * @swagger
+ * /docs/{id}:
+ *   get:
+ *     summary: Retrieve a CouchDB document by ID
+ *     tags: [Documents]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: CouchDB document ID
+ *     responses:
+ *       200:
+ *         description: Document retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       400:
+ *         description: Invalid document id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ *       503:
+ *         description: Database session error
+ *   put:
+ *     summary: Update a CouchDB document by ID
+ *     tags: [Documents]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: CouchDB document ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Document updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       400:
+ *         description: Invalid document id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ *       503:
+ *         description: Database session error
+ *   delete:
+ *     summary: Delete a CouchDB document by ID
+ *     tags: [Documents]
+ *     security:
+ *       - GoogleAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: CouchDB document ID
+ *     responses:
+ *       200:
+ *         description: Document deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       400:
+ *         description: Invalid document id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Document not found
+ *       500:
+ *         description: Server error
+ *       503:
+ *         description: Database session error
+ */
 export async function retrieveDocument(req, res) {
     try {
         const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);

@@ -27,9 +27,12 @@ describe('document id validation and encoding', () => {
             expect(getEncodedDocumentIdSegment(null)).to.deep.equal({ error: INVALID_DOCUMENT_ID_ERROR });
         });
 
-        it('rejects path traversal segments', () => {
+        it('rejects a path traversal segment', () => {
             expect(getEncodedDocumentIdSegment('..')).to.deep.equal({ error: INVALID_DOCUMENT_ID_ERROR });
-            expect(getEncodedDocumentIdSegment('foo..bar')).to.deep.equal({ error: INVALID_DOCUMENT_ID_ERROR });
+        });
+
+        it('allows consecutive dots that are not a traversal segment', () => {
+            expect(getEncodedDocumentIdSegment('foo..bar')).to.deep.equal({ encoded: 'foo..bar' });
         });
 
         it('rejects slash and backslash', () => {

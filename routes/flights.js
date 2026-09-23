@@ -278,7 +278,7 @@ export async function retrieveFlight(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/Flight'
  *       400:
- *         description: Invalid flight data or document is not a flight record
+ *         description: Invalid document id, invalid flight data, or document is not a flight record
  *       404:
  *         description: Flight not found
  *       401:

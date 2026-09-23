@@ -71,8 +71,11 @@ describe('document id security in route handlers', () => {
         await retrieveDocument(req, res);
 
         expect(global.fetch.calledOnce).to.be.true;
-        expect(global.fetch.firstCall.args[0]).to.equal(
-            `${process.env.DB_URL}/${process.env.DB_NAME}/${encodeURIComponent(id)}`
-        );
+        const calledUrl = global.fetch.firstCall.args[0];
+        const encodedId = encodeURIComponent(id);
+        // Route modules capture DB_URL/DB_NAME at import. The full suite loads
+        // .env later (parity scripts), so only the document segment is stable.
+        expect(calledUrl.slice(calledUrl.lastIndexOf('/') + 1)).to.equal(encodedId);
+        expect(calledUrl).to.not.include(id);
     });
 });

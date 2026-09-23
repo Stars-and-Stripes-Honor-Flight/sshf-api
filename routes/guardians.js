@@ -289,7 +289,7 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
  *             schema:
  *               $ref: '#/components/schemas/Guardian'
  *       400:
- *         description: Invalid guardian data or document is not a guardian record
+ *         description: Invalid document id, invalid guardian data, or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -498,7 +498,7 @@ export async function updateGuardian(req, res) {
  *                 rev:
  *                   type: string
  *       400:
- *         description: Document is not a guardian record
+ *         description: Invalid document id or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -599,7 +599,7 @@ export async function deleteGuardian(req, res) {
  *                 seat:
  *                   type: string
  *       400:
- *         description: Invalid request or document is not a guardian record
+ *         description: Invalid document id, invalid request, or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -747,7 +747,7 @@ export async function updateGuardianSeat(req, res) {
  *                 bus:
  *                   type: string
  *       400:
- *         description: Invalid request, invalid bus value, or document is not a guardian record
+ *         description: Invalid document id, invalid request, invalid bus value, or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:

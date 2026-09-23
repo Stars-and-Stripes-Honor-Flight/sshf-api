@@ -13,7 +13,7 @@ export function getEncodedDocumentIdSegment(id) {
     if (id.startsWith('_')) {
         return { error: INVALID_DOCUMENT_ID_ERROR };
     }
-    if (id.includes('/') || id.includes('\\') || id.includes('..')) {
+    if (id === '..' || id.includes('/') || id.includes('\\')) {
         return { error: INVALID_DOCUMENT_ID_ERROR };
     }
     return { encoded: encodeURIComponent(id) };
@@ -32,22 +32,6 @@ export function buildCouchDocumentUrl(baseUrl, id) {
         return { error: segment.error };
     }
     return { url: `${baseUrl}/${segment.encoded}` };
-}
-
-/**
- * Send 400 when the id is invalid; otherwise return the encoded path segment.
- *
- * @param {import('express').Response} res
- * @param {unknown} id
- * @returns {string|null}
- */
-export function encodedDocumentIdOrRespond(res, id) {
-    const segment = getEncodedDocumentIdSegment(id);
-    if (segment.error) {
-        res.status(400).json({ error: segment.error });
-        return null;
-    }
-    return segment.encoded;
 }
 
 /**

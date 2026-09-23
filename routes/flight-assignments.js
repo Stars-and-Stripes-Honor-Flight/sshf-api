@@ -155,7 +155,7 @@ export async function getFlightAssignments(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/AddVeteransResult'
  *       400:
- *         description: Invalid request (bad veteranCount or not a flight record)
+ *         description: Invalid document id or invalid request (bad veteranCount or not a flight record)
  *       404:
  *         description: Flight not found
  *       401:
