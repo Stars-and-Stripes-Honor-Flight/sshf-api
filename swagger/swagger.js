@@ -135,7 +135,8 @@ const definition = {
       'DocRevision',
       'DocRevisionList',
       'DocDiffChange',
-      'DocDiff'
+      'DocDiff',
+      'GenericDocumentWrite'
     )
   },
   security: [

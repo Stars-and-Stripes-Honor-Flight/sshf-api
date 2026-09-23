@@ -3,7 +3,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { listDocumentRevisions, diffDocument } from '../routes/docs.js';
+import { createDocument, updateDocument, deleteDocument, listDocumentRevisions, diffDocument } from '../routes/docs.js';
 import { COMPACTION_WARNING } from '../models/doc_diff.js';
 
 const indexSource = readFileSync(
@@ -246,6 +246,357 @@ describe('Document revision routes', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+    });
+});
+
+describe('Generic document writes', () => {
+    const allowedDocument = {
+        _id: 'flight-2026-spring',
+        _rev: '1-client-supplied',
+        _deleted: true,
+        type: 'Flight',
+        name: 'Spring 2026',
+        flight_date: '2026-04-15',
+        capacity: 100,
+        completed: true,
+        metadata: {
+            created_at: '1999-01-01T00:00:00Z',
+            created_by: 'Attacker',
+            updated_by: 'Attacker'
+        },
+        language: 'javascript',
+        views: { all: { map: 'function () { emit(null, null); }' } },
+        validate_doc_update: 'function (newDoc) { throw({ forbidden: "no" }); }',
+        filters: { none: 'function () { return false; }' }
+    };
+
+    let req;
+    let res;
+
+    beforeEach(() => {
+        req = {
+            params: { id: 'flight-2026-spring' },
+            body: JSON.parse(JSON.stringify(allowedDocument)),
+            user: { firstName: 'Admin', lastName: 'User' },
+            dbCookie: 'auth-cookie'
+        };
+        res = {
+            status: sinon.stub().returnsThis(),
+            json: sinon.spy()
+        };
+        global.fetch = sinon.stub().resolves(mockResponse({ ok: true, id: 'flight-2026-spring', rev: '1-abc' }));
+    });
+
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    function sentBody(callIndex = 0) {
+        return JSON.parse(global.fetch.getCall(callIndex).args[1].body);
+    }
+
+    describe('createDocument', () => {
+        it('rejects a design-document id before writing', async () => {
+            req.body._id = '_design/hf-app-review';
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal(
+                'Document _id must not refer to a design or system document'
+            );
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects a system document id before writing', async () => {
+            req.body._id = '_local/shard';
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal(
+                'Document _id must not refer to a design or system document'
+            );
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects a missing _id before writing', async () => {
+            delete req.body._id;
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document _id is required');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects a document type that is not allowlisted', async () => {
+            req.body.type = 'Note';
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal(
+                'Document type must be one of: Flight, Guardian, Veteran'
+            );
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects a review-database type on the logistics document API', async () => {
+            req.body.type = 'VeteranApp';
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Document type must be one of');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('writes an allowlisted document without client control or design-document fields', async () => {
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(201)).to.be.true;
+            expect(global.fetch.calledOnce).to.be.true;
+            expect(global.fetch.firstCall.args[1].method).to.equal('POST');
+            const written = sentBody();
+            expect(written._id).to.equal('flight-2026-spring');
+            expect(written.type).to.equal('Flight');
+            expect(written.name).to.equal('Spring 2026');
+            expect(written.completed).to.equal(false);
+            expect(written.metadata.created_by).to.equal('Admin User');
+            expect(written.metadata.updated_by).to.equal('Admin User');
+            expect(written).to.not.have.any.keys(
+                '_rev',
+                '_deleted',
+                'language',
+                'views',
+                'validate_doc_update',
+                'filters'
+            );
+        });
+
+        it('rejects a flight that fails model validation before writing', async () => {
+            req.body.name = '';
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Validation failed');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('returns 409 when CouchDB reports a conflict', async () => {
+            global.fetch.resolves(mockResponse(
+                { error: 'conflict', reason: 'Document update conflict.' },
+                { ok: false, status: 409 }
+            ));
+
+            await createDocument(req, res);
+
+            expect(res.status.calledWith(409)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
+        });
+    });
+
+    describe('updateDocument', () => {
+        const serverRev = '2-server-rev';
+
+        beforeEach(() => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: serverRev,
+                type: 'Flight',
+                name: 'Old name'
+            }));
+            global.fetch.onCall(1).resolves(mockResponse({ ok: true, id: 'flight-2026-spring', rev: '3-new' }));
+        });
+
+        it('rejects a body _id that does not match the URL id before reading CouchDB', async () => {
+            req.body._id = 'flight-other';
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document _id must match the URL id');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects a design-document id in the body before reading CouchDB', async () => {
+            req.params.id = '_design/hf-app-review';
+            req.body._id = '_design/hf-app-review';
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal(
+                'Document _id must not refer to a design or system document'
+            );
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects a missing body _id before reading CouchDB', async () => {
+            delete req.body._id;
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document _id is required');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects a type that is not allowlisted before reading CouchDB', async () => {
+            req.body.type = 'Note';
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal(
+                'Document type must be one of: Flight, Guardian, Veteran'
+            );
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('rejects an update that would change the stored document type', async () => {
+            req.body.type = 'Guardian';
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: serverRev,
+                type: 'Flight',
+                name: 'Old name'
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal(
+                'Document type must match the stored document type'
+            );
+            expect(global.fetch.calledOnce).to.be.true;
+            expect(global.fetch.firstCall.args[1]?.method).to.equal(undefined);
+        });
+
+        it('rejects an update of a stored document whose type is not allowlisted', async () => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: serverRev,
+                type: 'Note',
+                name: 'Old name'
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Stored document type is not allowed');
+            expect(global.fetch.calledOnce).to.be.true;
+        });
+
+        it('replaces an allowlisted document using the server revision and stripped fields', async () => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: serverRev,
+                type: 'Flight',
+                name: 'Old name',
+                flight_date: '2026-04-15',
+                capacity: 80,
+                completed: false,
+                metadata: {
+                    created_at: '2020-01-01T00:00:00Z',
+                    created_by: 'Original Author'
+                }
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.json.calledOnce).to.be.true;
+            expect(res.status.called).to.be.false;
+            const written = sentBody(1);
+            expect(written._rev).to.equal(serverRev);
+            expect(written._rev).to.not.equal(allowedDocument._rev);
+            expect(written.metadata.created_by).to.equal('Original Author');
+            expect(written.metadata.created_at).to.equal('2020-01-01T00:00:00Z');
+            expect(written.metadata.updated_by).to.equal('Admin User');
+            expect(written).to.not.have.any.keys('_deleted', 'language', 'views', 'validate_doc_update', 'filters');
+        });
+
+        it('rejects an incomplete veteran update without putting the document', async () => {
+            req.params.id = 'veteran-1';
+            req.body = { _id: 'veteran-1', type: 'Veteran' };
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'veteran-1',
+                _rev: serverRev,
+                type: 'Veteran',
+                name: { first: 'John', last: 'Smith' }
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Validation failed');
+            expect(global.fetch.calledOnce).to.be.true;
+            expect(global.fetch.firstCall.args[1]?.method).to.equal(undefined);
+        });
+
+        it('returns 409 when the replacement conflicts', async () => {
+            global.fetch.onCall(1).resolves(mockResponse(
+                { error: 'conflict', reason: 'Document update conflict.' },
+                { ok: false, status: 409 }
+            ));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(409)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
+            expect(global.fetch.secondCall.args[1].method).to.equal('PUT');
+        });
+    });
+
+    describe('deleteDocument', () => {
+        it('does not delete a document whose type is not allowlisted', async () => {
+            global.fetch.resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: '2-server-rev',
+                type: 'Note'
+            }));
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Stored document type is not allowed');
+            expect(global.fetch.calledOnce).to.be.true;
+            expect(global.fetch.firstCall.args[1]?.method).to.equal(undefined);
+        });
+
+        it('deletes an allowlisted document with the current revision', async () => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: '2-server-rev',
+                type: 'Flight'
+            }));
+            global.fetch.onCall(1).resolves(mockResponse({ ok: true, id: 'flight-2026-spring', rev: '3-del' }));
+
+            await deleteDocument(req, res);
+
+            expect(res.json.calledOnce).to.be.true;
+            expect(global.fetch.secondCall.args[1].method).to.equal('DELETE');
+            expect(global.fetch.secondCall.args[0]).to.include('rev=2-server-rev');
+        });
+
+        it('returns 409 when the delete conflicts', async () => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: '2-server-rev',
+                type: 'Flight'
+            }));
+            global.fetch.onCall(1).resolves(mockResponse(
+                { error: 'conflict', reason: 'Document update conflict.' },
+                { ok: false, status: 409 }
+            ));
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(409)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
         });
     });
 });
