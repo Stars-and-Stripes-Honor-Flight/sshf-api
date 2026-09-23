@@ -2,10 +2,12 @@ import { Guardian } from '../models/guardian.js';
 import { Veteran } from '../models/veteran.js';
 import { VALID_BUSES } from '../models/flight_detail.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 import { trimIfString } from '../utils/trim_strings.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
+const dbBase = `${dbUrl}/${dbName}`;
 
 /**
  * @swagger
@@ -108,7 +110,7 @@ export async function createGuardian(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/Guardian'
  *       400:
- *         description: Document is not a guardian record
+ *         description: Invalid document id or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -118,9 +120,11 @@ export async function createGuardian(req, res) {
  */
 export async function retrieveGuardian(req, res) {
     try {
-        const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         const response = await dbFetch(req, url);
 
         const data = await response.json();
@@ -170,8 +174,12 @@ function constructGuardianFullName(name) {
  */
 async function updateVeteranGuardianReference(veteranId, guardianId, guardianName, action, user, timestamp, req) {
     try {
-        const veteranUrl = `${dbUrl}/${dbName}/${veteranId}`;
-        
+        const veteranBuilt = buildCouchDocumentUrl(dbBase, veteranId);
+        if (veteranBuilt.error) {
+            return { success: false, error: veteranBuilt.error };
+        }
+        const veteranUrl = veteranBuilt.url;
+
         // Fetch the current veteran document
         const getVeteranResponse = await dbFetch(req, veteranUrl);
 
@@ -281,7 +289,7 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
  *             schema:
  *               $ref: '#/components/schemas/Guardian'
  *       400:
- *         description: Invalid guardian data or document is not a guardian record
+ *         description: Invalid document id, invalid guardian data, or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -307,8 +315,11 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
 export async function updateGuardian(req, res) {
     try {
         const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, docId);
+        if (url === null) {
+            return;
+        }
+
         // First, get the current document
         const getResponse = await dbFetch(req, url);
 
@@ -487,7 +498,7 @@ export async function updateGuardian(req, res) {
  *                 rev:
  *                   type: string
  *       400:
- *         description: Document is not a guardian record
+ *         description: Invalid document id or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -497,10 +508,13 @@ export async function updateGuardian(req, res) {
  */
 export async function deleteGuardian(req, res) {
     try {
-        const docId = req.params.id;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         // First, get the current document
-        const getResponse = await dbFetch(req, `${dbUrl}/${dbName}/${docId}`);
+        const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
             if (getResponse.status === 404) {
@@ -516,9 +530,9 @@ export async function deleteGuardian(req, res) {
             return res.status(400).json({ error: 'Document is not a guardian record' });
         }
 
-        const url = `${dbUrl}/${dbName}/${docId}?rev=${currentDoc._rev}`;
+        const deleteUrl = `${url}?rev=${encodeURIComponent(currentDoc._rev)}`;
 
-        const deleteResponse = await dbFetch(req, url, {
+        const deleteResponse = await dbFetch(req, deleteUrl, {
             method: 'DELETE'
         });
 
@@ -585,7 +599,7 @@ export async function deleteGuardian(req, res) {
  *                 seat:
  *                   type: string
  *       400:
- *         description: Invalid request or document is not a guardian record
+ *         description: Invalid document id, invalid request, or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -606,7 +620,10 @@ export async function updateGuardianSeat(req, res) {
         const newSeat = trimIfString(String(value));
 
         // Get the current document
-        const url = `${dbUrl}/${dbName}/${docId}`;
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
         const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
@@ -730,7 +747,7 @@ export async function updateGuardianSeat(req, res) {
  *                 bus:
  *                   type: string
  *       400:
- *         description: Invalid request, invalid bus value, or document is not a guardian record
+ *         description: Invalid document id, invalid request, invalid bus value, or document is not a guardian record
  *       404:
  *         description: Guardian not found
  *       401:
@@ -758,7 +775,10 @@ export async function updateGuardianBus(req, res) {
         }
 
         // Get the current document
-        const url = `${dbUrl}/${dbName}/${docId}`;
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
         const getResponse = await dbFetch(req, url);
 
         if (!getResponse.ok) {
@@ -876,7 +896,10 @@ async function patchGuardianField(req, res, config) {
             return res.status(400).json({ error: config.validationMessage });
         }
 
-        const url = `${dbUrl}/${dbName}/${docId}`;
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
         const getResponse = await dbFetch(req, url);
         if (!getResponse.ok) {
             if (getResponse.status === 404) {

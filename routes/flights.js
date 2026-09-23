@@ -1,8 +1,10 @@
 import { Flight } from '../models/flight.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
+const dbBase = `${dbUrl}/${dbName}`;
 
 /**
  * @swagger
@@ -205,7 +207,7 @@ export async function createFlight(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/Flight'
  *       400:
- *         description: Document is not a flight record
+ *         description: Invalid document id or document is not a flight record
  *       404:
  *         description: Flight not found
  *       401:
@@ -215,9 +217,11 @@ export async function createFlight(req, res) {
  */
 export async function retrieveFlight(req, res) {
     try {
-        const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (url === null) {
+            return;
+        }
+
         const response = await dbFetch(req, url);
 
         const data = await response.json();
@@ -274,7 +278,7 @@ export async function retrieveFlight(req, res) {
  *             schema:
  *               $ref: '#/components/schemas/Flight'
  *       400:
- *         description: Invalid flight data or document is not a flight record
+ *         description: Invalid document id, invalid flight data, or document is not a flight record
  *       404:
  *         description: Flight not found
  *       401:
@@ -285,8 +289,11 @@ export async function retrieveFlight(req, res) {
 export async function updateFlight(req, res) {
     try {
         const docId = req.params.id;
-        const url = `${dbUrl}/${dbName}/${docId}`;
-        
+        const url = buildCouchDocumentUrlOrRespond(res, dbBase, docId);
+        if (url === null) {
+            return;
+        }
+
         // First, get the current document
         const getResponse = await dbFetch(req, url);
 

@@ -94,4 +94,42 @@ describe('OpenAPI spec generation', () => {
         expect(diff.responses['200'].content['application/json'].schema.$ref)
             .to.equal('#/components/schemas/DocDiff');
     });
+
+    it('documents invalid document ids on routes that validate them', () => {
+        const operations = [
+            ['/docs/{id}', 'get'],
+            ['/docs/{id}', 'put'],
+            ['/docs/{id}', 'delete'],
+            ['/docs/{id}/revisions', 'get'],
+            ['/docs/{id}/diff', 'get'],
+            ['/veterans/{id}', 'get'],
+            ['/veterans/{id}', 'put'],
+            ['/veterans/{id}', 'delete'],
+            ['/veterans/{id}/seat', 'patch'],
+            ['/veterans/{id}/bus', 'patch'],
+            ['/guardians/{id}', 'get'],
+            ['/guardians/{id}', 'put'],
+            ['/guardians/{id}', 'delete'],
+            ['/guardians/{id}/seat', 'patch'],
+            ['/guardians/{id}/bus', 'patch'],
+            ['/flights/{id}', 'get'],
+            ['/flights/{id}', 'put'],
+            ['/flights/{id}/detail', 'get'],
+            ['/flights/{id}/assignments', 'get'],
+            ['/flights/{id}/assignments', 'post'],
+            ['/review/applications/{id}', 'get'],
+            ['/review/applications/{id}', 'put'],
+            ['/review/applications/{id}/status', 'patch'],
+            ['/review/applications/{id}/accept', 'post']
+        ];
+
+        for (const [path, method] of operations) {
+            const operation = specs.paths[path]?.[method];
+            expect(operation, `missing ${method.toUpperCase()} ${path}`).to.be.an('object');
+            expect(
+                operation.responses?.['400']?.description,
+                `${method.toUpperCase()} ${path} 400`
+            ).to.include('Invalid document id');
+        }
+    });
 });

@@ -1,8 +1,10 @@
 import { FlightDetailResult } from '../models/flight_detail.js';
 import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
+const dbBase = `${dbUrl}/${dbName}`;
 
 /**
  * @swagger
@@ -43,7 +45,7 @@ const dbName = process.env.DB_NAME;
  *             schema:
  *               $ref: '#/components/schemas/FlightDetailResult'
  *       400:
- *         description: Document is not a flight record
+ *         description: Invalid document id or document is not a flight record
  *       404:
  *         description: Flight not found
  *       401:
@@ -53,10 +55,10 @@ const dbName = process.env.DB_NAME;
  */
 export async function getFlightDetail(req, res) {
     try {
-        const flightId = req.params.id;
-
-        // First, get the flight document
-        const flightUrl = `${dbUrl}/${dbName}/${flightId}`;
+        const flightUrl = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
+        if (flightUrl === null) {
+            return;
+        }
         const flightResponse = await dbFetch(req, flightUrl);
 
         const flightData = await flightResponse.json();
