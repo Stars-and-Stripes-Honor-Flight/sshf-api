@@ -8,6 +8,97 @@ const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
 const dbBase = `${dbUrl}/${dbName}`;
 
+function assignVeteranToFlight(vetDoc, flightName, userName, timestamp) {
+    const oldFlight = vetDoc.flight?.id || 'None';
+    vetDoc.flight.id = flightName;
+
+    if (!vetDoc.flight.history) {
+        vetDoc.flight.history = [];
+    }
+    vetDoc.flight.history.push({
+        id: timestamp,
+        change: `changed flight from: ${oldFlight} to: ${flightName} by: ${userName}`
+    });
+
+    vetDoc.metadata = vetDoc.metadata || {};
+    vetDoc.metadata.updated_at = timestamp;
+    vetDoc.metadata.updated_by = userName;
+}
+
+function assignGuardianToFlight(guardianDoc, flightName, userName, timestamp) {
+    const oldFlight = guardianDoc.flight?.id || 'None';
+    if (oldFlight === flightName) {
+        return false;
+    }
+
+    guardianDoc.flight = guardianDoc.flight || {};
+    guardianDoc.flight.id = flightName;
+
+    if (!guardianDoc.flight.history) {
+        guardianDoc.flight.history = [];
+    }
+    guardianDoc.flight.history.push({
+        id: timestamp,
+        change: `changed flight from: ${oldFlight} to: ${flightName} by: ${userName}`
+    });
+
+    guardianDoc.metadata = guardianDoc.metadata || {};
+    guardianDoc.metadata.updated_at = timestamp;
+    guardianDoc.metadata.updated_by = userName;
+    return true;
+}
+
+function putDocument(req, url, doc) {
+    return dbFetch(req, url, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(doc)
+    });
+}
+
+/**
+ * PUT a document. On 409, re-read the current revision, reapply mutate, and retry once.
+ * mutate returns false when the re-read document is already assigned to the flight.
+ */
+async function putWithConflictRetry(req, url, doc, mutate) {
+    const response = await putDocument(req, url, doc);
+    if (response.ok || response.status !== 409) {
+        return response;
+    }
+
+    const currentResponse = await dbFetch(req, url);
+    if (!currentResponse.ok) {
+        return currentResponse;
+    }
+
+    const current = await currentResponse.json();
+    if (mutate(current) === false) {
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+
+    return putDocument(req, url, current);
+}
+
+function saveFailureMessage(label, id, data, status) {
+    const fallback = status === 409 ? 'Document update conflict.' : 'Unknown error';
+    return `Failed to save ${label} ${id}: ${stableDatabaseError(fallback, data, status)}`;
+}
+
+function failureStatus(response) {
+    return Number.isInteger(response?.status) ? response.status : 500;
+}
+
+function sendAddVeteransResult(res, result) {
+    const body = result.toJSON();
+    const statusCode = result.statusCode();
+    if (statusCode === 200) {
+        return res.json(body);
+    }
+    return res.status(statusCode).json(body);
+}
+
 /**
  * @swagger
  * /flights/{id}/assignments:
@@ -131,6 +222,15 @@ export async function getFlightAssignments(req, res) {
  *       - Veterans with paired guardians have their guardian added automatically
  *       - Flight history entries are recorded for each assignment
  *       
+ *       Each veteran is saved, then each paired guardian. A CouchDB 409 is
+ *       retried once after the current revision is re-read. If that retry still
+ *       conflicts, the failure is a conflict for that document.
+ *       
+ *       The response is 200 only when every attempted save succeeds. When a
+ *       veteran or guardian save fails, the status is 409 if any remaining
+ *       failure is a conflict and 500 otherwise. Both failure responses list
+ *       the ids that were saved and the ids that failed.
+ *       
  *       The veteranCount must be between 1 and 100.
  *     tags: [Flight Assignments]
  *     security:
@@ -158,7 +258,7 @@ export async function getFlightAssignments(req, res) {
  *                 description: Number of veterans to add from waitlist
  *     responses:
  *       200:
- *         description: Veterans added successfully
+ *         description: Every selected veteran and paired guardian was saved
  *         content:
  *           application/json:
  *             schema:
@@ -169,8 +269,27 @@ export async function getFlightAssignments(req, res) {
  *         description: Flight not found
  *       401:
  *         description: Unauthorized
+ *       409:
+ *         description: |
+ *           One or more veteran or guardian documents conflicted. The handler
+ *           re-reads the current revision and retries that write once. This
+ *           status is returned when a conflict remains after that retry. The
+ *           body lists the ids that were saved and the ids that failed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AddVeteransResult'
  *       500:
- *         description: Server error
+ *         description: |
+ *           Server error while preparing the assignment, or one or more veteran
+ *           or guardian saves failed for a reason other than a remaining document
+ *           conflict. Save failures list the ids that were saved and the ids that failed.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/AddVeteransResult'
+ *                 - $ref: '#/components/schemas/Error'
  *       503:
  *         description: Database session error
  *         content:
@@ -295,41 +414,25 @@ export async function addVeteransToFlight(req, res) {
             if (!vetDoc) continue;
 
             try {
-                // Update veteran's flight assignment
-                const oldFlight = vetDoc.flight?.id || 'None';
-                vetDoc.flight.id = flightName;
+                assignVeteranToFlight(vetDoc, flightName, userName, timestamp);
 
-                // Add history entry
-                if (!vetDoc.flight.history) {
-                    vetDoc.flight.history = [];
-                }
-                vetDoc.flight.history.push({
-                    id: timestamp,
-                    change: `changed flight from: ${oldFlight} to: ${flightName} by: ${userName}`
-                });
-
-                // Update metadata
-                vetDoc.metadata = vetDoc.metadata || {};
-                vetDoc.metadata.updated_at = timestamp;
-                vetDoc.metadata.updated_by = userName;
-
-                // Save the veteran document
                 const vetUrlBuilt = buildCouchDocumentUrl(dbBase, vetDoc._id);
                 if (vetUrlBuilt.error) {
-                    result.addError(`Invalid veteran document id ${vetDoc._id}: ${vetUrlBuilt.error}`);
+                    result.addFailure({
+                        id: typeof vetDoc._id === 'string' ? vetDoc._id : String(row.id || ''),
+                        type: 'veteran',
+                        status: 400,
+                        error: `Invalid veteran document id ${vetDoc._id}: ${vetUrlBuilt.error}`
+                    });
                     continue;
                 }
                 const saveVetUrl = vetUrlBuilt.url;
-                const saveVetResponse = await dbFetch(req, saveVetUrl, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(vetDoc)
+                const saveVetResponse = await putWithConflictRetry(req, saveVetUrl, vetDoc, (current) => {
+                    assignVeteranToFlight(current, flightName, userName, timestamp);
                 });
 
                 if (saveVetResponse.ok) {
-                    result.incrementVeterans();
+                    result.incrementVeterans(vetDoc._id);
 
                     // Check if veteran has a guardian that needs to be added
                     const guardianId = vetDoc.guardian?.id;
@@ -339,7 +442,12 @@ export async function addVeteransToFlight(req, res) {
                         try {
                             const guardianBuilt = buildCouchDocumentUrl(dbBase, guardianId);
                             if (guardianBuilt.error) {
-                                result.addError(`Invalid guardian document id ${guardianId}: ${guardianBuilt.error}`);
+                                result.addFailure({
+                                    id: guardianId,
+                                    type: 'guardian',
+                                    status: 400,
+                                    error: `Invalid guardian document id ${guardianId}: ${guardianBuilt.error}`
+                                });
                                 continue;
                             }
                             const guardianUrl = guardianBuilt.url;
@@ -347,55 +455,61 @@ export async function addVeteransToFlight(req, res) {
 
                             if (guardianResponse.ok) {
                                 const guardianDoc = await guardianResponse.json();
-                                const grdOldFlight = guardianDoc.flight?.id || 'None';
+                                const changed = assignGuardianToFlight(guardianDoc, flightName, userName, timestamp);
 
                                 // Only update if guardian is not already on this flight
-                                if (grdOldFlight !== flightName) {
-                                    guardianDoc.flight = guardianDoc.flight || {};
-                                    guardianDoc.flight.id = flightName;
-
-                                    if (!guardianDoc.flight.history) {
-                                        guardianDoc.flight.history = [];
-                                    }
-                                    guardianDoc.flight.history.push({
-                                        id: timestamp,
-                                        change: `changed flight from: ${grdOldFlight} to: ${flightName} by: ${userName}`
-                                    });
-
-                                    guardianDoc.metadata = guardianDoc.metadata || {};
-                                    guardianDoc.metadata.updated_at = timestamp;
-                                    guardianDoc.metadata.updated_by = userName;
-
-                                    const saveGrdResponse = await dbFetch(req, guardianUrl, {
-                                        method: 'PUT',
-                                        headers: {
-                                            'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify(guardianDoc)
-                                    });
+                                if (changed) {
+                                    const saveGrdResponse = await putWithConflictRetry(
+                                        req,
+                                        guardianUrl,
+                                        guardianDoc,
+                                        (current) => assignGuardianToFlight(current, flightName, userName, timestamp)
+                                    );
 
                                     if (saveGrdResponse.ok) {
-                                        result.incrementGuardians();
+                                        result.incrementGuardians(guardianId);
                                     } else {
                                         const saveGrdData = await saveGrdResponse.json();
-                                        result.addError(`Failed to save guardian ${guardianId}: ${stableDatabaseError('Unknown error', saveGrdData, saveGrdResponse.status)}`);
+                                        const status = failureStatus(saveGrdResponse);
+                                        result.addFailure({
+                                            id: guardianId,
+                                            type: 'guardian',
+                                            status,
+                                            error: saveFailureMessage('guardian', guardianId, saveGrdData, status)
+                                        });
                                     }
                                 }
                             }
                         } catch (guardianError) {
-                            result.addError(`Error processing guardian ${guardianId}: ${guardianError.message}`);
+                            result.addFailure({
+                                id: guardianId,
+                                type: 'guardian',
+                                status: 500,
+                                error: `Error processing guardian ${guardianId}: ${guardianError.message}`
+                            });
                         }
                     }
                 } else {
                     const saveVetData = await saveVetResponse.json();
-                    result.addError(`Failed to save veteran ${vetDoc._id}: ${stableDatabaseError('Unknown error', saveVetData, saveVetResponse.status)}`);
+                    const status = failureStatus(saveVetResponse);
+                    result.addFailure({
+                        id: typeof vetDoc._id === 'string' ? vetDoc._id : '',
+                        type: 'veteran',
+                        status,
+                        error: saveFailureMessage('veteran', vetDoc._id, saveVetData, status)
+                    });
                 }
             } catch (vetError) {
-                result.addError(`Error processing veteran ${row.id}: ${vetError.message}`);
+                result.addFailure({
+                    id: typeof vetDoc?._id === 'string' ? vetDoc._id : String(row.id || ''),
+                    type: 'veteran',
+                    status: 500,
+                    error: `Error processing veteran ${row.id}: ${vetError.message}`
+                });
             }
         }
 
-        res.json(result.toJSON());
+        sendAddVeteransResult(res, result);
     } catch (error) {
         if (error instanceof DatabaseSessionError) {
             console.error('Database session error:', error.message);

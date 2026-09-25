@@ -1178,6 +1178,210 @@ describe('Flight Assignments Route Handlers', () => {
             expect(savedGuardianDoc.metadata.updated_at).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
         });
 
+        it('should return a non-200 response listing saved and failed ids when a guardian save fails after the veteran save', async () => {
+            const guardianId = 'guard-1'.padEnd(32, '0');
+
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            _rev: '1-xyz',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: guardianId },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+
+            global.fetch.onCall(2).resolves({
+                ok: true,
+                status: 201,
+                json: async () => ({ ok: true, id: 'vet-1', rev: '2-abc' })
+            });
+
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    _id: guardianId,
+                    _rev: '1-grd',
+                    flight: { id: 'None', history: [] },
+                    metadata: {}
+                })
+            });
+
+            global.fetch.onCall(4).resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ error: 'internal_server_error', reason: 'disk full' })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.calledWith(200)).to.be.false;
+            expect(res.status.calledWith(500)).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(1);
+            expect(response.added.guardians).to.equal(0);
+            expect(response.saved.veterans).to.deep.equal(['vet-1']);
+            expect(response.saved.guardians).to.deep.equal([]);
+            expect(response.failed).to.deep.equal([{
+                id: guardianId,
+                type: 'guardian',
+                status: 500,
+                error: response.errors[0]
+            }]);
+            expect(response.errors[0]).to.include('Failed to save guardian');
+            expect(response.errors[0]).to.include(guardianId);
+        });
+
+        it('should re-read a veteran once after CouchDB returns 409 and report 409 when the retry still conflicts', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            _rev: '1-xyz',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: '' },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+
+            global.fetch.onCall(2).resolves({
+                ok: false,
+                status: 409,
+                json: async () => ({ error: 'conflict', reason: 'Document update conflict.' })
+            });
+
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    _id: 'vet-1',
+                    _rev: '2-current',
+                    flight: { id: 'None', history: [] },
+                    guardian: { id: '' },
+                    metadata: {}
+                })
+            });
+
+            global.fetch.onCall(4).resolves({
+                ok: false,
+                status: 409,
+                json: async () => ({ error: 'conflict', reason: 'Document update conflict.' })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            const puts = global.fetch.getCalls().filter((call) => call.args[1]?.method === 'PUT');
+            expect(puts).to.have.length(2);
+            expect(JSON.parse(puts[0].args[1].body)._rev).to.equal('1-xyz');
+            const retryBody = JSON.parse(puts[1].args[1].body);
+            expect(retryBody._rev).to.equal('2-current');
+            expect(retryBody.flight.id).to.equal('SSHF-Nov2024');
+
+            expect(res.status.calledWith(409)).to.be.true;
+            expect(res.status.calledWith(200)).to.be.false;
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(0);
+            expect(response.saved.veterans).to.deep.equal([]);
+            expect(response.failed).to.deep.equal([{
+                id: 'vet-1',
+                type: 'veteran',
+                status: 409,
+                error: response.errors[0]
+            }]);
+            expect(response.errors[0]).to.include('Failed to save veteran');
+            expect(response.errors[0]).to.include('vet-1');
+            expect(response.errors[0]).to.include('Document update conflict.');
+        });
+
+        it('should save the veteran when a 409 retry with the current revision succeeds', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            _rev: '1-xyz',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: '' },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+
+            global.fetch.onCall(2).resolves({
+                ok: false,
+                status: 409,
+                json: async () => ({ error: 'conflict', reason: 'Document update conflict.' })
+            });
+
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                    _id: 'vet-1',
+                    _rev: '2-current',
+                    flight: { id: 'None', history: [{ id: 'earlier', change: 'other edit' }] },
+                    guardian: { id: '' },
+                    metadata: { updated_by: 'Someone Else' }
+                })
+            });
+
+            global.fetch.onCall(4).resolves({
+                ok: true,
+                status: 201,
+                json: async () => ({ ok: true, id: 'vet-1', rev: '3-saved' })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            const puts = global.fetch.getCalls().filter((call) => call.args[1]?.method === 'PUT');
+            expect(puts).to.have.length(2);
+            const retryBody = JSON.parse(puts[1].args[1].body);
+            expect(retryBody._rev).to.equal('2-current');
+            expect(retryBody.flight.id).to.equal('SSHF-Nov2024');
+            expect(retryBody.flight.history.some((entry) => entry.change === 'other edit')).to.be.true;
+            expect(retryBody.flight.history.some((entry) => entry.change.includes('changed flight from: None to: SSHF-Nov2024'))).to.be.true;
+
+            expect(res.status.called).to.be.false;
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(1);
+            expect(response.saved.veterans).to.deep.equal(['vet-1']);
+            expect(response.failed).to.deep.equal([]);
+            expect(response.errors).to.deep.equal([]);
+        });
+
         it('should handle guardian with flight object but no id property', async () => {
             global.fetch.onCall(0).resolves({
                 ok: true,
