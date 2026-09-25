@@ -122,7 +122,7 @@ Anyone can verify; no GCP access needed for the first three:
 3. **App works** — open `https://sshf-api-928260206537.us-central1.run.app/api-docs/`,
    sign in with a production Google account, and exercise a protected endpoint
    (e.g. `GET /user/hasgroup`). Roles should reflect your Workspace groups.
-   Note: the API caches a signed-in token's roles for 30 minutes; use a fresh
+   Note: the API caches a signed-in token's roles for 15 minutes; use a fresh
    sign-in when validating authorization changes.
 
 Administrators can additionally confirm from the CLI:
@@ -271,7 +271,7 @@ promotion workflow breaks:
 | Promote never asks for approval | The `production` GitHub environment or its required reviewer is missing. |
 | Auth step fails with a token/OIDC error | Workload Identity Federation provider, its attribute condition, or the SA binding was changed. Compare against the Infrastructure reference above. |
 | Smoke test fails, traffic unchanged | The new revision does not boot or `/api-docs/` errors. Check revision logs in the prod project; production users are unaffected. Fix and release again. |
-| Users authenticate but have no roles | Admin SDK API disabled in the project, runtime SA missing the Workspace Groups Reader role, or a cached token (30-minute cache — re-sign-in). With `ALLOWED_GROUP_EMAILS` set this becomes data-route `403` (fail closed). |
+| Users authenticate but have no roles | Admin SDK API disabled in the project, runtime SA missing the Workspace Groups Reader role, or a cached token (15-minute cache — re-sign-in). With `ALLOWED_GROUP_EMAILS` set this becomes data-route `403` (fail closed). |
 | Every authenticated request returns 401 after a deploy | The token audience no longer matches. `GOOGLE_CLIENT_ID` on the service must equal the OAuth client the UI/Swagger mint tokens with; if the UI uses a different client, add it to `ALLOWED_CLIENT_IDS`. |
 | Revision fails to start, or every data route returns 403 | On Cloud Run, `ALLOWED_GROUP_EMAILS` is missing or empty. Set it to the environment Workspace group and deploy a new revision. Local runs without `K_SERVICE` may omit it. |
 | Some users get 403 | `ALLOWED_EMAIL_DOMAINS` is set and rejects an unverified or out-of-domain email, or `ALLOWED_GROUP_EMAILS` is set and they are not in a listed Workspace group (or Admin SDK returned no roles). `ALLOWED_EMAIL_DOMAINS` is optional; group membership is the required Cloud Run gate. |

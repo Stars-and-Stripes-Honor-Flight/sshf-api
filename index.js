@@ -10,6 +10,7 @@ import { buildCorsOptions } from './utils/cors.js';
 import { authenticateIntake } from './utils/intake_auth.js';
 import { assertValidTokenClaims, TokenAudienceError, authorize, assertGroupAuthorizationConfigured } from './utils/auth.js';
 import { shouldFallbackToServiceAccountJwt, shouldPreferServiceAccountJwt } from './utils/groups.js';
+import { createUserCache } from './utils/user_cache.js';
 
 // Import route handlers
 import { getHasGroup } from './routes/user.js';
@@ -75,9 +76,10 @@ const port = 8080;
 // Enable CORS for all routes with specific options
 app.use(cors(buildCorsOptions()));
 
-// In-memory cache for user authentication
-const userCache = new Map();
-const userCacheTTL = 30 * 60 * 1000; // 30 minutes in milliseconds
+// Successful authentications are cached for 15 minutes (see utils/user_cache.js).
+// Keys are SHA-256 hashes of the bearer token, expired entries are swept on
+// access, and the map is capped at USER_CACHE_MAX_ENTRIES.
+const userCache = createUserCache();
 
 // Client used only to introspect incoming access tokens (validate audience)
 const tokenInfoClient = new OAuth2Client();
@@ -277,17 +279,10 @@ async function authenticate(req, res, next) {
         }
         const token = authHeader.split(' ')[1];
 
-        // Check if user data is in cache
-        if (userCache.has(token)) {
-            const cachedData = userCache.get(token);
-            // Check if cache is expired
-            if (Date.now() - cachedData.timestamp < userCacheTTL) {
-                req.user = cachedData.user;
-                return next();
-            } else {
-                // Remove expired cache entry
-                userCache.delete(token);
-            }
+        const cachedUser = userCache.get(token);
+        if (cachedUser) {
+            req.user = cachedUser;
+            return next();
         }
 
         // Introspect the token so we can confirm it was actually issued for
@@ -351,8 +346,7 @@ async function authenticate(req, res, next) {
             roles: roles // Add roles to user data
         };
 
-        // Store user data in cache
-        userCache.set(token, { user: user, timestamp: Date.now() });
+        userCache.set(token, user);
 
         // Attach user information to the request object (optional)
         req.user = user;
