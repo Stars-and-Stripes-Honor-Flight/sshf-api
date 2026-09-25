@@ -5,6 +5,8 @@ import {
     getAllowedGroupEmails,
     assertValidTokenClaims,
     assertUserInAllowedGroups,
+    assertGroupAuthorizationConfigured,
+    isRunningOnCloudRun,
     authorize,
     TokenAudienceError,
     DomainNotAllowedError,
@@ -21,6 +23,7 @@ describe('Auth token validation utilities', () => {
     const originalAllowedClientIds = process.env.ALLOWED_CLIENT_IDS;
     const originalAllowedDomains = process.env.ALLOWED_EMAIL_DOMAINS;
     const originalAllowedGroups = process.env.ALLOWED_GROUP_EMAILS;
+    const originalKService = process.env.K_SERVICE;
 
     const restore = (key, value) => {
         if (value === undefined) {
@@ -35,6 +38,7 @@ describe('Auth token validation utilities', () => {
         restore('ALLOWED_CLIENT_IDS', originalAllowedClientIds);
         restore('ALLOWED_EMAIL_DOMAINS', originalAllowedDomains);
         restore('ALLOWED_GROUP_EMAILS', originalAllowedGroups);
+        restore('K_SERVICE', originalKService);
     });
 
     describe('getAllowedClientIds', () => {
@@ -174,9 +178,40 @@ describe('Auth token validation utilities', () => {
         const memberRoles = [{ email: FULL_ACCESS_GROUP, name: 'Full Access' }];
         const otherRoles = [{ email: OTHER_GROUP, name: 'Other' }];
 
-        it('does not check groups when the allow-list is empty', () => {
+        it('does not check groups when the allow-list is empty off Cloud Run', () => {
+            delete process.env.K_SERVICE;
+            expect(isRunningOnCloudRun()).to.equal(false);
             expect(() => assertUserInAllowedGroups([], { allowedGroupEmails: [] })).to.not.throw();
             expect(() => assertUserInAllowedGroups(otherRoles, { allowedGroupEmails: [] })).to.not.throw();
+        });
+
+        it('allows an empty group list when K_SERVICE is unset', () => {
+            delete process.env.K_SERVICE;
+            delete process.env.ALLOWED_GROUP_EMAILS;
+            expect(() => assertUserInAllowedGroups(otherRoles)).to.not.throw();
+            expect(() => assertGroupAuthorizationConfigured()).to.not.throw();
+        });
+
+        it('rejects an empty group list on Cloud Run', () => {
+            process.env.K_SERVICE = 'sshf-api';
+            delete process.env.ALLOWED_GROUP_EMAILS;
+            expect(isRunningOnCloudRun()).to.equal(true);
+            expect(() => assertUserInAllowedGroups(memberRoles)).to.throw(GroupNotAllowedError);
+            expect(() => assertUserInAllowedGroups([], { allowedGroupEmails: [] })).to.throw(GroupNotAllowedError);
+            expect(() => assertGroupAuthorizationConfigured()).to.throw(GroupNotAllowedError);
+        });
+
+        it('treats a blank ALLOWED_GROUP_EMAILS as empty on Cloud Run', () => {
+            process.env.K_SERVICE = 'sshf-api';
+            process.env.ALLOWED_GROUP_EMAILS = '  ,  ';
+            expect(() => assertGroupAuthorizationConfigured()).to.throw(GroupNotAllowedError);
+        });
+
+        it('does not treat a blank K_SERVICE as Cloud Run', () => {
+            process.env.K_SERVICE = '   ';
+            delete process.env.ALLOWED_GROUP_EMAILS;
+            expect(isRunningOnCloudRun()).to.equal(false);
+            expect(() => assertUserInAllowedGroups([])).to.not.throw();
         });
 
         it('passes when the user is in an allowed group', () => {
@@ -265,13 +300,26 @@ describe('Auth token validation utilities', () => {
             expect(res.statusCode).to.equal(403);
         });
 
-        it('calls next when ALLOWED_GROUP_EMAILS is unset', () => {
+        it('calls next when ALLOWED_GROUP_EMAILS is unset off Cloud Run', () => {
+            delete process.env.K_SERVICE;
             delete process.env.ALLOWED_GROUP_EMAILS;
             const req = { user: { roles: [] } };
             const res = createRes();
             let nextCalled = false;
             authorize(req, res, () => { nextCalled = true; });
             expect(nextCalled).to.equal(true);
+        });
+
+        it('returns 403 when ALLOWED_GROUP_EMAILS is unset on Cloud Run', () => {
+            process.env.K_SERVICE = 'sshf-api';
+            delete process.env.ALLOWED_GROUP_EMAILS;
+            const req = { user: { roles: [{ email: FULL_ACCESS_GROUP }] } };
+            const res = createRes();
+            let nextCalled = false;
+            authorize(req, res, () => { nextCalled = true; });
+            expect(nextCalled).to.equal(false);
+            expect(res.statusCode).to.equal(403);
+            expect(res.body).to.deep.equal({ message: 'Forbidden: Account not permitted' });
         });
     });
 });

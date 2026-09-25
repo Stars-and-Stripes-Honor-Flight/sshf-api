@@ -8,7 +8,7 @@ import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession, reviewDbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
 import { authenticateIntake } from './utils/intake_auth.js';
-import { assertValidTokenClaims, TokenAudienceError, authorize } from './utils/auth.js';
+import { assertValidTokenClaims, TokenAudienceError, authorize, assertGroupAuthorizationConfigured } from './utils/auth.js';
 import { shouldFallbackToServiceAccountJwt, shouldPreferServiceAccountJwt } from './utils/groups.js';
 
 // Import route handlers
@@ -175,6 +175,15 @@ app.get('/openapi.json', (req, res) => {
 });
 
 app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
+
+// Cloud Run must not boot a revision that skips the Workspace group gate.
+// Local development (no K_SERVICE) may omit ALLOWED_GROUP_EMAILS.
+try {
+    assertGroupAuthorizationConfigured();
+} catch (error) {
+    console.error(error.message);
+    process.exit(1);
+}
 
 // Start the Express server
 app.listen(port, () => {

@@ -63,11 +63,35 @@ export function getAllowedEmailDomains(env = process.env) {
 
 /**
  * Workspace group emails permitted to access protected data routes. Empty
- * (the default) disables the group check so local development can omit it.
- * When set, membership is required (fail closed if Admin SDK returns no roles).
+ * disables the group check off Cloud Run so local development can omit it.
+ * On Cloud Run (K_SERVICE set) an empty list fails closed. When the list is
+ * set, membership is required (fail closed if Admin SDK returns no roles).
  */
 export function getAllowedGroupEmails(env = process.env) {
     return parseList(env.ALLOWED_GROUP_EMAILS).map((email) => email.toLowerCase());
+}
+
+/**
+ * Cloud Run sets K_SERVICE to the service name. Local development does not.
+ */
+export function isRunningOnCloudRun(env = process.env) {
+    return typeof env.K_SERVICE === 'string' && env.K_SERVICE.trim() !== '';
+}
+
+/**
+ * Deployed Cloud Run revisions must configure ALLOWED_GROUP_EMAILS. An empty
+ * list would otherwise accept any access token minted for the public OAuth
+ * client. Local development without K_SERVICE may omit the list.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @throws {GroupNotAllowedError} when Cloud Run has no group allow-list
+ */
+export function assertGroupAuthorizationConfigured(env = process.env) {
+    if (isRunningOnCloudRun(env) && getAllowedGroupEmails(env).length === 0) {
+        throw new GroupNotAllowedError(
+            'ALLOWED_GROUP_EMAILS must be set when running on Cloud Run'
+        );
+    }
 }
 
 function isEmailVerified(value) {
@@ -110,16 +134,20 @@ export function assertValidTokenClaims(claims = {}, options = {}) {
 
 /**
  * Require the authenticated user to belong to at least one configured
- * Workspace group. When the allow-list is empty the check is disabled.
+ * Workspace group. When the allow-list is empty the check is disabled off
+ * Cloud Run. On Cloud Run an empty list fails closed.
  *
  * @param {Array<{email?: string}>|undefined|null} roles
- * @param {{allowedGroupEmails?: string[]}} [options]
- * @throws {GroupNotAllowedError} when the user is not in an allowed group
+ * @param {{allowedGroupEmails?: string[], env?: NodeJS.ProcessEnv}} [options]
+ * @throws {GroupNotAllowedError} when the user is not in an allowed group,
+ *   or when Cloud Run has no group allow-list
  */
 export function assertUserInAllowedGroups(roles, options = {}) {
-    const allowedGroupEmails = options.allowedGroupEmails ?? getAllowedGroupEmails();
+    const env = options.env ?? process.env;
+    const allowedGroupEmails = options.allowedGroupEmails ?? getAllowedGroupEmails(env);
 
     if (allowedGroupEmails.length === 0) {
+        assertGroupAuthorizationConfigured(env);
         return;
     }
 

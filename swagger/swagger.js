@@ -79,7 +79,8 @@ const definition = {
           'with 401. Protected data endpoints return 401 for a missing, ' +
           'invalid, or wrong-audience token and 403 when the account email ' +
           'domain or Workspace group membership is not permitted ' +
-          '(ALLOWED_EMAIL_DOMAINS / ALLOWED_GROUP_EMAILS). ' +
+          '(ALLOWED_EMAIL_DOMAINS is optional; ALLOWED_GROUP_EMAILS is ' +
+          'required on Cloud Run and fails closed when empty). ' +
           'GET /user/hasgroup is auth-only so clients can probe group membership.',
         flows: {
           implicit: {
