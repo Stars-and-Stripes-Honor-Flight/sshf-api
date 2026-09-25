@@ -576,6 +576,9 @@ describe('Flight Assignment Models', () => {
                 const result = new AddVeteransResult();
                 expect(result.added.veterans).to.equal(0);
                 expect(result.added.guardians).to.equal(0);
+                expect(result.saved.veterans).to.deep.equal([]);
+                expect(result.saved.guardians).to.deep.equal([]);
+                expect(result.failed).to.deep.equal([]);
                 expect(result.errors).to.deep.equal([]);
             });
         });
@@ -587,6 +590,13 @@ describe('Flight Assignment Models', () => {
                 result.incrementVeterans();
                 expect(result.added.veterans).to.equal(2);
             });
+
+            it('should record the saved veteran id', () => {
+                const result = new AddVeteransResult();
+                result.incrementVeterans('vet-1');
+                expect(result.added.veterans).to.equal(1);
+                expect(result.saved.veterans).to.deep.equal(['vet-1']);
+            });
         });
 
         describe('incrementGuardians', () => {
@@ -594,6 +604,13 @@ describe('Flight Assignment Models', () => {
                 const result = new AddVeteransResult();
                 result.incrementGuardians();
                 expect(result.added.guardians).to.equal(1);
+            });
+
+            it('should record the saved guardian id', () => {
+                const result = new AddVeteransResult();
+                result.incrementGuardians('guard-1');
+                expect(result.added.guardians).to.equal(1);
+                expect(result.saved.guardians).to.deep.equal(['guard-1']);
             });
         });
 
@@ -607,17 +624,83 @@ describe('Flight Assignment Models', () => {
             });
         });
 
+        describe('addFailure', () => {
+            it('should record the failed id and keep the error message', () => {
+                const result = new AddVeteransResult();
+                result.addFailure({
+                    id: 'guard-1',
+                    type: 'guardian',
+                    status: 500,
+                    error: 'Failed to save guardian guard-1: Unknown error'
+                });
+
+                expect(result.failed).to.deep.equal([{
+                    id: 'guard-1',
+                    type: 'guardian',
+                    status: 500,
+                    error: 'Failed to save guardian guard-1: Unknown error'
+                }]);
+                expect(result.errors).to.deep.equal([
+                    'Failed to save guardian guard-1: Unknown error'
+                ]);
+            });
+        });
+
+        describe('statusCode', () => {
+            it('should be 200 when nothing failed', () => {
+                const result = new AddVeteransResult();
+                result.incrementVeterans('vet-1');
+                expect(result.statusCode()).to.equal(200);
+            });
+
+            it('should be 409 when a document conflict remains', () => {
+                const result = new AddVeteransResult();
+                result.incrementVeterans('vet-1');
+                result.addFailure({
+                    id: 'vet-2',
+                    type: 'veteran',
+                    status: 409,
+                    error: 'Failed to save veteran vet-2: Document update conflict.'
+                });
+                expect(result.statusCode()).to.equal(409);
+            });
+
+            it('should be 500 when a save fails for a non-conflict reason', () => {
+                const result = new AddVeteransResult();
+                result.incrementVeterans('vet-1');
+                result.addFailure({
+                    id: 'guard-1',
+                    type: 'guardian',
+                    status: 500,
+                    error: 'Failed to save guardian guard-1: Unknown error'
+                });
+                expect(result.statusCode()).to.equal(500);
+            });
+        });
+
         describe('toJSON', () => {
             it('should convert result to JSON', () => {
                 const result = new AddVeteransResult();
-                result.incrementVeterans();
-                result.incrementGuardians();
-                result.addError('Test error');
-                
+                result.incrementVeterans('vet-1');
+                result.incrementGuardians('guard-1');
+                result.addFailure({
+                    id: 'vet-2',
+                    type: 'veteran',
+                    status: 409,
+                    error: 'Test error'
+                });
+
                 const json = result.toJSON();
-                
+
                 expect(json).to.deep.equal({
                     added: { veterans: 1, guardians: 1 },
+                    saved: { veterans: ['vet-1'], guardians: ['guard-1'] },
+                    failed: [{
+                        id: 'vet-2',
+                        type: 'veteran',
+                        status: 409,
+                        error: 'Test error'
+                    }],
                     errors: ['Test error']
                 });
             });

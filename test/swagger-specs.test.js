@@ -204,4 +204,28 @@ describe('OpenAPI spec generation', () => {
         expect(create.responses['409'].description).to.match(/conflict/i);
         expect(remove.responses['400'].description).to.match(/not allowed/i);
     });
+
+    it('documents partial failure when adding veterans to a flight', () => {
+        const post = specs.paths['/flights/{id}/assignments']?.post;
+        expect(post, 'missing POST /flights/{id}/assignments').to.be.an('object');
+        expect(post.responses).to.include.all.keys('200', '409', '500');
+
+        const conflict = post.responses['409'];
+        expect(conflict.description).to.match(/conflict/i);
+        expect(conflict.description).to.match(/retry/i);
+        expect(conflict.content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/AddVeteransResult');
+
+        const partial = post.responses['500'];
+        expect(partial.description).to.match(/saved/i);
+        expect(partial.description).to.match(/failed/i);
+
+        const schema = specs.components?.schemas?.AddVeteransResult;
+        expect(schema, 'missing AddVeteransResult schema').to.be.an('object');
+        expect(schema.properties.saved.properties).to.have.all.keys('veterans', 'guardians');
+        expect(schema.properties.saved.properties.veterans.items.type).to.equal('string');
+        expect(schema.properties.failed.items.properties).to.include.all.keys('id', 'type', 'status', 'error');
+        expect(schema.properties.failed.items.properties.type.enum).to.deep.equal(['veteran', 'guardian']);
+        expect(schema.properties.failed.description).to.match(/id/i);
+    });
 });

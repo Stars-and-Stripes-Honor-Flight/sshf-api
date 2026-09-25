@@ -121,7 +121,11 @@ AssignmentPerson:
 
 AddVeteransResult:
   type: object
-  description: Result of adding veterans to a flight
+  description: |
+    Result of adding veterans to a flight. Returned with 200 when every save
+    succeeded, 409 when a document conflict remains after one retry, and 500
+    when a veteran or guardian save failed for another reason. Failure
+    responses list the document ids that were saved and the ids that failed.
   properties:
     added:
       type: object
@@ -132,9 +136,42 @@ AddVeteransResult:
         guardians:
           type: integer
           description: Number of guardians added
+    saved:
+      type: object
+      description: Document ids saved during this request
+      properties:
+        veterans:
+          type: array
+          items:
+            type: string
+          description: Veteran document ids that were saved
+        guardians:
+          type: array
+          items:
+            type: string
+          description: Guardian document ids that were saved
+    failed:
+      type: array
+      description: Documents that were not saved, including each document id
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Document id that failed to save
+          type:
+            type: string
+            enum: [veteran, guardian]
+            description: Whether the failed document is a veteran or a guardian
+          status:
+            type: integer
+            description: Status for this document. 409 is a conflict that remained after one revision retry.
+          error:
+            type: string
+            description: Error message for this document
     errors:
       type: array
       items:
         type: string
-      description: List of errors encountered during processing
+      description: Error messages for documents that failed to save, in the same order as failed
 

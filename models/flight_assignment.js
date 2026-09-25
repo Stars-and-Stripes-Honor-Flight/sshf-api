@@ -295,25 +295,67 @@ export class AddVeteransResult {
             veterans: 0,
             guardians: 0
         };
+        this.saved = {
+            veterans: [],
+            guardians: []
+        };
+        this.failed = [];
         this.errors = [];
     }
 
-    incrementVeterans() {
+    incrementVeterans(id) {
         this.added.veterans++;
+        if (typeof id === 'string' && id.length > 0) {
+            this.saved.veterans.push(id);
+        }
     }
 
-    incrementGuardians() {
+    incrementGuardians(id) {
         this.added.guardians++;
+        if (typeof id === 'string' && id.length > 0) {
+            this.saved.guardians.push(id);
+        }
     }
 
     addError(error) {
         this.errors.push(error);
     }
 
+    addFailure({ id, type, status, error }) {
+        const failure = {
+            id: typeof id === 'string' ? id : '',
+            type: type === 'guardian' ? 'guardian' : 'veteran',
+            status: Number.isInteger(status) ? status : 500,
+            error: typeof error === 'string' ? error : ''
+        };
+        this.failed.push(failure);
+        this.errors.push(failure.error);
+    }
+
+    /**
+     * 200 when every save succeeded.
+     * 409 when any document conflict remains after the route's single retry.
+     * 500 when a save failed for any other reason.
+     */
+    statusCode() {
+        if (this.failed.length === 0 && this.errors.length === 0) {
+            return 200;
+        }
+        if (this.failed.some((item) => item.status === 409)) {
+            return 409;
+        }
+        return 500;
+    }
+
     toJSON() {
         return {
             added: this.added,
-            errors: this.errors
+            saved: {
+                veterans: [...this.saved.veterans],
+                guardians: [...this.saved.guardians]
+            },
+            failed: this.failed.map((item) => ({ ...item })),
+            errors: [...this.errors]
         };
     }
 }
