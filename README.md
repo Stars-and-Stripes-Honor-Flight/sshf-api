@@ -50,8 +50,8 @@ Required environment variables:
 | `API_URL` | Public API base URL for OpenAPI/Swagger (defaults to `http://localhost:8080`) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI auth, and the client whose access tokens the API accepts (audience validation) |
 | `ALLOWED_CLIENT_IDS` | Optional. Comma-separated OAuth client IDs accepted for token audience validation (overrides `GOOGLE_CLIENT_ID` when set) |
-| `ALLOWED_EMAIL_DOMAINS` | Optional. Comma-separated email domains permitted to access the API; unset disables the domain check |
-| `ALLOWED_GROUP_EMAILS` | Optional. Comma-separated Workspace group emails required for data routes; unset disables the group gate. Dev: `sshf_app_dev_full_access@…`; prod: `sshf_app_prd_full_access@…` |
+| `ALLOWED_EMAIL_DOMAINS` | Optional defense in depth. When set, unverified emails and addresses outside these domains are rejected. Production does not require it. |
+| `ALLOWED_GROUP_EMAILS` | Required on Cloud Run (`K_SERVICE` set): empty or unset fails startup and data-route authorization. Optional locally (no `K_SERVICE`). Dev: `sshf_app_dev_full_access@…`; prod: `sshf_app_prd_full_access@…` |
 | `REVIEW_DB_NAME` | CouchDB database name for online applications (VeteranApp/GuardianApp); required for `/review/applications` routes |
 | `REVIEW_DB_URL` | Optional. CouchDB URL for the review database; defaults to `DB_URL` |
 | `REVIEW_DB_USER` | Optional. CouchDB username for the review database; defaults to `DB_USER` |
@@ -157,14 +157,17 @@ The API enforces these checks before a request proceeds:
    unless it was issued for this API's OAuth client (`GOOGLE_CLIENT_ID`, or any
    ID in `ALLOWED_CLIENT_IDS`). This ensures a valid Google token minted for
    some other application cannot be replayed against this API.
-2. **Email domain (optional)** — when `ALLOWED_EMAIL_DOMAINS` is set, an
-   authenticated user whose verified email falls outside those domains receives
-   `403`.
-3. **Workspace group membership (optional, required in deployed envs)** — when
-   `ALLOWED_GROUP_EMAILS` is set, data routes require membership in at least
-   one listed group (`403` otherwise, including when Admin SDK returns no
-   roles). `GET /user/hasgroup` stays auth-only so the UI can probe membership
-   during sign-in.
+2. **Email domain (optional)** — when `ALLOWED_EMAIL_DOMAINS` is set, the
+   account must have a verified email in one of those domains or the request
+   is rejected with `403`. Unverified emails are rejected whenever the list is
+   set. Production does not require this variable.
+3. **Workspace group membership** — on Cloud Run (`K_SERVICE` set),
+   `ALLOWED_GROUP_EMAILS` is required. An empty list fails process startup and
+   data routes return `403`. When the list is set, data routes require
+   membership in at least one listed group (`403` otherwise, including when
+   Admin SDK returns no roles). Local development without `K_SERVICE` may omit
+   the list. `GET /user/hasgroup` stays auth-only so the UI can probe
+   membership during sign-in.
 
 Responses: `401` for a missing, invalid, expired, or wrong-audience token;
 `403` for a permitted-token account that is not allowed (domain or group);

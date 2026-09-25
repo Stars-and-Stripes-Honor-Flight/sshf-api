@@ -205,19 +205,28 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
   --update-env-vars "^;^ALLOWED_CLIENT_IDS=<api-client-id>,<ui-client-id>"
 ```
 
-- **Optional email-domain lock (defense in depth).** Set `ALLOWED_EMAIL_DOMAINS`
-  to reject authenticated users outside the org domain with 403:
+- **Optional email-domain lock (defense in depth).** Production does **not**
+  require `ALLOWED_EMAIL_DOMAINS`. Authorization on Cloud Run is audience
+  validation plus Workspace group membership. Set `ALLOWED_EMAIL_DOMAINS` only
+  as an extra check: when the list is set, unverified emails and addresses
+  outside those domains are rejected with 403. Leave it unset to skip the
+  domain check.
 
 ```bash
 gcloud run services update sshf-api --region us-central1 --project sshf-api-prd \
   --update-env-vars "ALLOWED_EMAIL_DOMAINS=starsandstripeshonorflight.org"
 ```
 
-- **Workspace group membership (required for deployed envs).** Set
+- **Workspace group membership (required on Cloud Run).** Set
   `ALLOWED_GROUP_EMAILS` so data routes reject authenticated users who are not
-  in the environment full-access group. Without this env var the group check
-  is disabled. Set it in the same release window as the authorize middleware
-  ships. `GET /user/hasgroup` remains auth-only for UI login probes.
+  in the environment full-access group. Cloud Run sets `K_SERVICE`. When that
+  variable is present and `ALLOWED_GROUP_EMAILS` is empty or unset, the
+  process exits at startup and `authorize` rejects data-route requests with
+  403. A revision that omits the group list therefore fails closed and does
+  not serve traffic. Local development without `K_SERVICE` may omit the list.
+  `GET /user/hasgroup` remains auth-only for UI login probes. Confirm the
+  live service has `ALLOWED_GROUP_EMAILS` set to the environment's Workspace
+  group (do not record the secret value in tickets).
 
 ```bash
 # Dev
@@ -264,6 +273,7 @@ promotion workflow breaks:
 | Smoke test fails, traffic unchanged | The new revision does not boot or `/api-docs/` errors. Check revision logs in the prod project; production users are unaffected. Fix and release again. |
 | Users authenticate but have no roles | Admin SDK API disabled in the project, runtime SA missing the Workspace Groups Reader role, or a cached token (30-minute cache — re-sign-in). With `ALLOWED_GROUP_EMAILS` set this becomes data-route `403` (fail closed). |
 | Every authenticated request returns 401 after a deploy | The token audience no longer matches. `GOOGLE_CLIENT_ID` on the service must equal the OAuth client the UI/Swagger mint tokens with; if the UI uses a different client, add it to `ALLOWED_CLIENT_IDS`. |
-| Some users get 403 | `ALLOWED_EMAIL_DOMAINS` rejects their verified email, or `ALLOWED_GROUP_EMAILS` is set and they are not in a listed Workspace group (or Admin SDK returned no roles). |
+| Revision fails to start, or every data route returns 403 | On Cloud Run, `ALLOWED_GROUP_EMAILS` is missing or empty. Set it to the environment Workspace group and deploy a new revision. Local runs without `K_SERVICE` may omit it. |
+| Some users get 403 | `ALLOWED_EMAIL_DOMAINS` is set and rejects an unverified or out-of-domain email, or `ALLOWED_GROUP_EMAILS` is set and they are not in a listed Workspace group (or Admin SDK returned no roles). `ALLOWED_EMAIL_DOMAINS` is optional; group membership is the required Cloud Run gate. |
 | New secret value not taking effect | Revisions pin secret versions at deploy time. Force a new revision (see Configuration and secrets). |
 | CORS errors from the UI | The UI origin is missing from the service's `ALLOWED_ORIGINS` env var. |
