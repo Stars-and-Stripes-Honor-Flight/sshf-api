@@ -1,7 +1,7 @@
 import { Guardian } from '../models/guardian.js';
 import { Veteran } from '../models/veteran.js';
 import { VALID_BUSES } from '../models/flight_detail.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 import { trimIfString } from '../utils/trim_strings.js';
 
@@ -43,6 +43,15 @@ const dbBase = `${dbUrl}/${dbName}`;
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function createGuardian(req, res) {
     try {
@@ -63,7 +72,7 @@ export async function createGuardian(req, res) {
 
         if (!response.ok) {
             const data = await response.json();
-            throw new Error(data.reason || 'Failed to create guardian document');
+            throw new Error(stableDatabaseError('Failed to create guardian document', data, response.status));
         }
 
         const data = await response.json();
@@ -117,6 +126,15 @@ export async function createGuardian(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function retrieveGuardian(req, res) {
     try {
@@ -132,7 +150,7 @@ export async function retrieveGuardian(req, res) {
             if (response.status === 404) {
                 return res.status(404).json({ error: 'Guardian not found' });
             }
-            throw new Error(data.reason || 'Failed to get guardian');
+            throw new Error(stableDatabaseError('Failed to get guardian', data, response.status));
         }
 
         // Verify this is a guardian document
@@ -188,7 +206,7 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
                 return { success: false, error: `Veteran ${veteranId} not found` };
             }
             const errorData = await getVeteranResponse.json();
-            return { success: false, error: errorData.reason || 'Failed to get veteran' };
+            return { success: false, error: stableDatabaseError('Failed to get veteran', errorData, getVeteranResponse.status) };
         }
 
         const currentVeteranDoc = await getVeteranResponse.json();
@@ -251,7 +269,7 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
 
         if (!updateVeteranResponse.ok) {
             const errorData = await updateVeteranResponse.json();
-            return { success: false, error: errorData.reason || 'Failed to update veteran' };
+            return { success: false, error: stableDatabaseError('Failed to update veteran', errorData, updateVeteranResponse.status) };
         }
 
         return { success: true, veteranName };
@@ -296,6 +314,15 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  *     x-code-samples:
  *       - lang: 'JavaScript'
  *         label: 'Example: Adding a veteran pairing'
@@ -446,7 +473,7 @@ export async function updateGuardian(req, res) {
 
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || 'Failed to update guardian');
+            throw new Error(stableDatabaseError('Failed to update guardian', data, updateResponse.status));
         }
 
         const data = await updateResponse.json();
@@ -505,6 +532,15 @@ export async function updateGuardian(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function deleteGuardian(req, res) {
     try {
@@ -538,7 +574,7 @@ export async function deleteGuardian(req, res) {
 
         const data = await deleteResponse.json();
         if (!deleteResponse.ok) {
-            throw new Error(data.reason || 'Failed to delete guardian');
+            throw new Error(stableDatabaseError('Failed to delete guardian', data, deleteResponse.status));
         }
 
         res.json(data);
@@ -606,6 +642,15 @@ export async function deleteGuardian(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function updateGuardianSeat(req, res) {
     try {
@@ -678,7 +723,7 @@ export async function updateGuardianSeat(req, res) {
 
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || 'Failed to update guardian seat');
+            throw new Error(stableDatabaseError('Failed to update guardian seat', data, updateResponse.status));
         }
 
         const data = await updateResponse.json();
@@ -754,6 +799,15 @@ export async function updateGuardianSeat(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function updateGuardianBus(req, res) {
     try {
@@ -833,7 +887,7 @@ export async function updateGuardianBus(req, res) {
 
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || 'Failed to update guardian bus');
+            throw new Error(stableDatabaseError('Failed to update guardian bus', data, updateResponse.status));
         }
 
         const data = await updateResponse.json();
@@ -940,7 +994,7 @@ async function patchGuardianField(req, res, config) {
         });
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || config.saveError);
+            throw new Error(stableDatabaseError(config.saveError, data, updateResponse.status));
         }
 
         const data = await updateResponse.json();

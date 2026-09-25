@@ -1,5 +1,5 @@
 import { FlightDetailResult } from '../models/flight_detail.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
@@ -52,6 +52,15 @@ const dbBase = `${dbUrl}/${dbName}`;
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function getFlightDetail(req, res) {
     try {
@@ -66,7 +75,7 @@ export async function getFlightDetail(req, res) {
             if (flightResponse.status === 404) {
                 return res.status(404).json({ error: 'Flight not found' });
             }
-            throw new Error(flightData.reason || 'Failed to get flight');
+            throw new Error(stableDatabaseError('Failed to get flight', flightData, flightResponse.status));
         }
 
         // Verify this is a flight document
@@ -92,7 +101,7 @@ export async function getFlightDetail(req, res) {
 
         if (!viewResponse.ok) {
             const viewData = await viewResponse.json();
-            throw new Error(viewData.reason || 'Failed to retrieve flight detail');
+            throw new Error(stableDatabaseError('Failed to retrieve flight detail', viewData, viewResponse.status));
         }
 
         const viewData = await viewResponse.json();

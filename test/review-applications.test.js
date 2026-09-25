@@ -342,7 +342,8 @@ describe('Review Applications Route Handlers', () => {
             await createReviewApplication(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.equal('boom');
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to create application');
+            expect(res.json.firstCall.args[0].error).to.not.include('boom');
         });
     });
 
@@ -745,7 +746,7 @@ describe('Review Applications Route Handlers', () => {
             await updateReviewApplication(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.equal('update failed');
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to update application');
         });
 
         it('should return 503 when review database session is exhausted', async () => {
@@ -1154,7 +1155,7 @@ describe('Review Applications Route Handlers', () => {
             );
             expect(reviewPutCalls).to.have.lengthOf(0);
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.equal('conflict');
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to save accepted application');
         });
 
         it('should return 503 when main database session is exhausted', async () => {

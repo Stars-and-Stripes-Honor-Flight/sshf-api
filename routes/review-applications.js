@@ -1,4 +1,4 @@
-import { dbFetch, reviewDbFetch, getReviewDbConfig, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, reviewDbFetch, getReviewDbConfig, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 import { REVIEW_APPLICATION_STATUSES } from '../models/review_application.js';
 import { VeteranApplication } from '../models/veteran_application.js';
@@ -50,7 +50,7 @@ function handleError(res, error, context) {
 async function readErrorReason(response, fallback) {
     try {
         const data = await response.json();
-        return data.reason || fallback;
+        return stableDatabaseError(fallback, data, response.status);
     } catch (parseError) {
         return fallback;
     }

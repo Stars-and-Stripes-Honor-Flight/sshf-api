@@ -1,7 +1,7 @@
 import { FlightAssignment, AddVeteransResult } from '../models/flight_assignment.js';
 import { Veteran } from '../models/veteran.js';
 import { Guardian } from '../models/guardian.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
@@ -46,6 +46,15 @@ const dbBase = `${dbUrl}/${dbName}`;
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function getFlightAssignments(req, res) {
     try {
@@ -60,7 +69,7 @@ export async function getFlightAssignments(req, res) {
             if (flightResponse.status === 404) {
                 return res.status(404).json({ error: 'Flight not found' });
             }
-            throw new Error(flightData.reason || 'Failed to get flight');
+            throw new Error(stableDatabaseError('Failed to get flight', flightData, flightResponse.status));
         }
 
         // Verify this is a flight document
@@ -85,7 +94,7 @@ export async function getFlightAssignments(req, res) {
 
         if (!viewResponse.ok) {
             const viewData = await viewResponse.json();
-            throw new Error(viewData.reason || 'Failed to retrieve flight assignments');
+            throw new Error(stableDatabaseError('Failed to retrieve flight assignments', viewData, viewResponse.status));
         }
 
         const viewData = await viewResponse.json();
@@ -162,6 +171,15 @@ export async function getFlightAssignments(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function addVeteransToFlight(req, res) {
     try {
@@ -185,7 +203,7 @@ export async function addVeteransToFlight(req, res) {
             if (flightResponse.status === 404) {
                 return res.status(404).json({ error: 'Flight not found' });
             }
-            throw new Error(flightData.reason || 'Failed to get flight');
+            throw new Error(stableDatabaseError('Failed to get flight', flightData, flightResponse.status));
         }
 
         // Verify this is a flight document
@@ -208,7 +226,7 @@ export async function addVeteransToFlight(req, res) {
 
         if (!waitlistResponse.ok) {
             const waitlistData = await waitlistResponse.json();
-            throw new Error(waitlistData.reason || 'Failed to retrieve waitlist');
+            throw new Error(stableDatabaseError('Failed to retrieve waitlist', waitlistData, waitlistResponse.status));
         }
 
         const waitlistData = await waitlistResponse.json();
@@ -360,7 +378,7 @@ export async function addVeteransToFlight(req, res) {
                                         result.incrementGuardians();
                                     } else {
                                         const saveGrdData = await saveGrdResponse.json();
-                                        result.addError(`Failed to save guardian ${guardianId}: ${saveGrdData.reason || 'Unknown error'}`);
+                                        result.addError(`Failed to save guardian ${guardianId}: ${stableDatabaseError('Unknown error', saveGrdData, saveGrdResponse.status)}`);
                                     }
                                 }
                             }
@@ -370,7 +388,7 @@ export async function addVeteransToFlight(req, res) {
                     }
                 } else {
                     const saveVetData = await saveVetResponse.json();
-                    result.addError(`Failed to save veteran ${vetDoc._id}: ${saveVetData.reason || 'Unknown error'}`);
+                    result.addError(`Failed to save veteran ${vetDoc._id}: ${stableDatabaseError('Unknown error', saveVetData, saveVetResponse.status)}`);
                 }
             } catch (vetError) {
                 result.addError(`Error processing veteran ${row.id}: ${vetError.message}`);

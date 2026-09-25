@@ -123,6 +123,15 @@ function filterPhoneSearchResults(searchRequest, dbResult) {
  *               properties:
  *                 error:
  *                   type: string
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 
 export async function getSearch(req, res, next) {

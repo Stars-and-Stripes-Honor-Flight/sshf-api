@@ -1,5 +1,5 @@
 import { QueryRequest } from '../models/query_request.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -180,8 +180,9 @@ export async function postQuery(req, res, next) {
         // Handle other non-OK responses from CouchDB
         if (!response.ok) {
             const errorData = await response.json();
-            const errorMessage = errorData.reason || errorData.error || 'Database error';
-            return res.status(500).json({ error: errorMessage });
+            return res.status(500).json({
+                error: stableDatabaseError('Database error', errorData, response.status)
+            });
         }
 
         // Parse and return the result

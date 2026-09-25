@@ -1,6 +1,6 @@
 import { RecentActivityRequest } from '../models/recent_activity_request.js';
 import { RecentActivityEntry } from '../models/recent_activity_entry.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -116,7 +116,7 @@ export async function getRecentActivity(req, res) {
         
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.reason || data.error || 'Failed to retrieve recent activity');
+            throw new Error(stableDatabaseError('Failed to retrieve recent activity', data, response.status));
         }
         
         // Transform rows to RecentActivityEntry objects

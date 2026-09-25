@@ -1,5 +1,5 @@
 import { Flight } from '../models/flight.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
@@ -60,6 +60,15 @@ const dbBase = `${dbUrl}/${dbName}`;
  *               properties:
  *                 error:
  *                   type: string
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function listFlights(req, res) {
     try {
@@ -73,7 +82,7 @@ export async function listFlights(req, res) {
 
         if (!response.ok) {
             const data = await response.json();
-            throw new Error(data.reason || 'Failed to retrieve flights');
+            throw new Error(stableDatabaseError('Failed to retrieve flights', data, response.status));
         }
 
         const data = await response.json();
@@ -138,6 +147,15 @@ export async function listFlights(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function createFlight(req, res) {
     try {
@@ -160,7 +178,7 @@ export async function createFlight(req, res) {
 
         if (!response.ok) {
             const data = await response.json();
-            throw new Error(data.reason || 'Failed to create flight document');
+            throw new Error(stableDatabaseError('Failed to create flight document', data, response.status));
         }
 
         const data = await response.json();
@@ -214,6 +232,15 @@ export async function createFlight(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function retrieveFlight(req, res) {
     try {
@@ -229,7 +256,7 @@ export async function retrieveFlight(req, res) {
             if (response.status === 404) {
                 return res.status(404).json({ error: 'Flight not found' });
             }
-            throw new Error(data.reason || 'Failed to get flight');
+            throw new Error(stableDatabaseError('Failed to get flight', data, response.status));
         }
 
         // Verify this is a flight document
@@ -285,6 +312,15 @@ export async function retrieveFlight(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function updateFlight(req, res) {
     try {
@@ -340,7 +376,7 @@ export async function updateFlight(req, res) {
 
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || 'Failed to update flight');
+            throw new Error(stableDatabaseError('Failed to update flight', data, updateResponse.status));
         }
 
         const data = await updateResponse.json();

@@ -216,8 +216,8 @@ describe('Veterans Search Route', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.calledOnce).to.be.true;
             const response = res.json.firstCall.args[0];
-            // data.reason takes priority over data.error, so it should be "View not found"
-            expect(response.error).to.include('View not found');
+            expect(response.error).to.equal('Failed to search unpaired veterans');
+            expect(response.error).to.not.include('View not found');
         });
 
         it('should handle CouchDB error responses without reason field', async () => {
@@ -232,7 +232,8 @@ describe('Veterans Search Route', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.calledOnce).to.be.true;
             const response = res.json.firstCall.args[0];
-            expect(response.error).to.include('Internal server error');
+            expect(response.error).to.equal('Failed to search unpaired veterans');
+            expect(response.error).to.not.include('Internal server error');
         });
 
         it('should handle CouchDB error responses with reason field', async () => {
@@ -247,7 +248,8 @@ describe('Veterans Search Route', () => {
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.calledOnce).to.be.true;
             const response = res.json.firstCall.args[0];
-            expect(response.error).to.include('Invalid query parameters');
+            expect(response.error).to.equal('Failed to search unpaired veterans');
+            expect(response.error).to.not.include('Invalid query parameters');
         });
 
         it('should handle CouchDB error responses without reason or error fields', async () => {

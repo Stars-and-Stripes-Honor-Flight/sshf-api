@@ -1,4 +1,4 @@
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -30,7 +30,7 @@ function buildRangeParams(startkey, endkey, includeDocs = true) {
 async function getResponseErrorMessage(response, fallbackMessage) {
     try {
         const data = await response.json();
-        return data.reason || data.error || fallbackMessage;
+        return stableDatabaseError(fallbackMessage, data, response.status);
     } catch (error) {
         return fallbackMessage;
     }

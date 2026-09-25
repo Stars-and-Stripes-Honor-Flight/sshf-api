@@ -94,18 +94,23 @@ describe('Exports Route Handlers', () => {
             expect(url).to.include('endkey=%5B%22SSHF-Apr2026%22%2C%22Veteran%22%5D');
         });
 
-        it('returns 500 when CouchDB responds with reason', async () => {
+        it('returns a stable message when CouchDB responds with reason', async () => {
+            const errorLog = sinon.stub(console, 'error');
             global.fetch.resolves({
                 ok: false,
                 status: 500,
-                json: async () => ({ reason: 'couch failure' })
+                json: async () => ({ error: 'internal_server_error', reason: 'couch failure' })
             });
 
             await exportFlightCsv(req, res);
 
             expect(res.status.calledOnceWith(500)).to.be.true;
             expect(res.json.calledOnce).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.equal('couch failure');
+            expect(res.json.firstCall.args[0]).to.deep.equal({
+                error: 'Failed to retrieve flight export'
+            });
+            expect(JSON.stringify(res.json.firstCall.args[0])).to.not.include('couch failure');
+            expect(JSON.stringify(errorLog.args)).to.include('couch failure');
         });
 
         it('returns fallback error when CouchDB error body has no reason/error', async () => {

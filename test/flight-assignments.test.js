@@ -145,7 +145,8 @@ describe('Flight Assignments Route Handlers', () => {
             await getFlightAssignments(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Database error');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get flight');
+            expect(res.json.firstCall.args[0].error).to.not.include('Database error');
         });
 
         it('should return 500 when flight fetch fails without reason', async () => {
@@ -175,7 +176,8 @@ describe('Flight Assignments Route Handlers', () => {
             await getFlightAssignments(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('View error');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to retrieve flight assignments');
+            expect(res.json.firstCall.args[0].error).to.not.include('View error');
         });
 
         it('should return 500 when view fetch fails without reason', async () => {

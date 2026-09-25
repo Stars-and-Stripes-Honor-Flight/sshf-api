@@ -9,7 +9,9 @@ import {
     reviewDbSession,
     reviewDbFetch,
     clearReviewSessionCache,
-    getReviewDbConfig
+    getReviewDbConfig,
+    stableDatabaseError,
+    DATABASE_SESSION_ERROR_BODY
 } from '../utils/db.js';
 
 describe('Database Utilities', () => {
@@ -59,16 +61,28 @@ describe('Database Utilities', () => {
             expect(req.dbCookie).to.equal('AuthSession=new-session-cookie');
         });
 
-        it('should handle session creation failure', async () => {
+        it('should return 503 without the CouchDB body when session login fails', async () => {
+            const couchBody = {
+                error: 'unauthorized',
+                reason: 'Name or password is incorrect.'
+            };
+            const json = sinon.stub().resolves(couchBody);
+            const text = sinon.stub().resolves(JSON.stringify(couchBody));
             global.fetch.resolves({
-                ok: false
+                ok: false,
+                status: 401,
+                json,
+                text
             });
 
             await dbSession(req, res, next);
 
-            expect(res.status.called).to.be.true;
-            expect(res.status.firstCall.args[0]).to.equal(500);
-            expect(res.json.called).to.be.true;
+            expect(res.status.calledOnceWith(503)).to.be.true;
+            expect(res.json.calledOnceWith(DATABASE_SESSION_ERROR_BODY)).to.be.true;
+            expect(JSON.stringify(res.json.firstCall.args[0])).to.not.include('Name or password');
+            expect(JSON.stringify(res.json.firstCall.args[0])).to.not.include('unauthorized');
+            expect(json.called).to.be.false;
+            expect(text.called).to.be.false;
             expect(next.called).to.be.false;
         });
 
@@ -77,9 +91,8 @@ describe('Database Utilities', () => {
 
             await dbSession(req, res, next);
 
-            expect(res.status.called).to.be.true;
-            expect(res.status.firstCall.args[0]).to.equal(500);
-            expect(res.json.called).to.be.true;
+            expect(res.status.calledOnceWith(503)).to.be.true;
+            expect(res.json.calledOnceWith(DATABASE_SESSION_ERROR_BODY)).to.be.true;
             expect(next.called).to.be.false;
         });
 
@@ -229,6 +242,35 @@ describe('Database Utilities', () => {
 
             expect(global.fetch.callCount).to.equal(3);
             expect(response.ok).to.be.true;
+            expect(req.dbCookie).to.equal('AuthSession=refreshed-cookie');
+        });
+
+        it('should return a persisting 401 after a successful session refresh as authorization failure', async () => {
+            const couchBody = {
+                error: 'unauthorized',
+                reason: 'You are not a server admin.'
+            };
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 401,
+                json: async () => couchBody
+            });
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=refreshed-cookie; Path=/')
+                }
+            });
+            global.fetch.onThirdCall().resolves({
+                ok: false,
+                status: 401,
+                json: async () => couchBody
+            });
+
+            const response = await dbFetch(req, 'http://localhost:5984/db/doc');
+
+            expect(response.status).to.equal(401);
+            expect(global.fetch.callCount).to.equal(3);
             expect(req.dbCookie).to.equal('AuthSession=refreshed-cookie');
         });
 
@@ -454,22 +496,28 @@ describe('Database client factory', () => {
             });
         });
 
-        it('should respond with 500 and not call next when session POST is not ok', async () => {
+        it('should respond with 503 and not call next when session POST is not ok', async () => {
             const client = createDbClient({
                 url: 'http://db-a.example.com',
                 user: 'db-user',
                 pass: 'db-pass',
                 cookieProperty: 'otherCookie'
             });
+            const couchBody = { reason: 'Name or password is incorrect.' };
+            const json = sinon.stub().resolves(couchBody);
 
             global.fetch.resolves({
-                ok: false
+                ok: false,
+                status: 401,
+                json
             });
 
             await client.session(req, res, next);
 
-            expect(res.status.calledOnceWith(500)).to.be.true;
-            expect(res.json.calledOnceWith({ message: 'Database session error' })).to.be.true;
+            expect(res.status.calledOnceWith(503)).to.be.true;
+            expect(res.json.calledOnceWith(DATABASE_SESSION_ERROR_BODY)).to.be.true;
+            expect(JSON.stringify(res.json.firstCall.args[0])).to.not.include('incorrect');
+            expect(json.called).to.be.false;
             expect(next.called).to.be.false;
         });
     });
@@ -623,6 +671,20 @@ describe('Database client factory', () => {
             expect(() => clearReviewSessionCache()).to.not.throw();
         });
 
+        it('should return 503 from reviewDbSession when review login fails', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 401,
+                json: async () => ({ reason: 'Name or password is incorrect.' })
+            });
+
+            await reviewDbSession(req, res, next);
+
+            expect(res.status.calledOnceWith(503)).to.be.true;
+            expect(res.json.calledOnceWith(DATABASE_SESSION_ERROR_BODY)).to.be.true;
+            expect(next.called).to.be.false;
+        });
+
         it('should set req.reviewDbCookie in reviewDbSession and use it in reviewDbFetch', async () => {
             const mockCookieHeader = 'AuthSession=review-session; Path=/';
 
@@ -677,6 +739,26 @@ describe('Database client factory', () => {
             expect(global.fetch.calledOnce).to.be.true;
             expect(mainReq.dbCookie).to.equal('AuthSession=main-session');
             expect(mainReq.reviewDbCookie).to.be.undefined;
+        });
+    });
+
+    describe('stableDatabaseError', () => {
+        it('returns the fallback message and logs CouchDB reason server-side', () => {
+            const errorLog = sinon.stub(console, 'error');
+
+            const message = stableDatabaseError('Failed to get document', {
+                error: 'internal_server_error',
+                reason: 'couch-secret-reason'
+            }, 500);
+
+            expect(message).to.equal('Failed to get document');
+            expect(message).to.not.include('couch-secret-reason');
+            expect(errorLog.calledOnce).to.be.true;
+            expect(errorLog.firstCall.args[1]).to.deep.include({
+                status: 500,
+                error: 'internal_server_error',
+                reason: 'couch-secret-reason'
+            });
         });
     });
 

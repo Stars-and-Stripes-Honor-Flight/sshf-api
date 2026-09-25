@@ -11,7 +11,7 @@ import {
     buildLogisticsDocument,
     prepareGenericDocumentWrite
 } from '../models/generic_document.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
@@ -20,11 +20,11 @@ const dbBase = `${dbUrl}/${dbName}`;
 
 function throwIfCouchWriteFailed(response, data, fallback) {
     if (response.status === 409) {
-        const error = new Error(data.reason || 'Document update conflict.');
+        const error = new Error(stableDatabaseError('Document update conflict.', data, response.status));
         error.statusCode = 409;
         throw error;
     }
-    throw new Error(data.reason || fallback);
+    throw new Error(stableDatabaseError(fallback, data, response.status));
 }
 
 function sendDocumentError(res, error, logLabel) {
@@ -271,7 +271,7 @@ export async function retrieveDocument(req, res) {
             if (response.status === 404) {
                 return res.status(404).json({ error: 'Document not found' });
             }
-            throw new Error(data.reason || 'Failed to get document');
+            throw new Error(stableDatabaseError('Failed to get document', data, response.status));
         }
 
         res.json(data);
@@ -442,7 +442,7 @@ export async function listDocumentRevisions(req, res) {
             if (response.status === 404) {
                 return res.status(404).json({ error: 'Document not found' });
             }
-            throw new Error(data.reason || 'Failed to get document revisions');
+            throw new Error(stableDatabaseError('Failed to get document revisions', data, response.status));
         }
 
         res.json(buildRevisionList(data));
@@ -541,7 +541,7 @@ export async function diffDocument(req, res) {
             if (infoResponse.status === 404) {
                 return res.status(404).json({ error: 'Document not found' });
             }
-            throw new Error(infoData.reason || 'Failed to get document revisions');
+            throw new Error(stableDatabaseError('Failed to get document revisions', infoData, infoResponse.status));
         }
 
         const pair = resolveRevisionPair(infoData._revs_info, request.from, request.to);
@@ -559,7 +559,7 @@ export async function diffDocument(req, res) {
                     error: 'Requested revision is not available. Older revisions are removed by database compaction.'
                 });
             }
-            throw new Error(failedData.reason || 'Failed to get document revision');
+            throw new Error(stableDatabaseError('Failed to get document revision', failedData, failed.status));
         }
 
         const [fromDoc, toDoc] = await Promise.all([
