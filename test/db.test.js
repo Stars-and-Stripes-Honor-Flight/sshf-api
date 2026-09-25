@@ -599,6 +599,167 @@ describe('Database client factory', () => {
         });
     });
 
+    describe('session cache key', () => {
+        const passA = 'db-pass-alpha-9f3c2a7e';
+        const passB = 'db-pass-beta-1c8d4b6f';
+        const sessionCookie = 'AuthSession=cookie-secret-b71e4d';
+        const sharedIdentity = {
+            url: 'http://db.example.com',
+            user: 'db-user',
+            cookieProperty: 'dbCookie'
+        };
+
+        function captureSessionCacheKeys() {
+            const keys = [];
+            const originalSet = Map.prototype.set;
+            sinon.stub(Map.prototype, 'set').callsFake(function (key, value) {
+                if (typeof key === 'string' && key.startsWith('AuthSession_')) {
+                    keys.push(key);
+                }
+                return originalSet.call(this, key, value);
+            });
+            return keys;
+        }
+
+        function loggedText(stub) {
+            return stub.getCalls().map((call) => call.args.map((arg) => {
+                if (typeof arg === 'string') {
+                    return arg;
+                }
+                if (arg instanceof Error) {
+                    return arg.message;
+                }
+                return JSON.stringify(arg);
+            }).join(' ')).join('\n');
+        }
+
+        function sessionResponse() {
+            return {
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns(`${sessionCookie}; Path=/`)
+                }
+            };
+        }
+
+        it('does not include either password when two configs differ only by password', async () => {
+            const keys = captureSessionCacheKeys();
+            const clientA = createDbClient({ ...sharedIdentity, pass: passA });
+            const clientB = createDbClient({ ...sharedIdentity, pass: passB });
+
+            global.fetch.resolves(sessionResponse());
+
+            await clientA.session({}, res, next);
+            await clientB.session({}, res, next);
+
+            expect(keys.length).to.equal(2);
+            for (const key of keys) {
+                expect(key).to.not.include(passA);
+                expect(key).to.not.include(passB);
+                expect(key).to.include(sharedIdentity.url);
+                expect(key).to.include(sharedIdentity.user);
+                expect(key).to.include(sharedIdentity.cookieProperty);
+            }
+        });
+
+        it('reuses one cache entry when only the password changes', async () => {
+            const keys = captureSessionCacheKeys();
+            let pass = passA;
+            const client = createDbClient(() => ({ ...sharedIdentity, pass }));
+
+            global.fetch.resolves(sessionResponse());
+
+            await client.session({}, res, next);
+            pass = passB;
+            global.fetch.resetHistory();
+            await client.session({}, res, next);
+
+            expect(global.fetch.called).to.be.false;
+            expect(keys).to.have.lengthOf(1);
+            expect(keys[0]).to.not.include(passA);
+            expect(keys[0]).to.not.include(passB);
+        });
+
+        it('does not share a cache entry when url, user, or cookieProperty differs', async () => {
+            let current = {
+                url: 'http://db-a.example.com',
+                user: 'user-a',
+                pass: passA,
+                cookieProperty: 'cookieA'
+            };
+            const client = createDbClient(() => current);
+
+            global.fetch.resolves(sessionResponse());
+
+            await client.session({}, res, next);
+            expect(global.fetch.callCount).to.equal(1);
+
+            current = { ...current, url: 'http://db-b.example.com' };
+            await client.session({}, res, next);
+            expect(global.fetch.callCount).to.equal(2);
+
+            current = { ...current, user: 'user-b' };
+            await client.session({}, res, next);
+            expect(global.fetch.callCount).to.equal(3);
+
+            current = { ...current, cookieProperty: 'cookieB' };
+            await client.session({}, res, next);
+            expect(global.fetch.callCount).to.equal(4);
+
+            global.fetch.resetHistory();
+            await client.session({}, res, next);
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('keeps the password and session cookie out of logs and error responses', async () => {
+            const errorLog = sinon.stub(console, 'error');
+            const warnLog = sinon.stub(console, 'warn');
+            const client = createDbClient({ ...sharedIdentity, pass: passA });
+
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            await client.session({ dbCookie: sessionCookie }, res, next);
+
+            const responseText = JSON.stringify(res.json.firstCall.args[0]);
+            const sessionLogs = `${loggedText(errorLog)}\n${loggedText(warnLog)}`;
+            expect(res.status.calledOnceWith(503)).to.be.true;
+            expect(res.json.calledOnceWith(DATABASE_SESSION_ERROR_BODY)).to.be.true;
+            expect(responseText).to.not.include(passA);
+            expect(responseText).to.not.include(passB);
+            expect(responseText).to.not.include(sessionCookie);
+            expect(sessionLogs).to.not.include(passA);
+            expect(sessionLogs).to.not.include(passB);
+            expect(sessionLogs).to.not.include(sessionCookie);
+
+            errorLog.resetHistory();
+            warnLog.resetHistory();
+            const reqWithCookie = { dbCookie: sessionCookie };
+            global.fetch.resolves({
+                ok: false,
+                status: 401
+            });
+
+            try {
+                await client.fetch(reqWithCookie, 'http://db.example.com/doc');
+                expect.fail('Expected DatabaseSessionError to be thrown');
+            } catch (error) {
+                expect(error).to.be.instanceof(DatabaseSessionError);
+                expect(error.message).to.not.include(passA);
+                expect(error.message).to.not.include(sessionCookie);
+                expect(error.message).to.not.include('AuthSession=');
+            }
+
+            const fetchLogs = `${loggedText(errorLog)}\n${loggedText(warnLog)}`;
+            expect(fetchLogs).to.not.include(passA);
+            expect(fetchLogs).to.not.include(passB);
+            expect(fetchLogs).to.not.include(sessionCookie);
+            expect(fetchLogs).to.not.include('cookie-secret-b71e4d');
+        });
+    });
+
     describe('createDbClient fetch', () => {
         it('should send cookie and Accept headers, refresh on 401, and retry successfully', async () => {
             const client = createDbClient({

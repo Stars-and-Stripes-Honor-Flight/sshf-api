@@ -91,8 +91,10 @@ export function createDbClient(config) {
         };
     };
 
-    const cacheKeyFor = ({ url, user, pass, cookieProperty }) =>
-        `AuthSession_${url}_${user}_${pass}_${cookieProperty}`;
+    // Password is omitted so a heap dump or future log of map keys cannot
+    // expose DB_PASS. URL, user, and cookie property still isolate entries.
+    const cacheKeyFor = ({ url, user, cookieProperty }) =>
+        `AuthSession_${url}_${user}_${cookieProperty}`;
 
     /**
      * Authenticates with CouchDB and returns a new session cookie
