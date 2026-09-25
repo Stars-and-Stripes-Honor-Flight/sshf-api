@@ -171,7 +171,11 @@ The API enforces these checks before a request proceeds:
 
 Responses: `401` for a missing, invalid, expired, or wrong-audience token;
 `403` for a permitted-token account that is not allowed (domain or group);
-`503` if token introspection is temporarily unavailable.
+`503` if token introspection or the Workspace Directory group lookup is
+temporarily unavailable. A Directory failure is not treated as an empty role
+list, which would otherwise become `403` when the group allow-list is set.
+Group lookup follows `nextPageToken` up to a documented page cap (2,000
+memberships). `GET /user/hasgroup` compares `groupEmail` case-insensitively.
 
 ## API Documentation
 

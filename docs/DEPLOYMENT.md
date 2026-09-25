@@ -256,7 +256,8 @@ promotion workflow breaks:
 - **Prod runtime SA**: `secretmanager.secretAccessor` on the prod project and
   the **Groups Reader** admin role in Google Workspace (Admin console → Admin
   roles). The **Admin SDK API** (`admin.googleapis.com`) must be enabled on
-  the prod project or group lookups silently return no roles.
+  the prod project. A Directory lookup failure returns `503` from
+  authentication instead of an empty role list.
 - **GitHub `production` environment**: required reviewer(s) plus the
   environment secrets `GCP_PROJECT_ID`, `GCP_SERVICE_NAME`, `GCP_REGION`,
   `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT` (prod values).
@@ -271,9 +272,9 @@ promotion workflow breaks:
 | Promote never asks for approval | The `production` GitHub environment or its required reviewer is missing. |
 | Auth step fails with a token/OIDC error | Workload Identity Federation provider, its attribute condition, or the SA binding was changed. Compare against the Infrastructure reference above. |
 | Smoke test fails, traffic unchanged | The new revision does not boot or `/api-docs/` errors. Check revision logs in the prod project; production users are unaffected. Fix and release again. |
-| Users authenticate but have no roles | Admin SDK API disabled in the project, runtime SA missing the Workspace Groups Reader role, or a cached token (15-minute cache — re-sign-in). With `ALLOWED_GROUP_EMAILS` set this becomes data-route `403` (fail closed). |
+| Users authenticate but have no roles | Successful Directory lookup returned no groups, or a cached token (15-minute cache — re-sign-in). With `ALLOWED_GROUP_EMAILS` set a user who is not in an allowed group gets data-route `403`. An Admin SDK outage returns `503` from authentication instead of that empty role list. |
 | Every authenticated request returns 401 after a deploy | The token audience no longer matches. `GOOGLE_CLIENT_ID` on the service must equal the OAuth client the UI/Swagger mint tokens with; if the UI uses a different client, add it to `ALLOWED_CLIENT_IDS`. |
 | Revision fails to start, or every data route returns 403 | On Cloud Run, `ALLOWED_GROUP_EMAILS` is missing or empty. Set it to the environment Workspace group and deploy a new revision. Local runs without `K_SERVICE` may omit it. |
-| Some users get 403 | `ALLOWED_EMAIL_DOMAINS` is set and rejects an unverified or out-of-domain email, or `ALLOWED_GROUP_EMAILS` is set and they are not in a listed Workspace group (or Admin SDK returned no roles). `ALLOWED_EMAIL_DOMAINS` is optional; group membership is the required Cloud Run gate. |
+| Some users get 403 | `ALLOWED_EMAIL_DOMAINS` is set and rejects an unverified or out-of-domain email, or `ALLOWED_GROUP_EMAILS` is set and a successful group lookup shows they are not in a listed Workspace group. `ALLOWED_EMAIL_DOMAINS` is optional; group membership is the required Cloud Run gate. A Directory outage is `503`, not this `403`. |
 | New secret value not taking effect | Revisions pin secret versions at deploy time. Force a new revision (see Configuration and secrets). |
 | CORS errors from the UI | The UI origin is missing from the service's `ALLOWED_ORIGINS` env var. |
