@@ -5,6 +5,9 @@
  * Locally, gcloud user ADC is often present but unusable for Directory API
  * (expired reauth / invalid_rapt, or missing scopes). Prefer the explicit
  * service-account JWT from env, and fall back to it after any ADC failure.
+ * When every local attempt fails, return no roles so API testing can continue
+ * to CouchDB. Cloud Run (K_SERVICE) still throws so authenticate returns 503
+ * instead of treating an Admin SDK outage as an empty allow-list miss.
  *
  * groups.list is paged. Each request uses GROUP_LIST_PAGE_SIZE (100), the
  * historical page size, which is within the Admin SDK maximum of 200.
@@ -14,6 +17,7 @@
  * visible to authorization.
  */
 import { google } from 'googleapis';
+import { isRunningOnCloudRun } from './auth.js';
 
 /** Groups requested per Directory groups.list call. */
 export const GROUP_LIST_PAGE_SIZE = 100;
@@ -125,9 +129,14 @@ export async function listGroupsForUser(userData, auth, options = {}) {
 
 /**
  * Resolve group memberships, falling back between JWT and ADC.
- * A successful response with no groups returns []. Any Admin SDK failure
- * after credential fallbacks are exhausted throws DirectoryGroupsUnavailableError
- * so authenticate can return 503 instead of an empty role list.
+ * A successful response with no groups returns [].
+ *
+ * On Cloud Run, an Admin SDK failure after credential fallbacks throws
+ * DirectoryGroupsUnavailableError so authenticate returns 503 instead of an
+ * empty role list. Off Cloud Run, that same exhaustion returns []: gcloud
+ * user ADC is often unusable for Directory, and local development without
+ * K_SERVICE may omit ALLOWED_GROUP_EMAILS so the request can still reach
+ * CouchDB. A configured local allow-list still fail-closes on those empty roles.
  */
 export async function getGroupMemberships(userData, options = {}) {
     const env = options.env ?? process.env;
@@ -140,6 +149,18 @@ export async function getGroupMemberships(userData, options = {}) {
         error?.message || 'Directory group lookup failed',
         { cause: error }
     );
+
+    const giveUp = (error) => {
+        logGroupFetchError('Error fetching groups', error);
+        if (isRunningOnCloudRun(env)) {
+            throw unavailable(error);
+        }
+        console.warn(
+            'Local Directory group lookup failed; continuing without Workspace roles. ' +
+            'On Cloud Run this failure returns 503.'
+        );
+        return [];
+    };
 
     const tryJwt = async () => {
         console.log('Using service-account JWT for Directory group lookup');
@@ -159,8 +180,7 @@ export async function getGroupMemberships(userData, options = {}) {
             try {
                 return await tryAdc();
             } catch (adcError) {
-                logGroupFetchError('Error fetching groups', adcError);
-                throw unavailable(adcError);
+                return giveUp(adcError);
             }
         }
     }
@@ -173,12 +193,10 @@ export async function getGroupMemberships(userData, options = {}) {
             try {
                 return await tryJwt();
             } catch (jwtError) {
-                logGroupFetchError('Error fetching groups', jwtError);
-                throw unavailable(jwtError);
+                return giveUp(jwtError);
             }
         }
 
-        logGroupFetchError('Error fetching groups', error);
-        throw unavailable(error);
+        return giveUp(error);
     }
 }

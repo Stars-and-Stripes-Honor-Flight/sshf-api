@@ -10,7 +10,7 @@ import {
     getGroupMemberships,
     DirectoryGroupsUnavailableError
 } from '../utils/groups.js';
-import { assertUserInAllowedGroups } from '../utils/auth.js';
+import { assertUserInAllowedGroups, GroupNotAllowedError } from '../utils/auth.js';
 import { createAuthenticator } from '../utils/authenticate.js';
 
 describe('Directory group auth strategy', () => {
@@ -134,6 +134,11 @@ describe('Directory group lookup failures', () => {
     const originalClientId = process.env.GOOGLE_CLIENT_ID;
     const originalAllowedClientIds = process.env.ALLOWED_CLIENT_IDS;
     const originalAllowedDomains = process.env.ALLOWED_EMAIL_DOMAINS;
+    const userData = { email: 'member@starsandstripeshonorflight.org' };
+    const saEnv = {
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: 'sa@example.iam.gserviceaccount.com',
+        GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nfake\\n-----END PRIVATE KEY-----\\n'
+    };
 
     const restore = (key, value) => {
         if (value === undefined) {
@@ -143,42 +148,52 @@ describe('Directory group lookup failures', () => {
         }
     };
 
-    afterEach(() => {
-        restore('GOOGLE_CLIENT_ID', originalClientId);
-        restore('ALLOWED_CLIENT_IDS', originalAllowedClientIds);
-        restore('ALLOWED_EMAIL_DOMAINS', originalAllowedDomains);
-        sinon.restore();
-    });
+    function directoryOutage() {
+        const error = new Error('Directory API unavailable');
+        error.response = { status: 503, data: { error: 'backendError' } };
+        return error;
+    }
 
-    it('returns 503 from authenticate when the Directory API fails', async () => {
-        process.env.GOOGLE_CLIENT_ID = OUR_CLIENT_ID;
-        delete process.env.ALLOWED_CLIENT_IDS;
-        delete process.env.ALLOWED_EMAIL_DOMAINS;
+    function unusableAdcError() {
+        const error = new Error('reauth related error (invalid_rapt)');
+        error.response = {
+            status: 400,
+            data: {
+                error: 'invalid_grant',
+                error_description: 'reauth related error (invalid_rapt)',
+                error_subtype: 'invalid_rapt'
+            }
+        };
+        return error;
+    }
+
+    function silenceLogs() {
         sinon.stub(console, 'error');
         sinon.stub(console, 'log');
+        sinon.stub(console, 'warn');
+    }
 
-        const directoryError = new Error('Directory API unavailable');
-        directoryError.response = { status: 503, data: { error: 'backendError' } };
+    function authenticateWithDirectory(env, directoryError) {
         const cacheSet = sinon.spy();
-
         const authenticate = createAuthenticator({
             getTokenInfo: async () => ({
                 aud: OUR_CLIENT_ID,
-                email: 'member@starsandstripeshonorflight.org',
+                email: userData.email,
                 email_verified: true
             }),
             getUserInfo: async () => ({
                 sub: 'user-1',
-                email: 'member@starsandstripeshonorflight.org',
+                email: userData.email,
                 given_name: 'Mem',
                 family_name: 'Ber'
             }),
-            getGroupMemberships: (userData) => getGroupMemberships(userData, {
-                env: {},
+            getGroupMemberships: (data) => getGroupMemberships(data, {
+                env,
                 listGroups: async () => {
                     throw directoryError;
                 },
-                createAdcAuth: () => ({})
+                createAdcAuth: () => ({}),
+                createJwtAuth: () => ({})
             }),
             cache: {
                 get() {
@@ -187,7 +202,26 @@ describe('Directory group lookup failures', () => {
                 set: cacheSet
             }
         });
+        return { authenticate, cacheSet };
+    }
 
+    afterEach(() => {
+        restore('GOOGLE_CLIENT_ID', originalClientId);
+        restore('ALLOWED_CLIENT_IDS', originalAllowedClientIds);
+        restore('ALLOWED_EMAIL_DOMAINS', originalAllowedDomains);
+        sinon.restore();
+    });
+
+    it('returns 503 from authenticate on Cloud Run when the Directory API fails', async () => {
+        process.env.GOOGLE_CLIENT_ID = OUR_CLIENT_ID;
+        delete process.env.ALLOWED_CLIENT_IDS;
+        delete process.env.ALLOWED_EMAIL_DOMAINS;
+        silenceLogs();
+
+        const { authenticate, cacheSet } = authenticateWithDirectory(
+            { K_SERVICE: 'sshf-api' },
+            directoryOutage()
+        );
         const req = { headers: { authorization: 'Bearer token-1' } };
         const res = {
             status: sinon.stub().returnsThis(),
@@ -204,24 +238,110 @@ describe('Directory group lookup failures', () => {
         expect(cacheSet.called).to.be.false;
     });
 
-    it('throws DirectoryGroupsUnavailableError instead of returning an empty list', async () => {
-        sinon.stub(console, 'error');
-        sinon.stub(console, 'log');
+    it('throws DirectoryGroupsUnavailableError on Cloud Run instead of returning an empty list', async () => {
+        silenceLogs();
 
         try {
-            await getGroupMemberships(
-                { email: 'member@starsandstripeshonorflight.org' },
-                {
-                    env: {},
-                    listGroups: async () => {
-                        throw new Error('backendError');
-                    },
-                    createAdcAuth: () => ({})
-                }
-            );
+            await getGroupMemberships(userData, {
+                env: { K_SERVICE: 'sshf-api' },
+                listGroups: async () => {
+                    throw directoryOutage();
+                },
+                createAdcAuth: () => ({})
+            });
+            expect.fail('expected Directory group lookup to throw');
+        } catch (error) {
+            expect(error).to.be.instanceOf(DirectoryGroupsUnavailableError);
+            expect(error.message).to.equal('Directory API unavailable');
+        }
+    });
+
+    it('throws on Cloud Run when ADC and the service-account JWT both fail', async () => {
+        silenceLogs();
+        const listGroups = sinon.stub().rejects(directoryOutage());
+
+        try {
+            await getGroupMemberships(userData, {
+                env: { ...saEnv, K_SERVICE: 'sshf-api' },
+                listGroups,
+                createAdcAuth: () => ({}),
+                createJwtAuth: () => ({})
+            });
             expect.fail('expected Directory group lookup to throw');
         } catch (error) {
             expect(error).to.be.instanceOf(DirectoryGroupsUnavailableError);
         }
+
+        expect(listGroups.callCount).to.equal(2);
+    });
+
+    it('returns no roles locally when ADC is unusable and no service-account JWT is configured', async () => {
+        silenceLogs();
+
+        const groups = await getGroupMemberships(userData, {
+            env: {},
+            listGroups: async () => {
+                throw unusableAdcError();
+            },
+            createAdcAuth: () => ({})
+        });
+
+        expect(groups).to.deep.equal([]);
+    });
+
+    it('returns no roles locally when the JWT and ADC attempts both fail', async () => {
+        silenceLogs();
+        const listGroups = sinon.stub().rejects(new Error('Could not load the default credentials'));
+
+        const groups = await getGroupMemberships(userData, {
+            env: saEnv,
+            listGroups,
+            createAdcAuth: () => ({}),
+            createJwtAuth: () => ({})
+        });
+
+        expect(listGroups.callCount).to.equal(2);
+        expect(groups).to.deep.equal([]);
+    });
+
+    it('continues authentication locally so a tunneled CouchDB request is not blocked', async () => {
+        process.env.GOOGLE_CLIENT_ID = OUR_CLIENT_ID;
+        delete process.env.ALLOWED_CLIENT_IDS;
+        delete process.env.ALLOWED_EMAIL_DOMAINS;
+        silenceLogs();
+
+        const { authenticate, cacheSet } = authenticateWithDirectory({}, unusableAdcError());
+        const req = { headers: { authorization: 'Bearer token-1' } };
+        const res = {
+            status: sinon.stub().returnsThis(),
+            json: sinon.spy()
+        };
+        const next = sinon.spy();
+
+        await authenticate(req, res, next);
+
+        expect(next.calledOnce).to.be.true;
+        expect(res.status.called).to.be.false;
+        expect(req.user.roles).to.deep.equal([]);
+        expect(req.user.email).to.equal(userData.email);
+        expect(cacheSet.calledOnce).to.be.true;
+        expect(() => assertUserInAllowedGroups(req.user.roles, { env: {} })).to.not.throw();
+    });
+
+    it('still rejects local data routes when ALLOWED_GROUP_EMAILS is set and Directory is unusable', async () => {
+        silenceLogs();
+
+        const groups = await getGroupMemberships(userData, {
+            env: { ALLOWED_GROUP_EMAILS: FULL_ACCESS_GROUP },
+            listGroups: async () => {
+                throw unusableAdcError();
+            },
+            createAdcAuth: () => ({})
+        });
+
+        expect(groups).to.deep.equal([]);
+        expect(() => assertUserInAllowedGroups(groups.map((group) => ({ email: group.email })), {
+            env: { ALLOWED_GROUP_EMAILS: FULL_ACCESS_GROUP }
+        })).to.throw(GroupNotAllowedError);
     });
 });

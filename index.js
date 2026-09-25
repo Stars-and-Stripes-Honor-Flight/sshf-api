@@ -96,8 +96,9 @@ async function getUserInfo(token) {
     return userResponse.data;
 }
 
-// Middleware to authenticate Google users. Directory outages return 503
-// (see utils/authenticate.js) and are not cached as an empty role list.
+// Middleware to authenticate Google users. On Cloud Run, Directory outages
+// return 503 (see utils/authenticate.js) and are not cached as an empty role
+// list. Local runs continue with no roles when Directory credentials fail.
 const authenticate = createAuthenticator({
     getTokenInfo: (token) => tokenInfoClient.getTokenInfo(token),
     getUserInfo,

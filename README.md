@@ -61,7 +61,7 @@ Required environment variables:
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
-> **Note**: In Cloud Run, Application Default Credentials are used automatically. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership.
+> **Note**: In Cloud Run, Application Default Credentials are used automatically. A Directory failure there is `503`. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership. If local Directory credentials are missing or unusable, authentication continues with no roles. Leave `ALLOWED_GROUP_EMAILS` unset for that local path; data routes then proceed to CouchDB.
 
 ### Installation
 
@@ -167,13 +167,21 @@ The API enforces these checks before a request proceeds:
    membership in at least one listed group (`403` otherwise, including when
    Admin SDK returns no roles). Local development without `K_SERVICE` may omit
    the list. `GET /user/hasgroup` stays auth-only so the UI can probe
-   membership during sign-in.
+   membership during sign-in. Local Directory lookup prefers
+   `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
+   When those are missing or gcloud user ADC cannot call Directory
+   (`invalid_rapt`, missing scopes), local authentication continues with no
+   roles so requests still reach CouchDB (including a tunneled dev database).
+   If `ALLOWED_GROUP_EMAILS` is set locally, those empty roles still `403`.
 
 Responses: `401` for a missing, invalid, expired, or wrong-audience token;
 `403` for a permitted-token account that is not allowed (domain or group);
-`503` if token introspection or the Workspace Directory group lookup is
-temporarily unavailable. A Directory failure is not treated as an empty role
-list, which would otherwise become `403` when the group allow-list is set.
+`503` if token introspection is temporarily unavailable, or if the Workspace
+Directory group lookup fails on Cloud Run. A Cloud Run Directory failure is
+not treated as an empty role list, which would otherwise become `403` when
+the group allow-list is set. Off Cloud Run that lookup failure continues
+with no roles.
+
 Group lookup follows `nextPageToken` up to a documented page cap (2,000
 memberships). `GET /user/hasgroup` compares `groupEmail` case-insensitively.
 

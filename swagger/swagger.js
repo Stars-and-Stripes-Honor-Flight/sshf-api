@@ -81,8 +81,9 @@ const definition = {
           'domain or Workspace group membership is not permitted ' +
           '(ALLOWED_EMAIL_DOMAINS is optional; ALLOWED_GROUP_EMAILS is ' +
           'required on Cloud Run and fails closed when empty). ' +
-          'An Admin SDK group-lookup failure returns 503 instead of an empty ' +
-          'role list. GET /user/hasgroup is auth-only so clients can probe ' +
+          'On Cloud Run an Admin SDK group-lookup failure returns 503 instead ' +
+          'of an empty role list. Off Cloud Run that failure continues with ' +
+          'no roles. GET /user/hasgroup is auth-only so clients can probe ' +
           'group membership and compares group emails case-insensitively.',
         flows: {
           implicit: {
