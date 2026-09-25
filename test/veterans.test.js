@@ -205,7 +205,8 @@ describe('Veterans Route Handlers', () => {
             await retrieveVeteran(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Database error');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get veteran');
+            expect(res.json.firstCall.args[0].error).to.not.include('Database error');
         });
 
         it('should handle database errors without reason during retrieval', async () => {
@@ -291,7 +292,8 @@ describe('Veterans Route Handlers', () => {
             await updateVeteran(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Update failed');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to update veteran');
+            expect(res.json.firstCall.args[0].error).to.not.include('Update failed');
         });
 
         it('should handle database update errors when no reason is provided', async () => {
@@ -505,7 +507,8 @@ describe('Veterans Route Handlers', () => {
             await deleteVeteran(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Delete failed');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to delete veteran');
+            expect(res.json.firstCall.args[0].error).to.not.include('Delete failed');
         });
 
         it('should handle database delete errors when no reason is provided', async () => {
@@ -750,7 +753,8 @@ describe('Veterans Route Handlers', () => {
             await updateVeteranSeat(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Conflict');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to update veteran seat');
+            expect(res.json.firstCall.args[0].error).to.not.include('Conflict');
         });
 
         it('should return 500 when save fails without reason', async () => {

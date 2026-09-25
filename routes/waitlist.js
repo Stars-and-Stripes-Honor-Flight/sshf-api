@@ -1,7 +1,7 @@
 import { Veteran } from '../models/veteran.js';
 import { Guardian } from '../models/guardian.js';
 import { WaitlistRequest } from '../models/waitlist_request.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -127,7 +127,7 @@ export async function getWaitlist(req, res) {
         
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.reason || data.error || 'Failed to retrieve waitlist');
+            throw new Error(stableDatabaseError('Failed to retrieve waitlist', data, response.status));
         }
         
         // Map rows to appropriate model based on type

@@ -26,6 +26,8 @@ describe('OpenAPI spec generation', () => {
             expect(schemas[name], `missing schema ${name}`).to.be.an('object');
             expect(schemas[name].type).to.equal('object');
         }
+
+        expect(schemas.Error.properties).to.have.property('error');
     });
 
     it('loads the review application schemas and intake security scheme', () => {
@@ -74,6 +76,37 @@ describe('OpenAPI spec generation', () => {
             expect(specs.paths[path], `missing path ${path}`).to.be.an('object');
             expect(Object.keys(specs.paths[path]).length).to.be.greaterThan(0);
         }
+    });
+
+    it('documents 503 when a database session cannot be established', () => {
+        const operations = [
+            ['/search', 'get'],
+            ['/query', 'post'],
+            ['/flights', 'get'],
+            ['/flights', 'post'],
+            ['/flights/{id}', 'get'],
+            ['/flights/{id}/detail', 'get'],
+            ['/flights/{id}/assignments', 'get'],
+            ['/flights/{id}/assignments', 'post'],
+            ['/veterans', 'post'],
+            ['/veterans/{id}', 'get'],
+            ['/veterans/search', 'get'],
+            ['/guardians', 'post'],
+            ['/guardians/{id}', 'put'],
+            ['/docs', 'post'],
+            ['/exports/flight', 'get'],
+            ['/waitlist', 'get'],
+            ['/recent-activity', 'get'],
+            ['/review/applications', 'get']
+        ];
+
+        for (const [path, method] of operations) {
+            const operation = specs.paths[path]?.[method];
+            expect(operation, `missing ${method.toUpperCase()} ${path}`).to.be.an('object');
+            expect(operation.responses, `${method.toUpperCase()} ${path}`).to.have.property('503');
+        }
+
+        expect(specs.paths['/search'].get.responses['503'].description).to.match(/session/i);
     });
 
     it('documents document revision list and diff endpoints', () => {

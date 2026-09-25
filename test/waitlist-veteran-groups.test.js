@@ -125,7 +125,7 @@ describe('Waitlist Veteran Groups Route Handler', () => {
             await getWaitlistVeteranGroups(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.equal('Database error occurred');
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to retrieve veteran groups');
         });
 
         it('should return 500 when database returns error with no reason', async () => {

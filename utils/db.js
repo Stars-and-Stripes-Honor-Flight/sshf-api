@@ -17,6 +17,42 @@ export class DatabaseSessionError extends Error {
 }
 
 /**
+ * Shared JSON body for session middleware when CouchDB login fails.
+ * The body is stable and never includes a CouchDB response.
+ */
+export const DATABASE_SESSION_ERROR_BODY = Object.freeze({
+    error: 'Database session error'
+});
+
+/**
+ * Log CouchDB error fields and return a stable message safe for clients.
+ * `reason` and `error` from CouchDB stay in server logs.
+ *
+ * @param {string} fallback
+ * @param {{ reason?: string, error?: string } | null | undefined} data
+ * @param {number} [status]
+ * @returns {string}
+ */
+export function stableDatabaseError(fallback, data, status) {
+    const reason = typeof data?.reason === 'string' && data.reason.length > 0
+        ? data.reason
+        : undefined;
+    const errorName = typeof data?.error === 'string' && data.error.length > 0
+        ? data.error
+        : undefined;
+
+    if (reason || errorName) {
+        console.error('CouchDB request failed', {
+            status,
+            error: errorName,
+            reason
+        });
+    }
+
+    return fallback;
+}
+
+/**
  * Resolve the connection settings for the application review database.
  * URL, user and password fall back to the main database settings so a review
  * database hosted on the same CouchDB server only needs REVIEW_DB_NAME.
@@ -76,6 +112,7 @@ export function createDbClient(config) {
         });
 
         if (!response.ok) {
+            console.error('CouchDB session login failed', { status: response.status });
             throw new Error('Failed to create CouchDB session');
         }
 
@@ -119,8 +156,8 @@ export function createDbClient(config) {
             req[resolved.cookieProperty] = authCookie;
             next();
         } catch (error) {
-            console.error('CouchDB session error:', error);
-            res.status(500).json({ message: 'Database session error' });
+            console.error('CouchDB session error:', error instanceof Error ? error.message : 'Unknown session error');
+            res.status(503).json(DATABASE_SESSION_ERROR_BODY);
         }
     }
 
@@ -154,15 +191,31 @@ export function createDbClient(config) {
                 });
 
                 if (response.status === 401) {
-                    console.warn(`CouchDB session expired (attempt ${attempts}/${MAX_SESSION_RETRY_ATTEMPTS}), refreshing...`);
+                    console.warn(`CouchDB returned 401 (attempt ${attempts}/${MAX_SESSION_RETRY_ATTEMPTS}), refreshing session...`);
 
+                    let refreshedCookie;
                     try {
-                        req[cookieProperty] = await refreshSession(resolved);
-                        continue;
+                        refreshedCookie = await refreshSession(resolved);
                     } catch (refreshError) {
                         console.error(`Session refresh failed (attempt ${attempts}/${MAX_SESSION_RETRY_ATTEMPTS}):`, refreshError.message);
                         continue;
                     }
+
+                    req[cookieProperty] = refreshedCookie;
+                    const retryResponse = await fetch(url, {
+                        ...options,
+                        headers: {
+                            ...headers,
+                            Cookie: refreshedCookie
+                        }
+                    });
+
+                    if (retryResponse.status === 401) {
+                        console.error('CouchDB authorization failed after session refresh');
+                        return retryResponse;
+                    }
+
+                    return retryResponse;
                 }
 
                 return response;

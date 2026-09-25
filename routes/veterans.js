@@ -2,7 +2,7 @@ import { Veteran } from '../models/veteran.js';
 import { UnpairedVeteranRequest } from '../models/unpaired_veteran_request.js';
 import { UnpairedVeteranResults } from '../models/unpaired_veteran_results.js';
 import { VALID_BUSES } from '../models/flight_detail.js';
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 import { trimIfString } from '../utils/trim_strings.js';
 
@@ -44,6 +44,15 @@ const dbBase = `${dbUrl}/${dbName}`;
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function createVeteran(req, res) {
     try {
@@ -64,7 +73,7 @@ export async function createVeteran(req, res) {
 
         if (!response.ok) {
             const data = await response.json();
-            throw new Error(data.reason || 'Failed to create veteran document');
+            throw new Error(stableDatabaseError('Failed to create veteran document', data, response.status));
         }
 
         const data = await response.json();
@@ -118,6 +127,15 @@ export async function createVeteran(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function retrieveVeteran(req, res) {
     try {
@@ -133,7 +151,7 @@ export async function retrieveVeteran(req, res) {
             if (response.status === 404) {
                 return res.status(404).json({ error: 'Veteran not found' });
             }
-            throw new Error(data.reason || 'Failed to get veteran');
+            throw new Error(stableDatabaseError('Failed to get veteran', data, response.status));
         }
 
         // Verify this is a veteran document
@@ -189,6 +207,15 @@ export async function retrieveVeteran(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function updateVeteran(req, res) {
     try {
@@ -250,7 +277,7 @@ export async function updateVeteran(req, res) {
 
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || 'Failed to update veteran');
+            throw new Error(stableDatabaseError('Failed to update veteran', data, updateResponse.status));
         }
 
         const data = await updateResponse.json();
@@ -309,6 +336,15 @@ export async function updateVeteran(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function deleteVeteran(req, res) {
     try {
@@ -342,7 +378,7 @@ export async function deleteVeteran(req, res) {
 
         const data = await deleteResponse.json();
         if (!deleteResponse.ok) {
-            throw new Error(data.reason || 'Failed to delete veteran');
+            throw new Error(stableDatabaseError('Failed to delete veteran', data, deleteResponse.status));
         }
 
         res.json(data);
@@ -369,7 +405,7 @@ async function searchUnpaired(searchRequest, req) {
     
     const data = await response.json();
     if (!response.ok) {
-        throw new Error(data.reason || data.error || 'Failed to search unpaired veterans');
+        throw new Error(stableDatabaseError('Failed to search unpaired veterans', data, response.status));
     }
     
     return data;
@@ -444,6 +480,15 @@ async function searchUnpaired(searchRequest, req) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       503:
+ *         description: Database session error
  *         content:
  *           application/json:
  *             schema:
@@ -528,6 +573,15 @@ export async function searchUnpairedVeterans(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function updateVeteranSeat(req, res) {
     try {
@@ -599,7 +653,7 @@ export async function updateVeteranSeat(req, res) {
 
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || 'Failed to update veteran seat');
+            throw new Error(stableDatabaseError('Failed to update veteran seat', data, updateResponse.status));
         }
 
         const data = await updateResponse.json();
@@ -675,6 +729,15 @@ export async function updateVeteranSeat(req, res) {
  *         description: Unauthorized
  *       500:
  *         description: Server error
+ *       503:
+ *         description: Database session error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
  */
 export async function updateVeteranBus(req, res) {
     try {
@@ -754,7 +817,7 @@ export async function updateVeteranBus(req, res) {
 
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || 'Failed to update veteran bus');
+            throw new Error(stableDatabaseError('Failed to update veteran bus', data, updateResponse.status));
         }
 
         const data = await updateResponse.json();
@@ -862,7 +925,7 @@ async function patchVeteranField(req, res, config) {
         });
         if (!updateResponse.ok) {
             const data = await updateResponse.json();
-            throw new Error(data.reason || config.saveError);
+            throw new Error(stableDatabaseError(config.saveError, data, updateResponse.status));
         }
 
         const data = await updateResponse.json();

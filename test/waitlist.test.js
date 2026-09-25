@@ -274,7 +274,7 @@ describe('Waitlist Route Handler', () => {
                 await getWaitlist(req, res);
 
                 expect(res.status.calledWith(500)).to.be.true;
-                expect(res.json.firstCall.args[0].error).to.equal('Database error occurred');
+                expect(res.json.firstCall.args[0].error).to.equal('Failed to retrieve waitlist');
             });
 
             it('should return 500 when database returns error with error field', async () => {
@@ -286,7 +286,7 @@ describe('Waitlist Route Handler', () => {
                 await getWaitlist(req, res);
 
                 expect(res.status.calledWith(500)).to.be.true;
-                expect(res.json.firstCall.args[0].error).to.equal('not_found');
+                expect(res.json.firstCall.args[0].error).to.equal('Failed to retrieve waitlist');
             });
 
             it('should return 500 with default message when database returns empty error', async () => {

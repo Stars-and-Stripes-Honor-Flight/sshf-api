@@ -480,7 +480,8 @@ describe('Query Route', () => {
             await postQuery(req, res, next);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Database does not exist');
+            expect(res.json.firstCall.args[0].error).to.equal('Database error');
+            expect(res.json.firstCall.args[0].error).to.not.include('Database does not exist');
         });
 
         it('should return 500 when CouchDB returns 500 error', async () => {
@@ -496,7 +497,37 @@ describe('Query Route', () => {
             await postQuery(req, res, next);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Internal server error');
+            expect(res.json.firstCall.args[0].error).to.equal('Database error');
+            expect(JSON.stringify(res.json.firstCall.args[0])).to.not.include('Internal server error');
+        });
+
+        it('returns a stable database error when authorization fails after session refresh', async () => {
+            const errorLog = sinon.stub(console, 'error');
+            global.fetch = sinon.stub();
+            global.fetch.onFirstCall().resolves({
+                ok: false,
+                status: 401,
+                json: async () => ({ error: 'unauthorized', reason: 'You are not a server admin.' })
+            });
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                headers: {
+                    get: sinon.stub().returns('AuthSession=refreshed-cookie; Path=/')
+                }
+            });
+            global.fetch.onThirdCall().resolves({
+                ok: false,
+                status: 401,
+                json: async () => ({ error: 'unauthorized', reason: 'You are not a server admin.' })
+            });
+
+            await postQuery(req, res, next);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Database error');
+            expect(JSON.stringify(res.json.firstCall.args[0])).to.not.include('could not be established');
+            expect(JSON.stringify(res.json.firstCall.args[0])).to.not.include('server admin');
+            expect(JSON.stringify(errorLog.args)).to.include('You are not a server admin.');
         });
 
         it('should return 500 for non-session, non-validation errors', async () => {

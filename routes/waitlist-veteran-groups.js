@@ -1,4 +1,4 @@
-import { dbFetch, DatabaseSessionError } from '../utils/db.js';
+import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -64,7 +64,7 @@ export async function getWaitlistVeteranGroups(req, res) {
 
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.reason || data.error || 'Failed to retrieve veteran groups');
+            throw new Error(stableDatabaseError('Failed to retrieve veteran groups', data, response.status));
         }
 
         const groupedNames = new Map();

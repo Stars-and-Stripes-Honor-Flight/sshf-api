@@ -285,7 +285,8 @@ describe('Flights Route Handlers', () => {
             await listFlights(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Database error');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to retrieve flights');
+            expect(res.json.firstCall.args[0].error).to.not.include('Database error');
         });
 
         it('should handle database errors without reason', async () => {
@@ -535,7 +536,8 @@ describe('Flights Route Handlers', () => {
             await retrieveFlight(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Database error');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get flight');
+            expect(res.json.firstCall.args[0].error).to.not.include('Database error');
         });
 
         it('should handle database errors without reason during retrieval', async () => {
@@ -711,7 +713,8 @@ describe('Flights Route Handlers', () => {
             await updateFlight(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Update failed');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to update flight');
+            expect(res.json.firstCall.args[0].error).to.not.include('Update failed');
         });
 
         it('should handle database update errors when no reason is provided', async () => {

@@ -184,7 +184,8 @@ describe('Guardians Route Handlers', () => {
             await retrieveGuardian(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Database error');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get guardian');
+            expect(res.json.firstCall.args[0].error).to.not.include('Database error');
         });
 
         it('should handle database errors without reason during retrieval', async () => {
@@ -270,7 +271,8 @@ describe('Guardians Route Handlers', () => {
             await updateGuardian(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Update failed');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to update guardian');
+            expect(res.json.firstCall.args[0].error).to.not.include('Update failed');
         });
 
         it('should handle database update errors when no reason is provided', async () => {
@@ -1296,7 +1298,8 @@ describe('Guardians Route Handlers', () => {
             await deleteGuardian(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Delete failed');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to delete guardian');
+            expect(res.json.firstCall.args[0].error).to.not.include('Delete failed');
         });
 
         it('should handle database delete errors when no reason is provided', async () => {
@@ -1521,7 +1524,8 @@ describe('Guardians Route Handlers', () => {
             await updateGuardianSeat(req, res);
 
             expect(res.status.calledWith(500)).to.be.true;
-            expect(res.json.firstCall.args[0].error).to.include('Conflict');
+            expect(res.json.firstCall.args[0].error).to.include('Failed to update guardian seat');
+            expect(res.json.firstCall.args[0].error).to.not.include('Conflict');
         });
 
         it('should return 500 when save fails without reason', async () => {
