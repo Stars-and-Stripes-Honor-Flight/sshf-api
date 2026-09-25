@@ -2,8 +2,9 @@
  * Google user authentication middleware.
  *
  * Introspects the bearer access token, loads profile and Workspace groups,
- * and caches a successful result. Directory lookup failures are 503 so a
- * transient Admin SDK outage is not cached or turned into an empty role list.
+ * and caches a successful result. On Cloud Run, Directory lookup failures are
+ * 503 so a transient Admin SDK outage is not cached or turned into an empty
+ * role list. Off Cloud Run, getGroupMemberships returns no roles instead.
  */
 import { assertValidTokenClaims, TokenAudienceError } from './auth.js';
 import { DirectoryGroupsUnavailableError } from './groups.js';
