@@ -7,7 +7,8 @@
  *       Auth-only probe used by the UI during sign-in. Does not require
  *       membership in ALLOWED_GROUP_EMAILS so non-members can still discover
  *       that they are unauthorized. Data routes enforce group membership
- *       separately via the authorize middleware.
+ *       separately via the authorize middleware. groupEmail is compared to
+ *       role emails case-insensitively, matching authorize.
  *     tags: [User]
  *     security:
  *       - GoogleAuth: []
@@ -33,11 +34,17 @@
  *       401:
  *         description: Missing, invalid, or wrong-audience token
  *       503:
- *         description: Token introspection temporarily unavailable
+ *         description: Token introspection or Workspace Directory group lookup temporarily unavailable
  */
+function normalizeGroupEmail(value) {
+    return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
 export function getHasGroup(req, res) {
     const roles = req.user?.roles;
-    const groupEmail = req.query.groupEmail;
-    const hasGroup = roles?.some(role => role.email === groupEmail) ?? false;
+    const requested = normalizeGroupEmail(req.query.groupEmail);
+    const hasGroup = requested.length > 0 && (roles?.some(
+        (role) => normalizeGroupEmail(role.email) === requested
+    ) ?? false);
     res.json({ hasgroup: hasGroup });
 }

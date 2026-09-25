@@ -25,6 +25,16 @@ describe('getHasGroup', () => {
         expect(res.body).to.deep.equal({ hasgroup: true });
     });
 
+    it('returns hasgroup true when groupEmail differs only by case', () => {
+        const req = {
+            user: { roles: [{ email: FULL_ACCESS_GROUP.toUpperCase() }] },
+            query: { groupEmail: FULL_ACCESS_GROUP }
+        };
+        const res = createRes();
+        getHasGroup(req, res);
+        expect(res.body).to.deep.equal({ hasgroup: true });
+    });
+
     it('returns hasgroup false when the user is not in the requested group', () => {
         const req = {
             user: { roles: [{ email: 'other@example.com' }] },

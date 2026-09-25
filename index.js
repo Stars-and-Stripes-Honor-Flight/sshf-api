@@ -8,9 +8,10 @@ import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession, reviewDbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
 import { authenticateIntake } from './utils/intake_auth.js';
-import { assertValidTokenClaims, TokenAudienceError, authorize, assertGroupAuthorizationConfigured } from './utils/auth.js';
-import { shouldFallbackToServiceAccountJwt, shouldPreferServiceAccountJwt } from './utils/groups.js';
+import { authorize, assertGroupAuthorizationConfigured } from './utils/auth.js';
+import { getGroupMemberships } from './utils/groups.js';
 import { createUserCache } from './utils/user_cache.js';
+import { createAuthenticator } from './utils/authenticate.js';
 
 // Import route handlers
 import { getHasGroup } from './routes/user.js';
@@ -83,6 +84,26 @@ const userCache = createUserCache();
 
 // Client used only to introspect incoming access tokens (validate audience)
 const tokenInfoClient = new OAuth2Client();
+
+async function getUserInfo(token) {
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: token });
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userResponse = await oauth2.userinfo.get();
+    if (!userResponse.data) {
+        throw new Error('Failed to fetch user info');
+    }
+    return userResponse.data;
+}
+
+// Middleware to authenticate Google users. Directory outages return 503
+// (see utils/authenticate.js) and are not cached as an empty role list.
+const authenticate = createAuthenticator({
+    getTokenInfo: (token) => tokenInfoClient.getTokenInfo(token),
+    getUserInfo,
+    getGroupMemberships,
+    cache: userCache
+});
 
 // Route definitions
 app.get('/user/hasgroup', authenticate, getHasGroup);
@@ -191,170 +212,3 @@ try {
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
-
-const DIRECTORY_GROUP_SCOPE = 'https://www.googleapis.com/auth/admin.directory.group.readonly';
-
-function createDirectoryJwtAuth() {
-    return new google.auth.JWT({
-        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        key: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        scopes: [DIRECTORY_GROUP_SCOPE]
-    });
-}
-
-async function listGroupsForUser(userData, auth) {
-    const admin = google.admin({ version: 'directory_v1', auth });
-    const domain = userData.email.split('@')[1];
-    const response = await admin.groups.list({
-        userKey: userData.email,
-        domain,
-        maxResults: 100
-    });
-    return response.data.groups || [];
-}
-
-function logGroupFetchError(label, error) {
-    console.error(`${label}:`, error.message);
-    if (error.response) {
-        console.error('Error details:', {
-            status: error.response.status,
-            data: error.response.data
-        });
-    }
-}
-
-async function getGroupMemberships(userData) {
-    const tryJwt = async () => {
-        console.log('Using service-account JWT for Directory group lookup');
-        return listGroupsForUser(userData, createDirectoryJwtAuth());
-    };
-
-    const tryAdc = async () => {
-        const auth = new google.auth.GoogleAuth({
-            scopes: [DIRECTORY_GROUP_SCOPE]
-        });
-        console.log('Using Application Default Credentials for authentication');
-        return listGroupsForUser(userData, auth);
-    };
-
-    if (shouldPreferServiceAccountJwt()) {
-        try {
-            return await tryJwt();
-        } catch (error) {
-            logGroupFetchError('JWT group fetch failed, trying ADC', error);
-            try {
-                return await tryAdc();
-            } catch (adcError) {
-                logGroupFetchError('Error fetching groups', adcError);
-                return [];
-            }
-        }
-    }
-
-    try {
-        return await tryAdc();
-    } catch (error) {
-        if (shouldFallbackToServiceAccountJwt(error)) {
-            console.log('ADC authentication failed, falling back to JWT with env vars:', error.message);
-            try {
-                return await tryJwt();
-            } catch (jwtError) {
-                logGroupFetchError('Error fetching groups', jwtError);
-                return [];
-            }
-        }
-
-        logGroupFetchError('Error fetching groups', error);
-        return [];
-    }
-}
-
-// Middleware to authenticate Google users
-async function authenticate(req, res, next) {
-    try {
-        // Get the token from the Authorization header (assuming it's a Bearer token)
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ message: 'Unauthorized: No Bearer token provided' });
-        }
-        const token = authHeader.split(' ')[1];
-
-        const cachedUser = userCache.get(token);
-        if (cachedUser) {
-            req.user = cachedUser;
-            return next();
-        }
-
-        // Introspect the token so we can confirm it was actually issued for
-        // this application's OAuth client. A valid Google token alone is not
-        // enough: without this check any Google access token from any client
-        // would be accepted.
-        let tokenInfo;
-        try {
-            tokenInfo = await tokenInfoClient.getTokenInfo(token);
-        } catch (introspectionError) {
-            const status = introspectionError?.status ?? introspectionError?.response?.status;
-            if (status && status >= 400 && status < 500) {
-                return res.status(401).json({ message: 'Unauthorized: Invalid token' });
-            }
-            console.error('Token introspection failed:', introspectionError?.message);
-            return res.status(503).json({ message: 'Authentication service unavailable' });
-        }
-
-        try {
-            assertValidTokenClaims({
-                aud: tokenInfo.aud,
-                email: tokenInfo.email,
-                emailVerified: tokenInfo.email_verified
-            });
-        } catch (validationError) {
-            if (validationError instanceof TokenAudienceError) {
-                return res.status(401).json({ message: 'Unauthorized: Token not issued for this application' });
-            }
-            return res.status(403).json({ message: 'Forbidden: Account not permitted' });
-        }
-
-        // Fetch basic user info
-        const oauth2Client = new google.auth.OAuth2();
-        oauth2Client.setCredentials({ access_token: token });
-
-        const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-        const userResponse = await oauth2.userinfo.get();
-
-        if (!userResponse.data) {
-            throw new Error('Failed to fetch user info');
-        }
-
-        const userData = userResponse.data;
-
-        // Fetch group memberships
-        const groups = await getGroupMemberships(userData);
-
-        // Map groups to roles (customize this based on your needs)
-        const roles = groups.map(group => ({
-            id: group.id,
-            name: group.name,
-            email: group.email
-        }));
-
-        const user = {
-            id: userData.sub,
-            email: userData.email,
-            firstName: userData.given_name,
-            lastName: userData.family_name,
-            avatar: userData.picture,
-            roles: roles // Add roles to user data
-        };
-
-        userCache.set(token, user);
-
-        // Attach user information to the request object (optional)
-        req.user = user;
-
-        // Proceed to the next middleware or route handler
-        next();
-    } catch (error) {
-        console.error('Authentication error:', error);
-        res.status(401).json({ message: 'Unauthorized: Invalid token' });
-    }
-}
