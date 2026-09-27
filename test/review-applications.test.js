@@ -6,7 +6,8 @@ import {
     retrieveReviewApplication,
     updateReviewApplication,
     updateReviewApplicationStatus,
-    acceptReviewApplication
+    acceptReviewApplication,
+    saveReviewDocument
 } from '../routes/review-applications.js';
 import { clearSessionCache, clearReviewSessionCache } from '../utils/db.js';
 
@@ -586,6 +587,19 @@ describe('Review Applications Route Handlers', () => {
             expect(res.json.firstCall.args[0].error).to.include(
                 'Database session could not be established'
             );
+        });
+
+        it('should return 500 when the review document cannot be loaded', async () => {
+            global.fetch.resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ reason: 'unavailable' })
+            });
+
+            await retrieveReviewApplication(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to get review application');
         });
     });
 
@@ -1173,6 +1187,58 @@ describe('Review Applications Route Handlers', () => {
             expect(res.json.firstCall.args[0].error).to.include(
                 'Database session could not be established'
             );
+        });
+
+        it('should return 500 when the logistics lookup fails for a reason other than not found', async () => {
+            global.fetch.withArgs(sinon.match('http://review:5984/hf_apps/app-1'))
+                .onFirstCall().resolves({
+                    ok: true,
+                    status: 200,
+                    json: async () => buildVeteranAppFixture()
+                });
+            global.fetch.withArgs(sinon.match('http://main:5984/hf/app-1'))
+                .onFirstCall().resolves({
+                    ok: false,
+                    status: 500,
+                    json: async () => ({ reason: 'unavailable' })
+                });
+
+            await acceptReviewApplication(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal(
+                'Failed to check logistics database for existing record'
+            );
+        });
+    });
+
+    describe('saveReviewDocument', () => {
+        it('should reject an invalid document id before writing', async () => {
+            try {
+                await saveReviewDocument(req, 'foo/bar', { type: 'VeteranApp' });
+                expect.fail('expected invalid id to throw');
+            } catch (error) {
+                expect(error.message).to.equal('Invalid document id');
+            }
+            expect(global.fetch.called).to.be.false;
+        });
+    });
+
+    describe('readErrorReason', () => {
+        it('should use the fallback message when an error response body cannot be parsed', async () => {
+            req.body = buildVeteranIntakePayload();
+            global.fetch.resolves({
+                ok: false,
+                status: 500,
+                json: async () => {
+                    throw new Error('bad json');
+                }
+            });
+
+            await createReviewApplication(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Failed to create application');
         });
     });
 });

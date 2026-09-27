@@ -87,4 +87,16 @@ describe('User authentication cache', () => {
         expect(cache.get('token-a').id).to.equal('a');
         expect(cache.get('token-c').id).to.equal('c');
     });
+
+    it('updates an existing entry when setting the same token again', () => {
+        let now = 1_000;
+        const cache = createUserCache({ now: () => now, ttlMs: 15 * 60 * 1000, maxEntries: 10 });
+
+        cache.set('token-a', { ...user, id: 'user-1' });
+        now += 100;
+        cache.set('token-a', { ...user, id: 'user-updated' });
+
+        expect(cache.size()).to.equal(1);
+        expect(cache.get('token-a').id).to.equal('user-updated');
+    });
 });

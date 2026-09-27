@@ -36,6 +36,21 @@ describe('generic document write validation', () => {
         expect(ALLOWED_DOCUMENT_TYPES).to.deep.equal(['Flight', 'Guardian', 'Veteran']);
     });
 
+    it('rejects null body', () => {
+        expect(() => prepareGenericDocumentWrite(null))
+            .to.throw('Document body must be a JSON object');
+    });
+
+    it('rejects array body', () => {
+        expect(() => prepareGenericDocumentWrite([]))
+            .to.throw('Document body must be a JSON object');
+    });
+
+    it('rejects non-object body', () => {
+        expect(() => prepareGenericDocumentWrite('string'))
+            .to.throw('Document body must be a JSON object');
+    });
+
     it('requires _id', () => {
         expect(() => prepareGenericDocumentWrite({ type: 'Flight', name: 'Spring' }))
             .to.throw(MISSING_ID_ERROR);

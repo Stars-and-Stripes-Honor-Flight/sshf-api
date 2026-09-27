@@ -1430,6 +1430,191 @@ describe('Flight Assignments Route Handlers', () => {
             // The old flight should be 'None' since flight.id was undefined
             expect(savedGuardianDoc.flight.history[0].change).to.include('changed flight from: None to');
         });
+
+        it('should return 400 for an invalid flight id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('should record a failure when a waitlist veteran id is not a valid document id', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'bad/vet',
+                        value: '',
+                        doc: {
+                            _id: 'bad/vet',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: '' },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(0);
+            expect(response.failed[0]).to.include({
+                id: 'bad/vet',
+                type: 'veteran',
+                status: 400
+            });
+            expect(response.failed[0].error).to.include('Invalid document id');
+            expect(global.fetch.callCount).to.equal(2);
+        });
+
+        it('should record a failure when a paired guardian id is not a valid document id', async () => {
+            const guardianId = 'bad/guardian'.padEnd(32, 'x');
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            _rev: '1-xyz',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: guardianId },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+            global.fetch.onCall(2).resolves({
+                ok: true,
+                json: async () => ({ ok: true, id: 'vet-1', rev: '2-abc' })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(1);
+            expect(response.failed[0]).to.include({
+                id: guardianId,
+                type: 'guardian',
+                status: 400
+            });
+            expect(response.failed[0].error).to.include('Invalid document id');
+        });
+
+        it('should report the re-read status when a veteran save conflicts and the current document cannot be loaded', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            _rev: '1-xyz',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: '' },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+            global.fetch.onCall(2).resolves({
+                ok: false,
+                status: 409,
+                json: async () => ({ error: 'conflict', reason: 'Document update conflict.' })
+            });
+            global.fetch.onCall(3).resolves({
+                ok: false,
+                status: 500,
+                json: async () => ({ reason: 'unavailable' })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(0);
+            expect(response.failed[0].id).to.equal('vet-1');
+            expect(response.failed[0].status).to.equal(500);
+            expect(response.failed[0].error).to.include('Unknown error');
+        });
+
+        it('should count a guardian as saved when a conflict retry finds the guardian already on the flight', async () => {
+            const guardianId = 'g'.padEnd(32, '1');
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            _rev: '1-xyz',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: guardianId },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+            global.fetch.onCall(2).resolves({
+                ok: true,
+                json: async () => ({ ok: true, id: 'vet-1', rev: '2-abc' })
+            });
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                json: async () => ({
+                    _id: guardianId,
+                    flight: { id: 'None', history: [] },
+                    metadata: {}
+                })
+            });
+            global.fetch.onCall(4).resolves({
+                ok: false,
+                status: 409,
+                json: async () => ({ error: 'conflict', reason: 'Document update conflict.' })
+            });
+            global.fetch.onCall(5).resolves({
+                ok: true,
+                json: async () => ({
+                    _id: guardianId,
+                    _rev: '3-current',
+                    flight: { id: 'SSHF-Nov2024', history: [] },
+                    metadata: {}
+                })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.called).to.be.false;
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(1);
+            expect(response.added.guardians).to.equal(1);
+            expect(response.errors).to.deep.equal([]);
+        });
     });
 });
 

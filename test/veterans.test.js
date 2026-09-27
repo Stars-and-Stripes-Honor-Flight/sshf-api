@@ -437,6 +437,16 @@ describe('Veterans Route Handlers', () => {
             expect(response.metadata.updated_at).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
             expect(response.metadata.updated_by).to.equal('Admin User');
         });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
     });
 
     describe('deleteVeteran', () => {
@@ -554,6 +564,16 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await deleteVeteran(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
         });
     });
 
@@ -788,6 +808,17 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
         });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+            req.body = { value: '14B' };
+
+            await updateVeteranSeat(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
     });
 
     describe('updateVeteranBus', () => {
@@ -1000,6 +1031,17 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
         });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+            req.body = { value: 'Alpha1' };
+
+            await updateVeteranBus(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
     });
 
     describe('extended veteran patch handlers', () => {
@@ -1189,6 +1231,17 @@ describe('Veterans Route Handlers', () => {
                 expect(res.status.calledWith(503)).to.be.true;
             });
         }
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+            req.body = { value: true };
+
+            await updateVeteranMailCallReceived(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
 
         it('should return 500 for non-404 fetch failure in helper', async () => {
             req.body = { value: true };

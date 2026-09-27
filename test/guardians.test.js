@@ -417,6 +417,16 @@ describe('Guardians Route Handlers', () => {
             expect(response.metadata.updated_by).to.equal('Admin User');
         });
 
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await updateGuardian(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
+
         describe('veteran pairing synchronization', () => {
             beforeEach(() => {
                 const mockGuardian = JSON.parse(JSON.stringify(baseSampleData));
@@ -1227,6 +1237,28 @@ describe('Guardians Route Handlers', () => {
                 // No veteran fetch calls should be made
                 expect(global.fetch.callCount).to.equal(2);
             });
+
+            it('should record a pairing error when the veteran id is not a valid document id', async () => {
+                sinon.stub(console, 'warn');
+                sinon.stub(console, 'error');
+                req.body = JSON.parse(JSON.stringify(baseSampleData));
+                req.body.veteran = {
+                    pref_notes: '',
+                    history: [],
+                    pairings: [{ id: 'foo/bar', name: 'Bad Id' }]
+                };
+                global.fetch.onSecondCall().resolves({
+                    ok: true,
+                    json: async () => ({ id: 'guardian-id', rev: '2-def' })
+                });
+
+                await updateGuardian(req, res);
+
+                expect(global.fetch.callCount).to.equal(2);
+                expect(res.json.called).to.be.true;
+                expect(console.error.calledOnce).to.be.true;
+                expect(console.error.firstCall.args[1][0]).to.include('Invalid document id');
+            });
         });
     });
 
@@ -1345,6 +1377,16 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await deleteGuardian(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
         });
     });
 
@@ -1559,6 +1601,17 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
         });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+            req.body = { value: '14B' };
+
+            await updateGuardianSeat(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
     });
 
     describe('updateGuardianBus', () => {
@@ -1771,9 +1824,31 @@ describe('Guardians Route Handlers', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
         });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+            req.body = { value: 'Alpha1' };
+
+            await updateGuardianBus(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
     });
 
     describe('extended guardian patch handlers', () => {
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+            req.body = { value: 'updated notes' };
+
+            await updateGuardianTrainingNotes(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
+
         const baseDoc = {
             _id: 'guard-extended-1',
             _rev: '1-abc',

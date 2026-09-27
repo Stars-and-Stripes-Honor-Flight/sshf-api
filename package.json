@@ -1,6 +1,6 @@
 {
   "name": "sshf-api",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -15,15 +15,6 @@
     "deps:audit:all": "npm audit",
     "deps:update": "npm update",
     "deps:verify": "npm test && npm run coverage"
-  },
-  "nyc": {
-    "include": [
-      "src/**/*.js"
-    ],
-    "reporter": [
-      "text",
-      "html"
-    ]
   },
   "keywords": [],
   "author": "",
