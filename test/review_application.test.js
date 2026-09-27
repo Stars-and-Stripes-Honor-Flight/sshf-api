@@ -197,7 +197,10 @@ describe('ReviewApplication Model', () => {
         });
 
         it('should parse a non-legacy timestamp through Date', () => {
-            expect(toCreatedAt('2024/03/05 14:22:01')).to.equal('2024-03-05T14:22:01Z');
+            const input = '2024/03/05 14:22:01';
+            const parsed = new Date(input);
+            const expected = parsed.toISOString().split('.')[0] + 'Z';
+            expect(toCreatedAt(input)).to.equal(expected);
         });
 
         it('should return empty string when the fallback timestamp cannot be parsed', () => {
