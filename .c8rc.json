@@ -1,0 +1,22 @@
+{
+  "all": true,
+  "include": [
+    "routes/**/*.js",
+    "models/**/*.js",
+    "utils/**/*.js",
+    "swagger/**/*.js",
+    "index.js"
+  ],
+  "exclude": [
+    "scripts/**",
+    "test/**",
+    "coverage/**",
+    "**/*.test.js"
+  ],
+  "reporter": [
+    "text",
+    "html",
+    "lcov"
+  ],
+  "check-coverage": false
+}

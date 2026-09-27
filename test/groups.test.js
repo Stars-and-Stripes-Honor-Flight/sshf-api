@@ -345,3 +345,58 @@ describe('Directory group lookup failures', () => {
         })).to.throw(GroupNotAllowedError);
     });
 });
+
+describe('Directory auth creation functions', () => {
+    it('should create JWT auth with service account credentials', async () => {
+        const userData = { email: 'user@starsandstripeshonorflight.org' };
+        const saEnv = {
+            GOOGLE_SERVICE_ACCOUNT_EMAIL: 'sa@example.iam.gserviceaccount.com',
+            GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nfake\\n-----END PRIVATE KEY-----\\n'
+        };
+
+        const mockAuth = {
+            authorize: sinon.stub().resolves()
+        };
+        
+        const createJwtAuth = sinon.stub().returns(mockAuth);
+        const listGroups = sinon.stub().resolves([]);
+
+        await getGroupMemberships(userData, {
+            env: saEnv,
+            listGroups,
+            createJwtAuth
+        });
+
+        expect(createJwtAuth.calledOnce).to.be.true;
+        expect(listGroups.calledOnce).to.be.true;
+        expect(listGroups.firstCall.args[1]).to.equal(mockAuth);
+    });
+
+    it('should create ADC auth when JWT is not preferred', async () => {
+        const userData = { email: 'user@starsandstripeshonorflight.org' };
+        const emptyEnv = {};
+
+        const mockAuth = {
+            authorize: sinon.stub().resolves()
+        };
+        
+        const createAdcAuth = sinon.stub().returns(mockAuth);
+        const listGroups = sinon.stub().resolves([]);
+
+        sinon.stub(console, 'log');
+        sinon.stub(console, 'error');
+        sinon.stub(console, 'warn');
+
+        await getGroupMemberships(userData, {
+            env: emptyEnv,
+            listGroups,
+            createAdcAuth
+        });
+
+        expect(createAdcAuth.calledOnce).to.be.true;
+        expect(listGroups.calledOnce).to.be.true;
+        expect(listGroups.firstCall.args[1]).to.equal(mockAuth);
+        
+        sinon.restore();
+    });
+});
