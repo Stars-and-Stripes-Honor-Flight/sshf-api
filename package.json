@@ -16,15 +16,6 @@
     "deps:update": "npm update",
     "deps:verify": "npm test && npm run coverage"
   },
-  "nyc": {
-    "include": [
-      "src/**/*.js"
-    ],
-    "reporter": [
-      "text",
-      "html"
-    ]
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
