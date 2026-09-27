@@ -72,6 +72,26 @@ function normalizeBus(value) {
 }
 
 /**
+ * Removes a trailing guardian medical-level suffix appended by the Couch
+ * flight_pairings view. The view emits values such as "Main [A]" or "Web [B]"
+ * by concatenating flight.training with medical.level. That A–D scale is
+ * deprecated. The view is left unchanged so other consumers keep working;
+ * flight-detail people return the training type only.
+ *
+ * The suffix is a case-sensitive A–D letter in brackets, with optional
+ * whitespace around the brackets and inside them. Already-clean values and
+ * empty or missing training are unchanged.
+ * @param {any} value - training value from the view or caller
+ * @returns {string}
+ */
+function stripMedicalLevelSuffix(value) {
+    if (typeof value !== 'string' || value.length === 0) {
+        return '';
+    }
+    return value.replace(/\s*\[[\s]*[A-D][\s]*\]\s*$/, '');
+}
+
+/**
  * Represents an individual person (veteran or guardian) in the flight detail
  */
 export class FlightDetailPerson {
@@ -116,7 +136,7 @@ export class FlightDetailPerson {
         // Guardian-specific fields
         if (data.type === 'Guardian') {
             this.med_exprnc = data.med_exprnc || '';
-            this.training = data.training || '';
+            this.training = stripMedicalLevelSuffix(data.training);
             this.training_complete = parseBoolean(data.training_complete);
             this.flight_training_notes = data.flight_training_notes || '';
             this.flight_waiver = parseBoolean(data.flight_waiver);
@@ -220,6 +240,7 @@ export class FlightDetailPerson {
             homecoming_destination: doc.homecoming?.destination || '',
             // Guardian fields
             med_exprnc: value.med_exprnc || '',
+            // flight_pairings appends " [A]"–" [D]"; FlightDetailPerson strips it.
             training: value.training || '',
             training_complete: value.training_complete,
             flight_training_notes: doc.flight?.training_notes || '',

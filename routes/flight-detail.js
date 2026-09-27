@@ -21,6 +21,9 @@ const dbBase = `${dbUrl}/${dbName}`;
  *       - List of veteran-guardian pairs with seat/bus assignments
  *       - Per-person call-center fields such as fm_number and assigned_to when present
  *       - Per-person form fields used by gt-checkin, medical, and other flight forms
+ *       - Guardian training as the training type only. A trailing medical-level
+ *         suffix (` [A]` through ` [D]`) from the flight_pairings view is removed
+ *         here. medical_level remains a separate field. The Couch view is unchanged.
  *       
  *       Each pair includes mismatch flags:
  *       - busMismatch: true if people in the pair have different bus assignments

@@ -108,6 +108,7 @@ describe('Flight Detail Route Handlers', () => {
             expect(response.pairs[0].people[0].assigned_to).to.equal('Rachael M (Jim)');
             expect(response.pairs[0].people[1].fm_number).to.equal('');
             expect(response.pairs[0].people[1].assigned_to).to.equal('Rachael M (Jim)');
+            expect(response.pairs[0].people[1].training).to.equal('Main');
             expect(response.stats.buses.Alpha1).to.equal(2);
             expect(response.stats.tours.Alpha).to.equal(2);
             expect(response.stats.flight.Alpha).to.equal(2);
@@ -680,7 +681,7 @@ describe('Flight Detail Route Handlers', () => {
             expect(guardian.fm_number).to.equal('');
             expect(guardian.assigned_to).to.equal('Caller F');
             expect(guardian.med_exprnc).to.equal('Retired Paramedic');
-            expect(guardian.training).to.equal('Previous [A]');
+            expect(guardian.training).to.equal('Previous');
             expect(guardian.training_complete).to.equal(true);
         });
 

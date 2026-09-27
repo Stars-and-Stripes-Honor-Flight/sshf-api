@@ -82,7 +82,7 @@ describe('Flight Detail Models', () => {
                 expect(person.fm_number).to.equal('');
                 expect(person.assigned_to).to.equal('Caller B');
                 expect(person.med_exprnc).to.equal('Retired Nurse');
-                expect(person.training).to.equal('Main [A]');
+                expect(person.training).to.equal('Main');
                 expect(person.training_complete).to.equal(true);
                 expect(person).to.not.have.property('med_limits');
                 expect(person).to.not.have.property('group');
@@ -208,6 +208,7 @@ describe('Flight Detail Models', () => {
                     training_complete: true
                 });
                 const json = person.toJSON();
+                expect(json.training).to.equal('Previous');
                 expect(json).to.have.all.keys([
                     'type', 'id', 'name_first', 'name_last', 'name_middle', 'birth_date', 'gender',
                     'city', 'phone_mbl', 'bus', 'seat', 'shirt', 'fm_number', 'assigned_to',
@@ -488,6 +489,90 @@ describe('Flight Detail Models', () => {
                 const person = FlightDetailPerson.fromViewRow(row);
                 expect(person.assigned_to).to.equal('Guardian Caller');
                 expect(person.fm_number).to.equal('FM456');
+            });
+
+            it('should strip a trailing medical-level suffix from view training', () => {
+                const cases = [
+                    ['Main [A]', 'Main'],
+                    ['Web [B]', 'Web'],
+                    ['Previous [C]', 'Previous'],
+                    ['Make-up [D]', 'Make-up'],
+                    ['Phone[A]', 'Phone'],
+                    ['None  [ B ]', 'None'],
+                    ['Web [D]  ', 'Web']
+                ];
+
+                for (const [training, expected] of cases) {
+                    const person = FlightDetailPerson.fromViewRow({
+                        type: 'Guardian',
+                        id: 'guard-suffix',
+                        training
+                    });
+                    expect(person.training).to.equal(expected);
+                }
+            });
+
+            it('should leave already-clean training values unchanged', () => {
+                for (const training of ['Main', 'Web', 'Previous', 'Phone', 'Make-up', 'None']) {
+                    const person = FlightDetailPerson.fromViewRow({
+                        type: 'Guardian',
+                        id: 'guard-clean',
+                        training
+                    });
+                    expect(person.training).to.equal(training);
+                }
+            });
+
+            it('should leave empty or missing training empty', () => {
+                const empty = FlightDetailPerson.fromViewRow({
+                    type: 'Guardian',
+                    id: 'guard-empty',
+                    training: ''
+                });
+                const missing = FlightDetailPerson.fromViewRow({
+                    type: 'Guardian',
+                    id: 'guard-missing'
+                });
+                const absent = FlightDetailPerson.fromViewRow({
+                    value: { type: 'Guardian', id: 'guard-absent' }
+                });
+
+                expect(empty.training).to.equal('');
+                expect(missing.training).to.equal('');
+                expect(absent.training).to.equal('');
+            });
+
+            it('should keep medical_level separate when the view training includes a suffix', () => {
+                const person = FlightDetailPerson.fromViewRow({
+                    value: {
+                        type: 'Guardian',
+                        id: 'guard-level',
+                        training: 'Main [A]'
+                    },
+                    doc: {
+                        medical: { level: 'A' }
+                    }
+                });
+                const json = person.toJSON();
+
+                expect(json.training).to.equal('Main');
+                expect(json.medical_level).to.equal('A');
+                expect(json).to.not.have.property('training_medical_level');
+            });
+
+            it('should not strip suffixes outside the deprecated A-D medical levels', () => {
+                expect(FlightDetailPerson.fromViewRow({
+                    type: 'Guardian',
+                    training: 'Main [a]'
+                }).training).to.equal('Main [a]');
+                expect(FlightDetailPerson.fromViewRow({
+                    type: 'Guardian',
+                    training: 'Main [E]'
+                }).training).to.equal('Main [E]');
+                expect(FlightDetailPerson.fromViewRow({
+                    type: 'Guardian',
+                    training: 'Main [A] extra'
+                }).training).to.equal('Main [A] extra');
             });
 
             it('should handle missing doc.call object gracefully', () => {
