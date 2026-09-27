@@ -549,6 +549,37 @@ describe('Generic document writes', () => {
             expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
             expect(global.fetch.secondCall.args[1].method).to.equal('PUT');
         });
+
+        it('returns 404 when document not found for update', async () => {
+            req.params.id = 'flight-2026-spring';
+            req.body = allowedDocument;
+            global.fetch.reset();
+            global.fetch.onFirstCall().resolves(mockResponse(
+                { error: 'not_found', reason: 'missing' },
+                { ok: false, status: 404 }
+            ));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(404)).to.be.true;
+            expect(res.json.calledWith({ error: 'Document not found' })).to.be.true;
+        });
+
+        it('returns 500 when get fails with non-404 error during update', async () => {
+            sinon.stub(console, 'error');
+            req.params.id = 'flight-2026-spring';
+            req.body = allowedDocument;
+            global.fetch.reset();
+            global.fetch.onFirstCall().resolves(mockResponse(
+                { error: 'internal_error' },
+                { ok: false, status: 500 }
+            ));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.exist;
+        });
     });
 
     describe('deleteDocument', () => {
@@ -597,6 +628,47 @@ describe('Generic document writes', () => {
 
             expect(res.status.calledWith(409)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.equal('Document update conflict.');
+        });
+
+        it('returns 404 when document not found for deletion', async () => {
+            global.fetch.resolves(mockResponse(
+                { error: 'not_found', reason: 'missing' },
+                { ok: false, status: 404 }
+            ));
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(404)).to.be.true;
+            expect(res.json.calledWith({ error: 'Document not found' })).to.be.true;
+        });
+
+        it('returns 500 when get fails with non-404 error during deletion', async () => {
+            global.fetch.resolves(mockResponse(
+                { error: 'internal_error' },
+                { ok: false, status: 500 }
+            ));
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get document for deletion');
+        });
+
+        it('returns 500 when delete operation fails with non-409 error', async () => {
+            global.fetch.onCall(0).resolves(mockResponse({
+                _id: 'flight-2026-spring',
+                _rev: '2-server-rev',
+                type: 'Flight'
+            }));
+            global.fetch.onCall(1).resolves(mockResponse(
+                { error: 'internal_error', reason: 'Server error' },
+                { ok: false, status: 500 }
+            ));
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to delete document');
         });
     });
 });

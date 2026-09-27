@@ -617,6 +617,16 @@ describe('Flights Route Handlers', () => {
             expect(res.json.firstCall.args[0].error).to.include('Validation failed');
         });
 
+        it('should reject design document IDs', async () => {
+            req.params.id = '_design/mydesign';
+
+            await updateFlight(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.calledOnce).to.be.true;
+            expect(global.fetch.called).to.be.false;
+        });
+
         it('should handle not found errors', async () => {
             global.fetch.onFirstCall().resolves({
                 ok: false,
