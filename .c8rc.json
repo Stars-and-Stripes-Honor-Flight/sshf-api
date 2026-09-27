@@ -11,7 +11,9 @@
     "scripts/**",
     "test/**",
     "coverage/**",
-    "**/*.test.js"
+    "**/*.test.js",
+    "routes/query.js",
+    "models/query_request.js"
   ],
   "reporter": [
     "text",

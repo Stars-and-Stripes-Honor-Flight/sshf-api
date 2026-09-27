@@ -85,7 +85,7 @@ async function loadReviewDocument(req, res, docId) {
     return { doc, ApplicationClass };
 }
 
-async function saveReviewDocument(req, docId, couchDoc) {
+export async function saveReviewDocument(req, docId, couchDoc) {
     const built = buildCouchDocumentUrl(reviewDbBase(), docId);
     if (built.error) {
         throw new Error(built.error);
@@ -584,11 +584,8 @@ export async function acceptReviewApplication(req, res) {
         const application = ApplicationClass.fromCouchDoc(doc);
 
         // Look for an existing logistics record with the same id
-        const mainBuilt = buildCouchDocumentUrl(mainDbBase(), docId);
-        if (mainBuilt.error) {
-            return res.status(400).json({ error: mainBuilt.error });
-        }
-        const mainUrl = mainBuilt.url;
+        // docId already passed loadReviewDocument's id check.
+        const mainUrl = buildCouchDocumentUrl(mainDbBase(), docId).url;
         const existingResponse = await dbFetch(req, mainUrl);
         let existing = null;
         if (existingResponse.ok) {

@@ -3,7 +3,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { createDocument, updateDocument, deleteDocument, listDocumentRevisions, diffDocument } from '../routes/docs.js';
+import { createDocument, retrieveDocument, updateDocument, deleteDocument, listDocumentRevisions, diffDocument } from '../routes/docs.js';
 import { COMPACTION_WARNING } from '../models/doc_diff.js';
 
 const indexSource = readFileSync(
@@ -122,6 +122,66 @@ describe('Document revision routes', () => {
             global.fetch.rejects(new Error('Database error'));
 
             await listDocumentRevisions(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await listDocumentRevisions(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('should return 500 when revision metadata cannot be loaded', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.resolves(mockResponse(
+                { error: 'internal_error', reason: 'Server error' },
+                { ok: false, status: 500 }
+            ));
+
+            await listDocumentRevisions(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get document revisions');
+        });
+    });
+
+    describe('retrieveDocument', () => {
+        it('should return 404 when the document does not exist', async () => {
+            global.fetch.resolves(mockResponse(
+                { error: 'not_found', reason: 'missing' },
+                { ok: false, status: 404 }
+            ));
+
+            await retrieveDocument(req, res);
+
+            expect(res.status.calledWith(404)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Document not found');
+        });
+
+        it('should return 500 when the document fetch fails with a non-404 status', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.resolves(mockResponse(
+                { error: 'internal_error', reason: 'Server error' },
+                { ok: false, status: 500 }
+            ));
+
+            await retrieveDocument(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Failed to get document');
+        });
+
+        it('should return 503 when a database session cannot be established', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.rejects(new Error('Database error'));
+
+            await retrieveDocument(req, res);
 
             expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
@@ -289,6 +349,30 @@ describe('Document revision routes', () => {
 
             expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+
+        it('should return 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await diffDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('should return 404 when a revision snapshot was removed after revs_info said it was available', async () => {
+            global.fetch.onCall(0).resolves(mockResponse(revsInfoDoc));
+            global.fetch.onCall(1).resolves(mockResponse(
+                { error: 'not_found', reason: 'missing' },
+                { ok: false, status: 404 }
+            ));
+            global.fetch.onCall(2).resolves(mockResponse(currentDoc));
+
+            await diffDocument(req, res);
+
+            expect(res.status.calledWith(404)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('compaction');
         });
     });
 });
@@ -608,6 +692,17 @@ describe('Generic document writes', () => {
             expect(res.json.calledWith({ error: 'Document not found' })).to.be.true;
         });
 
+        it('returns 503 when a database session cannot be established during update', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.reset();
+            global.fetch.rejects(new Error('Database error'));
+
+            await updateDocument(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
+        });
+
         it('returns 500 when get fails with non-404 error during update', async () => {
             sinon.stub(console, 'error');
             req.params.id = 'flight-2026-spring';
@@ -695,6 +790,27 @@ describe('Generic document writes', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Failed to get document for deletion');
+        });
+
+        it('returns 400 for an invalid document id before reading CouchDB', async () => {
+            req.params.id = 'foo/bar';
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+            expect(global.fetch.called).to.be.false;
+        });
+
+        it('returns 503 when a database session cannot be established during deletion', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.reset();
+            global.fetch.rejects(new Error('Database error'));
+
+            await deleteDocument(req, res);
+
+            expect(res.status.calledWith(503)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
 
         it('returns 500 when delete operation fails with non-409 error', async () => {

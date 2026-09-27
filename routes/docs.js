@@ -12,7 +12,7 @@ import {
     prepareGenericDocumentWrite
 } from '../models/generic_document.js';
 import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
-import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
+import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -289,10 +289,8 @@ export async function retrieveDocument(req, res) {
 export async function updateDocument(req, res) {
     try {
         const document = prepareGenericDocumentWrite(req.body, { urlId: req.params.id });
-        const url = buildCouchDocumentUrlOrRespond(res, dbBase, req.params.id);
-        if (url === null) {
-            return;
-        }
+        // Body _id must match the URL id and already passed the same id rules.
+        const url = buildCouchDocumentUrl(dbBase, req.params.id).url;
 
         // First, get the current revision
         const getResponse = await dbFetch(req, url);

@@ -151,6 +151,10 @@ describe('ReviewApplication Model', () => {
         it('should return empty string for unparsable garbage', () => {
             expect(parseLegacyDate('garbage')).to.equal('');
         });
+
+        it('should parse a slash-separated year-first date through Date', () => {
+            expect(parseLegacyDate('2024/03/05')).to.equal('2024-03-05');
+        });
     });
 
     describe('formatLegacyDate', () => {
@@ -175,6 +179,14 @@ describe('ReviewApplication Model', () => {
         it('should return empty string for empty input', () => {
             expect(toAppDate('')).to.equal('');
         });
+
+        it('should parse a non-ISO date string', () => {
+            expect(toAppDate('March 5, 2024')).to.equal('2024-03-05');
+        });
+
+        it('should return empty string when the fallback date cannot be parsed', () => {
+            expect(toAppDate('not-a-date')).to.equal('');
+        });
     });
 
     describe('toCreatedAt', () => {
@@ -182,6 +194,20 @@ describe('ReviewApplication Model', () => {
             const result = toCreatedAt('2024-03-05 14:22:01');
             expect(result).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
             expect(result.startsWith('2024-03-05T')).to.equal(true);
+        });
+
+        it('should parse a non-legacy timestamp through Date', () => {
+            expect(toCreatedAt('2024/03/05 14:22:01')).to.equal('2024-03-05T14:22:01Z');
+        });
+
+        it('should return empty string when the fallback timestamp cannot be parsed', () => {
+            expect(toCreatedAt('not-a-timestamp')).to.equal('');
+        });
+
+        it('should return empty string for empty or non-string input', () => {
+            expect(toCreatedAt('')).to.equal('');
+            expect(toCreatedAt(null)).to.equal('');
+            expect(toCreatedAt(42)).to.equal('');
         });
     });
 
@@ -540,6 +566,18 @@ describe('ReviewApplication Model', () => {
             app.prepareForSave({ firstName: 'Admin', lastName: 'User' });
             expect(app.metadata.created_by).to.equal('Admin User');
             expect(app.metadata.created_at).to.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+        });
+
+        it('should store an empty name when no user is provided', () => {
+            const app = new ReviewApplication(buildValidNormalizedApp());
+            app.prepareForSave(null);
+            expect(app.metadata.updated_by).to.equal('');
+        });
+
+        it('should use a string user name as updated_by', () => {
+            const app = new ReviewApplication(buildValidNormalizedApp());
+            app.prepareForSave('Ada Lovelace');
+            expect(app.metadata.updated_by).to.equal('Ada Lovelace');
         });
     });
 

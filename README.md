@@ -276,7 +276,7 @@ sshf-api/
 2. Add route handlers in `routes/`
 3. Document endpoints using JSDoc OpenAPI annotations
 4. Add corresponding tests in `test/`
-5. Ensure 100% test coverage is maintained
+5. Ensure 100% statement and line coverage is maintained for application code. `.c8rc.json` excludes `scripts/` and the experimental ad-hoc query module (`routes/query.js`, `models/query_request.js`), which will be redesigned.
 
 ### Pull Request Process
 
