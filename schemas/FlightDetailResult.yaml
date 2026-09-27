@@ -178,7 +178,11 @@ FlightDetailPerson:
       description: Medical experience (Guardians only)
     training:
       type: string
-      description: Training status (Guardians only)
+      description: |
+        Training type (Guardians only), such as Main, Web, Previous, Phone,
+        Make-up, or None. A trailing medical-level suffix appended by the
+        Couch flight_pairings view (` [A]` through ` [D]`) is removed in this
+        response. Medical level stays on medical_level.
     training_complete:
       type: boolean
       description: Whether training is complete (Guardians only)
