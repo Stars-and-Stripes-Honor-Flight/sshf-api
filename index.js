@@ -85,7 +85,7 @@ const userCache = createUserCache();
 // Client used only to introspect incoming access tokens (validate audience)
 const tokenInfoClient = new OAuth2Client();
 
-async function getUserInfo(token) {
+export async function getUserInfo(token) {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: token });
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
@@ -215,9 +215,11 @@ export function validateGroupAuthorization() {
 export { app };
 
 // Start the Express server only when run directly
+/* c8 ignore start */
 if (import.meta.url === `file://${process.argv[1]}`) {
     validateGroupAuthorization();
     app.listen(port, () => {
         console.log(`Server running at http://localhost:${port}`);
     });
 }
+/* c8 ignore stop */

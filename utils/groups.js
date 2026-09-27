@@ -63,7 +63,7 @@ function logGroupFetchError(label, error) {
     }
 }
 
-function createDirectoryJwtAuth(env = process.env) {
+export function createDirectoryJwtAuth(env = process.env) {
     return new google.auth.JWT({
         email: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
         key: env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n'),
@@ -71,7 +71,7 @@ function createDirectoryJwtAuth(env = process.env) {
     });
 }
 
-function createDirectoryAdcAuth() {
+export function createDirectoryAdcAuth() {
     return new google.auth.GoogleAuth({
         scopes: [DIRECTORY_GROUP_SCOPE]
     });

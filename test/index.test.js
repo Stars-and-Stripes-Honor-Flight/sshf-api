@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { app, validateGroupAuthorization } from '../index.js';
+import { app, validateGroupAuthorization, getUserInfo } from '../index.js';
+import { google } from 'googleapis';
 
 describe('Express application', () => {
     it('should export Express app', () => {
@@ -48,6 +49,53 @@ describe('Express application', () => {
         app._router.stack.forEach((middleware) => {
             if (middleware.route && middleware.route.path === '/openapi.json') {
                 middleware.route.stack[0].handle(req, res);
+            }
+        });
+    });
+
+    describe('getUserInfo', () => {
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should fetch user info successfully', async () => {
+            const mockUserData = {
+                sub: 'user-123',
+                email: 'test@example.com',
+                given_name: 'Test',
+                family_name: 'User',
+                picture: 'https://example.com/avatar.jpg'
+            };
+
+            sinon.stub(google.auth, 'OAuth2').returns({
+                setCredentials: sinon.stub()
+            });
+            sinon.stub(google, 'oauth2').returns({
+                userinfo: {
+                    get: sinon.stub().resolves({ data: mockUserData })
+                }
+            });
+
+            const result = await getUserInfo('test-token');
+
+            expect(result).to.deep.equal(mockUserData);
+        });
+
+        it('should throw when userResponse.data is undefined', async () => {
+            sinon.stub(google.auth, 'OAuth2').returns({
+                setCredentials: sinon.stub()
+            });
+            sinon.stub(google, 'oauth2').returns({
+                userinfo: {
+                    get: sinon.stub().resolves({})
+                }
+            });
+
+            try {
+                await getUserInfo('test-token');
+                expect.fail('Should have thrown');
+            } catch (error) {
+                expect(error.message).to.equal('Failed to fetch user info');
             }
         });
     });

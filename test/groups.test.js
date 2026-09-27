@@ -8,7 +8,9 @@ import {
     shouldFallbackToServiceAccountJwt,
     listGroupsForUser,
     getGroupMemberships,
-    DirectoryGroupsUnavailableError
+    DirectoryGroupsUnavailableError,
+    createDirectoryJwtAuth,
+    createDirectoryAdcAuth
 } from '../utils/groups.js';
 import { assertUserInAllowedGroups, GroupNotAllowedError } from '../utils/auth.js';
 import { createAuthenticator } from '../utils/authenticate.js';
@@ -347,12 +349,30 @@ describe('Directory group lookup failures', () => {
 });
 
 describe('Directory auth creation functions', () => {
-    it('should create JWT auth with service account credentials', async () => {
+    const saEnv = {
+        GOOGLE_SERVICE_ACCOUNT_EMAIL: 'sa@example.iam.gserviceaccount.com',
+        GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nfake\\n-----END PRIVATE KEY-----\\n'
+    };
+
+    it('should create JWT auth object with service account credentials', () => {
+        const auth = createDirectoryJwtAuth(saEnv);
+        
+        expect(auth).to.be.an('object');
+        expect(auth.email).to.equal('sa@example.iam.gserviceaccount.com');
+        expect(auth.key).to.include('BEGIN PRIVATE KEY');
+        expect(auth.key).to.not.include('\\n');
+        expect(auth.scopes).to.deep.equal(['https://www.googleapis.com/auth/admin.directory.group.readonly']);
+    });
+
+    it('should create ADC auth object', () => {
+        const auth = createDirectoryAdcAuth();
+        
+        expect(auth).to.be.an('object');
+        expect(auth.scopes).to.deep.equal(['https://www.googleapis.com/auth/admin.directory.group.readonly']);
+    });
+
+    it('should create JWT auth with service account credentials via injection', async () => {
         const userData = { email: 'user@starsandstripeshonorflight.org' };
-        const saEnv = {
-            GOOGLE_SERVICE_ACCOUNT_EMAIL: 'sa@example.iam.gserviceaccount.com',
-            GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\\nfake\\n-----END PRIVATE KEY-----\\n'
-        };
 
         const mockAuth = {
             authorize: sinon.stub().resolves()

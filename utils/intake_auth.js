@@ -54,7 +54,7 @@ function isServiceUnavailable(error) {
     return typeof status === 'number' && status >= 500;
 }
 
-function defaultVerifyIdToken(idToken, audience) {
+export function defaultVerifyIdToken(idToken, audience) {
     const client = new OAuth2Client();
     return client.verifyIdToken({ idToken, audience }).then((ticket) => ticket.getPayload());
 }
