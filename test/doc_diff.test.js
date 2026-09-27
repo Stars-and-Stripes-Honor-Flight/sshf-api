@@ -107,6 +107,32 @@ describe('buildRevisionList', () => {
 });
 
 describe('resolveRevisionPair', () => {
+    it('should throw 400 when revsInfo is not an array', () => {
+        expect(() => resolveRevisionPair(null))
+            .to.throw(DocDiffError)
+            .that.has.property('status', 400);
+        expect(() => resolveRevisionPair(undefined))
+            .to.throw('Document revision history is not available');
+    });
+
+    it('should throw 400 when revsInfo is an empty array', () => {
+        expect(() => resolveRevisionPair([]))
+            .to.throw(DocDiffError)
+            .that.has.property('status', 400);
+    });
+
+    it('should throw 404 when no revisions have available status', () => {
+        expect(() => resolveRevisionPair([
+            { rev: REV_MISSING, status: 'missing' },
+            { rev: REV_DELETED, status: 'deleted' }
+        ]))
+            .to.throw(DocDiffError)
+            .that.has.property('status', 404);
+        expect(() => resolveRevisionPair([
+            { rev: REV_MISSING, status: 'missing' }
+        ])).to.throw('No available revisions found');
+    });
+
     it('should default to previous and current available revisions', () => {
         const pair = resolveRevisionPair(revsInfo);
         expect(pair.from).to.deep.equal({ rev: REV_PREVIOUS, status: 'available' });

@@ -239,6 +239,49 @@ describe('Document revision routes', () => {
             expect(res.json.firstCall.args[0].error).to.equal('Document not found');
         });
 
+        it('should return 500 when revs_info fetch fails with non-404 error', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.resolves(mockResponse(
+                { error: 'internal_error', reason: 'Server error' },
+                { ok: false, status: 500 }
+            ));
+
+            await diffDocument(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.exist;
+        });
+
+        it('should return 500 when from revision fetch fails with non-404 error', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.onFirstCall().resolves(mockResponse(revsInfoDoc));
+            global.fetch.onSecondCall().resolves(mockResponse(
+                { error: 'internal_error' },
+                { ok: false, status: 500 }
+            ));
+            global.fetch.onThirdCall().resolves(mockResponse(currentDoc));
+
+            await diffDocument(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.exist;
+        });
+
+        it('should return 500 when to revision fetch fails with non-404 error', async () => {
+            sinon.stub(console, 'error');
+            global.fetch.onFirstCall().resolves(mockResponse(revsInfoDoc));
+            global.fetch.onSecondCall().resolves(mockResponse(previousDoc));
+            global.fetch.onThirdCall().resolves(mockResponse(
+                { error: 'internal_error' },
+                { ok: false, status: 500 }
+            ));
+
+            await diffDocument(req, res);
+
+            expect(res.status.calledWith(500)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.exist;
+        });
+
         it('should return 503 when a database session cannot be established', async () => {
             global.fetch.rejects(new Error('Database error'));
 
