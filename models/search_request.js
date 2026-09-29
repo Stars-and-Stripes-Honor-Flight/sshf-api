@@ -5,6 +5,9 @@ export class SearchRequest {
         // Set defaults
         this.limit = data.limit || 25;
         this.lastname = data.lastname || '';
+        // basic/all_by_name, all_by_status_and_name, and all_by_flight_and_name
+        // emit doc.name.last.replace(/['\. ]/g, '') with case unchanged.
+        this.lastnameKey = String(this.lastname).replace(/['\. ]/g, '');
         this.status = data.status || 'Active';
         this.flight = data.flight || 'All';
         this.phone_num = data.phone_num || '';
@@ -64,19 +67,19 @@ export class SearchRequest {
             params.append('endkey', endKey);
         }
         else if (viewName === 'all_by_status_and_name') {
-            const startKey = JSON.stringify([this.status, this.lastname]);
+            const startKey = JSON.stringify([this.status, this.lastnameKey]);
             const endKey = JSON.stringify([this.status, '\ufff0']);
             params.append('startkey', startKey);
             params.append('endkey', endKey);
         } 
         else if (viewName === 'all_by_flight_and_name') {
-            const startKey = JSON.stringify([this.flight, this.lastname]);
+            const startKey = JSON.stringify([this.flight, this.lastnameKey]);
             const endKey = JSON.stringify([this.flight, '\ufff0']);
             params.append('startkey', startKey);
             params.append('endkey', endKey);
         }
         else {  // all_by_name view
-            const startKey = JSON.stringify([this.lastname]);
+            const startKey = JSON.stringify([this.lastnameKey]);
             const endKey = JSON.stringify(['\ufff0']);
             params.append('startkey', startKey);
             params.append('endkey', endKey);

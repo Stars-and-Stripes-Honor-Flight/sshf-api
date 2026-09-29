@@ -70,7 +70,10 @@ function filterPhoneSearchResults(searchRequest, dbResult) {
  *         name: lastname
  *         schema:
  *           type: string
- *         description: Last name to search for (partial match). Ignored when phone_num is provided.
+ *         description: |
+          Last name prefix to search for (partial match). Apostrophes, periods, and spaces
+          are removed before querying so the term matches the name index. Case is unchanged.
+          Ignored when phone_num is provided.
  *       - in: query
  *         name: phone_num
  *         schema:

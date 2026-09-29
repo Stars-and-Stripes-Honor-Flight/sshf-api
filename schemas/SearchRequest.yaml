@@ -7,7 +7,7 @@ properties:
   lastname:
     type: string
     default: ''
-    description: 'Last name to search for (ignored when phone_num is provided)'
+    description: 'Last name prefix to search for. Apostrophes, periods, and spaces are removed before querying so the term matches the name index. Case is unchanged. Ignored when phone_num is provided.'
   phone_num:
     type: string
     default: ''
