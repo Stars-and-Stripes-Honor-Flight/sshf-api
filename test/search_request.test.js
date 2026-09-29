@@ -163,6 +163,73 @@ describe('SearchRequest', () => {
             expect(params.get('endkey')).to.equal('["\ufff0"]');
             expect(params.get('limit')).to.equal('25');
         });
+
+        it('should strip spaces from lastname startkeys to match the name index', () => {
+            const cases = [
+                {
+                    label: 'Le Roy',
+                    status: 'Active',
+                    flight: 'All',
+                    startkey: '["Active","LeRoy"]',
+                    endkey: '["Active","\ufff0"]'
+                },
+                {
+                    label: 'le roy',
+                    status: 'All',
+                    flight: 'All',
+                    startkey: '["leroy"]',
+                    endkey: '["\ufff0"]'
+                },
+                {
+                    label: 'LeRoy',
+                    status: 'Active',
+                    flight: 'All',
+                    startkey: '["Active","LeRoy"]',
+                    endkey: '["Active","\ufff0"]'
+                },
+                {
+                    label: 'leroy',
+                    status: 'All',
+                    flight: 'SSHF-Nov2024',
+                    startkey: '["SSHF-Nov2024","leroy"]',
+                    endkey: '["SSHF-Nov2024","\ufff0"]'
+                }
+            ];
+
+            cases.forEach(({ label, status, flight, startkey, endkey }) => {
+                const request = new SearchRequest({
+                    status,
+                    flight,
+                    lastname: label
+                });
+                const params = new URLSearchParams(request.toQueryParams());
+                expect(params.get('startkey'), label).to.equal(startkey);
+                expect(params.get('endkey'), label).to.equal(endkey);
+                expect(request.lastname, label).to.equal(label);
+            });
+        });
+
+        it('should strip apostrophes and periods from lastname startkeys and keep other characters', () => {
+            const obrien = new SearchRequest({
+                status: 'All',
+                flight: 'All',
+                lastname: "O'Brien"
+            });
+            expect(new URLSearchParams(obrien.toQueryParams()).get('startkey')).to.equal('["OBrien"]');
+
+            const stJohn = new SearchRequest({
+                status: 'Active',
+                lastname: 'St. John'
+            });
+            expect(new URLSearchParams(stJohn.toQueryParams()).get('startkey')).to.equal('["Active","StJohn"]');
+
+            const hyphenated = new SearchRequest({
+                status: 'All',
+                flight: 'SSHF-Nov2024',
+                lastname: 'Smith-Jones'
+            });
+            expect(new URLSearchParams(hyphenated.toQueryParams()).get('startkey')).to.equal('["SSHF-Nov2024","Smith-Jones"]');
+        });
     });
 
     describe('toJSON', () => {
@@ -185,6 +252,15 @@ describe('SearchRequest', () => {
                 phone_num: '',
                 viewName: 'all_by_status_and_name'
             });
+        });
+
+        it('should keep the typed lastname when spaces are removed only for the index key', () => {
+            const request = new SearchRequest({
+                lastname: 'Le Roy',
+                status: 'Active'
+            });
+
+            expect(request.toJSON().lastname).to.equal('Le Roy');
         });
     });
 }); 

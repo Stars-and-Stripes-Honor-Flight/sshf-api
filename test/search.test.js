@@ -44,6 +44,36 @@ describe('Search Route', () => {
             expect(global.fetch.called).to.be.false;
         });
 
+        it('should query the name index with spaces removed from lastname', async () => {
+            req.query.lastname = 'Le Roy';
+
+            global.fetch = sinon.stub().resolves({
+                ok: true,
+                json: async () => ({
+                    total_rows: 1,
+                    offset: 0,
+                    rows: [{
+                        id: '1',
+                        key: ['Active', 'LeRoy'],
+                        value: {
+                            type: 'veteran',
+                            name: 'Jean Le Roy',
+                            phone: '217-555-1234',
+                            city: 'Springfield',
+                            status: 'Active'
+                        }
+                    }]
+                })
+            });
+
+            await getSearch(req, res, next);
+
+            expect(res.json.calledOnce).to.be.true;
+            const fetchUrl = global.fetch.firstCall.args[0];
+            expect(fetchUrl).to.include('/_design/basic/_view/all_by_status_and_name?');
+            expect(fetchUrl).to.include(`startkey=${encodeURIComponent('["Active","LeRoy"]')}`);
+        });
+
         it('should return search results', async () => {
             const mockDbResult = {
                 total_rows: 1,
