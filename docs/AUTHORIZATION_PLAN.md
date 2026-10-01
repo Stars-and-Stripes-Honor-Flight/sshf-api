@@ -14,7 +14,7 @@ in `.cursor/rules/`.
 | # | Requirement | Where it is addressed |
 |---|---|---|
 | R1 | Membership counts whether the user is a **direct or indirect (nested)** member of a Workspace group | Section 4, Phase 1 |
-| R2 | Specific authorization groups grant specific permissions in the app | Section 3 (roles WRITE, FULL, MEDICAL, REVIEW), Phase 2 |
+| R2 | Specific authorization groups grant specific permissions in the app | Section 3 (roles READ, WRITE, FULL, MEDICAL, REVIEW), Phase 2 |
 | R3 | Permissions allow or deny access to API endpoints; the API is the enforcer | Section 3.3, Phase 3 |
 | R4 | Group names that grant permissions are configurable per deployment environment | Section 5, Phase 2 |
 | R5 | The API exposes a summary of the current user's permission level for UI hints | Section 6, Phase 3 (API), Phase 4 (UI) |
@@ -68,8 +68,8 @@ There is a single permission level. Every protected route in `index.js`
 can call every data endpoint, including deletes, exports, and application
 acceptance. Dev uses `sshf_app_dev_full_access@…` and prod uses
 `sshf_app_prd_full_access@…`. Today every app user is in the full-access
-group. The other three authorization groups for each environment (Section 5)
-exist in Workspace but the API does not read them yet.
+group. The other four authorization groups for each environment (Section 5)
+are defined for this plan, but the API does not read them yet.
 
 Public or separately authenticated routes: `GET /openapi.json`,
 `/api-docs`, and `POST /review/applications` (service-account ID token via
@@ -133,7 +133,7 @@ needs **no new IAM grant, Workspace role, scope, or enabled API.**
 Workspace groups (per environment, env config)
         │  direct OR nested membership (Admin SDK hasMember)
         ▼
-Roles (stable IDs defined in code: WRITE, FULL, MEDICAL, REVIEW)
+Roles (stable IDs defined in code: READ, WRITE, FULL, MEDICAL, REVIEW)
         │  static role → permission catalog (code, tested)
         ▼
 Permissions (e.g. records:read, records:write)
@@ -161,34 +161,49 @@ Each role maps to one Workspace group per environment (Section 5).
 
 | Role | Group (dev / prd) | Purpose |
 |---|---|---|
-| `WRITE` | `sshf_app_dev_access@` / `sshf_app_prd_access@` | Common logistics read and write. Most board members get this through the BoD group nested inside the access group |
+| `READ` | `sshf_app_dev_read_access@` / `sshf_app_prd_read_access@` | Read-only logistics: search, view records, flights, waitlist, recent activity, and exports |
+| `WRITE` | `sshf_app_dev_write_access@` / `sshf_app_prd_write_access@` | Everything in READ plus common logistics writes. Most board members get this after rollout (for example through the BoD group nested in the write group) |
 | `FULL` | `sshf_app_dev_full_access@` / `sshf_app_prd_full_access@` | Everything in WRITE plus admin and batch update endpoints. A few people stay here after rollout |
-| `MEDICAL` | `sshf_app_dev_medical_access@` / `sshf_app_prd_medical_access@` | Extended medical data. Reserved: the role is configured and resolved, but its endpoints come later (there is little or no medical data in the database yet) |
+| `MEDICAL` | `sshf_app_dev_medical_access@` / `sshf_app_prd_medical_access@` | Reserved for future sensitive medical information. The role is configured and resolved, but its endpoints come later (there is little or no medical data in the database yet) |
 | `REVIEW` | `sshf_app_dev_review_access@` / `sshf_app_prd_review_access@` | Application intake review and acceptance (`/review/applications*`, already built) |
 
 All groups are on `starsandstripeshonorflight.org`, the only Workspace
-domain. There is **no read-only role** for now. One can be added later by
-moving `POST`/`PUT`/`PATCH` routes behind a permission that WRITE has and a
-new read-only role does not.
+domain.
+
+**Inheritance.** It is implemented as a fixed permission union in code, not
+through group nesting:
+
+```
+READ  ⊂  WRITE  ⊂  FULL          MEDICAL (separate)      REVIEW (separate)
+```
+
+- WRITE includes every READ permission.
+- FULL includes every WRITE (and therefore READ) permission.
+- FULL does **not** include MEDICAL or REVIEW. A FULL user gets those only
+  by also being in the medical or review group.
+- MEDICAL and REVIEW include no logistics permissions. A reviewer who also
+  needs to search logistics records is also put in the read (or write)
+  group.
 
 ### 3.2 Permission catalog (proposed defaults, grouped by the routes in `index.js`)
 
 | Permission | Granted by | Endpoints |
 |---|---|---|
-| `records:read` | WRITE, FULL | `GET /search`, `POST /query` (read-only Mango proxy), `GET /docs/:id`, `GET /docs/:id/revisions`, `GET /docs/:id/diff`, `GET /veterans/search`, `GET /veterans/:id`, `GET /guardians/:id`, `GET /flights`, `GET /flights/:id`, `GET /flights/:id/assignments`, `GET /flights/:id/detail`, `GET /waitlist`, `GET /waitlist/veteran-groups`, `GET /recent-activity` |
-| `records:write` | WRITE, FULL | `POST /veterans`, `PUT /veterans/:id`, `POST /guardians`, `PUT /guardians/:id`, every `PATCH /veterans/:id/*` and `PATCH /guardians/:id/*` field endpoint |
-| `exports:read` | WRITE, FULL | `GET /exports/flight`, `GET /exports/callcenterfollowup`, `GET /exports/tourlead` |
+| `records:read` | READ, WRITE, FULL | `GET /search`, `POST /query` (read-only Mango proxy), `GET /docs/:id`, `GET /docs/:id/revisions`, `GET /docs/:id/diff`, `GET /veterans/search`, `GET /veterans/:id`, `GET /guardians/:id`, `GET /flights`, `GET /flights/:id`, `GET /flights/:id/assignments`, `GET /flights/:id/detail`, `GET /waitlist`, `GET /waitlist/veteran-groups`, `GET /recent-activity` |
+| `exports:read` | READ, WRITE, FULL | `GET /exports/flight`, `GET /exports/callcenterfollowup`, `GET /exports/tourlead` |
+| `records:write` | WRITE, FULL | `POST /veterans`, `PUT /veterans/:id`, `POST /guardians`, `PUT /guardians/:id`, and every `PATCH /veterans/:id/*` and `PATCH /guardians/:id/*` field endpoint, **including `PATCH /veterans/:id/medical-form` and `PATCH /veterans/:id/medical-review`** |
 | `records:delete` | FULL | `DELETE /veterans/:id`, `DELETE /guardians/:id` |
 | `documents:admin` | FULL | `POST /docs`, `PUT /docs/:id`, `DELETE /docs/:id`. These are the generic document writes that bypass the type-specific routes |
 | `flights:manage` | FULL | `POST /flights`, `PUT /flights/:id`, `POST /flights/:id/assignments` (batch: adds up to 100 waitlist veterans and their guardians) |
 | `applications:review` | REVIEW | `GET /review/applications`, `GET /review/applications/:id`, `PUT /review/applications/:id`, `PATCH /review/applications/:id/status` |
 | `applications:accept` | REVIEW | `POST /review/applications/:id/accept`. This permission is enough on its own: the endpoint's write to the logistics database is limited to the accepted record |
-| `medical:read`, `medical:write` | MEDICAL | Reserved. No endpoints yet |
+| `medical:read`, `medical:write` | MEDICAL | Reserved for future sensitive medical information. No endpoints yet |
 
 Notes:
 
-- **FULL includes every WRITE permission**, so the few FULL users do not
-  also need to be in the access group.
+- **Inheritance follows Section 3.1.** The few FULL users do not also need
+  to be in the write or read group, and WRITE users do not also need the
+  read group.
 - **FULL does not include REVIEW or MEDICAL.** Review endpoints require the
   REVIEW permission. Admins who review applications are added to the review
   group. This follows the decision that "review endpoints get REVIEW
@@ -197,8 +212,16 @@ Notes:
 - The exact FULL-only list above (deletes, generic `/docs` writes, flight
   create/update, and batch flight assignment) is the proposed default. It is
   confirmed route by route in the Phase 3 PR review.
-- The existing `PATCH /veterans/:id/medical-form` and `.../medical-review`
-  stay under `records:write` until the MEDICAL endpoints are designed.
+- **`medical-form` and `medical-review` are not sensitive medical data.**
+  `PATCH /veterans/:id/medical-form` and `PATCH /veterans/:id/medical-review`
+  set boolean indicators: the form was turned in, and doctors need to
+  review it. They stay under `records:write` (WRITE and FULL) and will not
+  move to MEDICAL. MEDICAL is only for future endpoints that expose
+  sensitive medical content.
+- **READ is a strict read-only set.** Every `POST`/`PUT`/`PATCH`/`DELETE`
+  route requires a write-level or admin permission, so a READ-only user
+  gets `403` on all of them. `POST /query` counts as a read because it is a
+  validated, read-only `_find` proxy.
 
 ### 3.3 Enforcement and HTTP semantics
 
@@ -246,11 +269,11 @@ For each authenticated user on a cache miss:
 
 1. Build the **authorization group set**: every group email that grants a
    role. In Phase 1 this is `ALLOWED_GROUP_EMAILS` (the full-access group).
-   From Phase 2 it is the union of `AUTHZ_ROLE_WRITE_GROUPS`,
-   `AUTHZ_ROLE_FULL_GROUPS`, `AUTHZ_ROLE_MEDICAL_GROUPS`, and
-   `AUTHZ_ROLE_REVIEW_GROUPS`.
+   From Phase 2 it is the union of `AUTHZ_ROLE_READ_GROUPS`,
+   `AUTHZ_ROLE_WRITE_GROUPS`, `AUTHZ_ROLE_FULL_GROUPS`,
+   `AUTHZ_ROLE_MEDICAL_GROUPS`, and `AUTHZ_ROLE_REVIEW_GROUPS`.
 2. Call `admin.members.hasMember({ groupKey, memberKey: userEmail })` for
-   each group in that set, in parallel. That is 1 group in Phase 1 and 4
+   each group in that set, in parallel. That is 1 group in Phase 1 and 5
    from Phase 2.
    The result is exact for direct and nested membership, and Google evaluates
    nesting depth and cycles on its side.
@@ -302,7 +325,7 @@ uses `/user/hasgroup`.
     grant appears within about 2 minutes without a new token. On that
     refresh, cached positive results are reused and only the groups the user
     was not in are checked again. For a typical WRITE-only user that is at
-    most 3 `hasMember` calls about every 2 minutes while active, well within
+    most 4 `hasMember` calls about every 2 minutes while active, well within
     Admin SDK quota.
   - errors: never cached (same as today).
 - Caches are per Cloud Run instance. That is acceptable because every entry is
@@ -367,20 +390,27 @@ Secret Manager:
 
 | Env var | Dev value | Prod value |
 |---|---|---|
-| `AUTHZ_ROLE_WRITE_GROUPS` | `sshf_app_dev_access@starsandstripeshonorflight.org` | `sshf_app_prd_access@starsandstripeshonorflight.org` |
-| `AUTHZ_ROLE_FULL_GROUPS` | `sshf_app_dev_full_access@starsandstripeshonorflight.org` | `sshf_app_prd_full_access@starsandstripeshonorflight.org` |
-| `AUTHZ_ROLE_MEDICAL_GROUPS` | `sshf_app_dev_medical_access@starsandstripeshonorflight.org` | `sshf_app_prd_medical_access@starsandstripeshonorflight.org` |
-| `AUTHZ_ROLE_REVIEW_GROUPS` | `sshf_app_dev_review_access@starsandstripeshonorflight.org` | `sshf_app_prd_review_access@starsandstripeshonorflight.org` |
+| Env var | Role | Dev value | Prod value |
+|---|---|---|---|
+| `AUTHZ_ROLE_READ_GROUPS` | READ | `sshf_app_dev_read_access@starsandstripeshonorflight.org` | `sshf_app_prd_read_access@starsandstripeshonorflight.org` |
+| `AUTHZ_ROLE_WRITE_GROUPS` | WRITE | `sshf_app_dev_write_access@starsandstripeshonorflight.org` | `sshf_app_prd_write_access@starsandstripeshonorflight.org` |
+| `AUTHZ_ROLE_FULL_GROUPS` | FULL | `sshf_app_dev_full_access@starsandstripeshonorflight.org` | `sshf_app_prd_full_access@starsandstripeshonorflight.org` |
+| `AUTHZ_ROLE_MEDICAL_GROUPS` | MEDICAL | `sshf_app_dev_medical_access@starsandstripeshonorflight.org` | `sshf_app_prd_medical_access@starsandstripeshonorflight.org` |
+| `AUTHZ_ROLE_REVIEW_GROUPS` | REVIEW | `sshf_app_dev_review_access@starsandstripeshonorflight.org` | `sshf_app_prd_review_access@starsandstripeshonorflight.org` |
 
 ```bash
 # Dev example (prod uses the sshf_app_prd_* groups on sshf-api-prd)
 gcloud run services update sshf-api --region us-central1 --project sshf-api-dev \
-  --update-env-vars "^;^AUTHZ_ROLE_WRITE_GROUPS=sshf_app_dev_access@starsandstripeshonorflight.org;AUTHZ_ROLE_FULL_GROUPS=sshf_app_dev_full_access@starsandstripeshonorflight.org;AUTHZ_ROLE_MEDICAL_GROUPS=sshf_app_dev_medical_access@starsandstripeshonorflight.org;AUTHZ_ROLE_REVIEW_GROUPS=sshf_app_dev_review_access@starsandstripeshonorflight.org"
+  --update-env-vars "^;^AUTHZ_ROLE_READ_GROUPS=sshf_app_dev_read_access@starsandstripeshonorflight.org;AUTHZ_ROLE_WRITE_GROUPS=sshf_app_dev_write_access@starsandstripeshonorflight.org;AUTHZ_ROLE_FULL_GROUPS=sshf_app_dev_full_access@starsandstripeshonorflight.org;AUTHZ_ROLE_MEDICAL_GROUPS=sshf_app_dev_medical_access@starsandstripeshonorflight.org;AUTHZ_ROLE_REVIEW_GROUPS=sshf_app_dev_review_access@starsandstripeshonorflight.org"
 ```
+
+`env.example` (Phase 2) gets the same five variables, commented out with
+the dev values, next to the existing `ALLOWED_GROUP_EMAILS` entry. That entry
+is marked deprecated, as an alias for `AUTHZ_ROLE_FULL_GROUPS`.
 
 Rules:
 
-- `<ROLE>` must be one of `WRITE`, `FULL`, `MEDICAL`, `REVIEW`. On Cloud Run,
+- `<ROLE>` must be one of `READ`, `WRITE`, `FULL`, `MEDICAL`, `REVIEW`. On Cloud Run,
   any `AUTHZ_ROLE_*_GROUPS` variable with another role name **fails
   startup**, the same way `validateGroupAuthorization` fails today. Locally
   it logs a warning.
@@ -388,12 +418,20 @@ Rules:
 - A group may map to more than one role. A role may list more than one group.
 - On Cloud Run, `AUTHZ_ROLE_FULL_GROUPS` must be non-empty (after the alias
   below is applied), otherwise startup fails. This replaces today's
-  `ALLOWED_GROUP_EMAILS` check. WRITE, MEDICAL, and REVIEW may be unset, but
-  every group that is set must exist (Section 4.6).
-- **Backward compatibility.** If `AUTHZ_ROLE_FULL_GROUPS` is unset,
-  `ALLOWED_GROUP_EMAILS` is read as `AUTHZ_ROLE_FULL_GROUPS`. Existing dev
-  and prod services keep working without an env change. The alias is removed
-  in Phase 4 after both services are migrated.
+  `ALLOWED_GROUP_EMAILS` check. READ, WRITE, MEDICAL, and REVIEW may be
+  unset, but every group that is set must exist (Section 4.6).
+- **Migration from `ALLOWED_GROUP_EMAILS` to FULL.** Today
+  `ALLOWED_GROUP_EMAILS` holds `sshf_app_{dev,prd}_full_access@`, which is
+  exactly the FULL group. The plan migrates it in three steps:
+  1. Phase 2: if `AUTHZ_ROLE_FULL_GROUPS` is unset, `ALLOWED_GROUP_EMAILS`
+     is read as `AUTHZ_ROLE_FULL_GROUPS`. Existing dev and prod services keep
+     working without an env change, and a deprecation warning is logged at
+     startup.
+  2. Admin sets all five `AUTHZ_ROLE_*_GROUPS` on dev, then prod. If both
+     `AUTHZ_ROLE_FULL_GROUPS` and `ALLOWED_GROUP_EMAILS` are set, the new
+     variable wins and a warning is logged when they differ.
+  3. Phase 4: remove the alias, and remove `ALLOWED_GROUP_EMAILS` from both
+     services, README, `env.example`, and `docs/DEPLOYMENT.md`.
 - Group emails are not secrets, but they are also not sent to the client
   (Section 6).
 - `docs/DEPLOYMENT.md` gets a table of role variables and the `gcloud`
@@ -430,13 +468,12 @@ route, review included, so a Phase 2 summary would be misleading.
 {
   "email": "jane.doe@starsandstripeshonorflight.org",
   "hasAccess": true,
-  "roles": ["REVIEW", "WRITE"],
+  "roles": ["READ", "REVIEW"],
   "permissions": [
     "applications:accept",
     "applications:review",
     "exports:read",
-    "records:read",
-    "records:write"
+    "records:read"
   ],
   "evaluatedAt": "2026-10-01T15:04:05.000Z",
   "expiresAt": "2026-10-01T15:19:05.000Z"
@@ -447,8 +484,8 @@ route, review included, so a Phase 2 summary would be misleading.
 |---|---|---|
 | `email` | string | The authenticated account, for display and support |
 | `hasAccess` | boolean | `true` when `permissions` is non-empty. Lets the UI show the "no access" page with one check |
-| `roles` | string[] (enum: `WRITE`, `FULL`, `MEDICAL`, `REVIEW`), sorted | Stable role IDs. They are the same in every environment |
-| `permissions` | string[] (enum of permission names), sorted | The only field the UI should use for show/hide decisions |
+| `roles` | string[] (enum: `READ`, `WRITE`, `FULL`, `MEDICAL`, `REVIEW`), sorted | The roles granted directly by group membership. Inherited roles are not listed: a FULL user shows `["FULL"]`, not `["FULL", "READ", "WRITE"]`. Role IDs are the same in every environment |
+| `permissions` | string[] (enum of permission names), sorted | The effective union, including inherited permissions. The only field the UI should use for show/hide decisions |
 | `evaluatedAt` | ISO 8601 string | When membership was resolved (cache fill time) |
 | `expiresAt` | ISO 8601 string | When the server-side cache entry expires: the earliest membership expiry, so about 2 minutes when any group check was negative. The UI refetches after this |
 
@@ -490,8 +527,10 @@ UI that is deployed when it ships.
 ### Phase 0: Plan and admin prerequisites (this PR)
 
 - Plan direction approved. Decisions are in Section 9.
-- Domain and groups are confirmed: one domain, with four groups per
-  environment (Section 5), owned and administered only by domain admins.
+- Domain and groups are confirmed: one domain, with five groups per
+  environment (`*_read_access`, `*_write_access`, `*_full_access`,
+  `*_medical_access`, `*_review_access`; Section 5), owned and administered
+  only by domain admins.
 - Administrator: in **dev**, create a test group (for example
   `sshf_app_dev_nested_test@`), add it as a member of
   `sshf_app_dev_full_access@`, and add a test user **only** to the nested
@@ -507,8 +546,9 @@ passes `authorize` and gets `hasgroup: true` for that group. No new env vars,
 IAM, scopes, or endpoints.
 
 Migration path: the resolver takes a list of group emails. Phase 2 passes the
-four role groups instead of `ALLOWED_GROUP_EMAILS`, with no change to the
-nested-membership code.
+five role groups instead of `ALLOWED_GROUP_EMAILS`, with no change to the
+nested-membership code. `ALLOWED_GROUP_EMAILS` then becomes the deprecated
+alias for `AUTHZ_ROLE_FULL_GROUPS` (Section 5).
 
 Files likely to change:
 
@@ -557,10 +597,11 @@ Acceptance criteria:
   with no UI change.
 - No change to status codes or payload keys for existing clients.
 
-### Phase 2: Roles WRITE, FULL, MEDICAL, REVIEW, env mapping, and startup validation
+### Phase 2: Roles READ, WRITE, FULL, MEDICAL, REVIEW, env mapping, and startup validation
 
-- `utils/permissions.js`: the role → permission catalog (Sections 3.1 and
-  3.2), parsing of `AUTHZ_ROLE_{WRITE,FULL,MEDICAL,REVIEW}_GROUPS` with the
+- `utils/permissions.js`: the role → permission catalog with READ ⊂ WRITE ⊂
+  FULL inheritance (Sections 3.1 and 3.2), parsing of
+  `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS` with the
   `ALLOWED_GROUP_EMAILS` → FULL alias, and Cloud Run startup validation
   (Section 4.6). The validation replaces `assertGroupAuthorizationConfigured`
   and runs in `validateGroupAuthorization` before `app.listen`.
@@ -568,17 +609,21 @@ Acceptance criteria:
   through the Phase 1 resolver) and computes `req.user.roles` (role IDs) and
   `req.user.permissions` once per cache fill.
 - **The enforcement gate does not change.** `authorize` still passes only for
-  FULL, which is exactly today's `ALLOWED_GROUP_EMAILS` behavior. WRITE,
-  MEDICAL, and REVIEW membership is resolved and tested but grants nothing
-  yet. This lets admins set the new env vars and populate groups safely
-  before Phase 3.
+  FULL, which is exactly today's `ALLOWED_GROUP_EMAILS` behavior. READ,
+  WRITE, MEDICAL, and REVIEW membership is resolved and tested but grants
+  nothing yet. This lets admins set the new env vars and populate groups
+  safely before Phase 3.
 - `/user/hasgroup` keeps working for the full-access group.
-- Admin sets the four `AUTHZ_ROLE_*_GROUPS` vars on dev, then prod (Section
+- Admin sets the five `AUTHZ_ROLE_*_GROUPS` vars on dev, then prod (Section
   5). Until then, the alias keeps the current behavior.
-- Tests: env parsing (an unknown role fails on Cloud Run, alias fallback,
-  lowercasing, dedupe, FULL required), startup validation (`404` exits, a
-  Directory outage exits after retries, local runs only warn), resolution of
-  all four roles including nested membership, and the permission union.
+- `env.example`, the README env table, and `docs/DEPLOYMENT.md` list the five
+  variables and mark `ALLOWED_GROUP_EMAILS` as a deprecated alias.
+- Tests: env parsing (an unknown role fails on Cloud Run, alias fallback and
+  precedence, lowercasing, dedupe, FULL required), startup validation (`404`
+  exits, a Directory outage exits after retries, local runs only warn),
+  resolution of all five roles including nested membership, inheritance
+  (WRITE ⊇ READ, FULL ⊇ WRITE, FULL ⊉ MEDICAL/REVIEW), and the permission
+  union.
 
 ### Phase 3: Per-endpoint enforcement and permission summary
 
@@ -593,11 +638,15 @@ Acceptance criteria:
   `POST /review/applications`, `/user/hasgroup`, `/user/permissions`) has
   `authenticate` followed by `requirePermission` with the permissions from
   the table.
-- Role tests: WRITE can read, write, and export but gets `403` on delete,
-  `/docs` writes, flight management, and review. FULL can do everything
-  except review and medical. REVIEW can review and accept but gets `403` on
-  logistics routes. MEDICAL alone gets `403` everywhere until medical
-  endpoints exist.
+- Role tests:
+  - READ can read and export but gets `403` on every `POST`/`PUT`/`PATCH`/
+    `DELETE` route except the read-only `POST /query`.
+  - WRITE adds record writes, including `PATCH .../medical-form` and
+    `.../medical-review`, but gets `403` on delete, `/docs` writes, flight
+    management, and review.
+  - FULL can do everything except review and medical.
+  - REVIEW can review and accept but gets `403` on logistics routes.
+  - MEDICAL alone gets `403` everywhere until medical endpoints exist.
 - Endpoint contract tests for `/user/permissions`: `200` with empty
   permissions for a signed-in user with no role, `401`, `503`, and
   `Cache-Control: no-store`.
@@ -608,15 +657,17 @@ Acceptance criteria:
 **Rollout runbook, per environment (dev first, then prd):**
 
 1. Before deploying Phase 3, add current application reviewers to
-   `*_review_access`, and nest the BoD group in `*_access`. Everyone stays in
-   `*_full_access` for now. In Phase 2 this changes nothing for users.
-2. Deploy Phase 3. Check `GET /user/permissions` for a WRITE-only test user,
-   a REVIEW user, and a FULL user.
+   `*_review_access`, nest the BoD group in `*_write_access`, and add any
+   read-only users to `*_read_access`. Everyone stays in `*_full_access` for
+   now. In Phase 2 this changes nothing for users.
+2. Deploy Phase 3. Check `GET /user/permissions` for a READ-only test user,
+   a WRITE-only test user, a REVIEW user, and a FULL user.
 3. **Only after the Phase 4 UI change is deployed in that environment**,
    remove most board members from `*_full_access`. They keep WRITE through
-   the BoD group nested in `*_access`, and a few people stay in FULL. Until
-   then, sshf-ui's `full-access-guard.js` shows "Not authorized" to anyone
-   outside the full-access group, even when the API would allow them.
+   the BoD group nested in `*_write_access`, and a few people stay in FULL.
+   Until then, sshf-ui's `full-access-guard.js` shows "Not authorized" to
+   anyone outside the full-access group, even when the API would allow them.
+   That includes READ-only users.
 
 If step 1 is skipped, a FULL user who reviews applications loses review
 access at deploy time, because FULL does not include REVIEW. Adding them to
@@ -635,11 +686,9 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 ### Later (not scheduled)
 
 - **MEDICAL endpoints:** design the endpoints and the `medical:*`
-  permissions when medical data lands in the database. Decide then whether
-  the existing medical-form and medical-review `PATCH` routes move from
-  `records:write` to MEDICAL.
-- **Optional read-only role:** move `POST`/`PUT`/`PATCH` routes behind a
-  permission that a new read-only role lacks.
+  permissions when sensitive medical data lands in the database. The
+  existing `medical-form` and `medical-review` boolean `PATCH` routes stay
+  under `records:write` (Section 3.2).
 - **Error-shape cleanup:** unify `{ message }` and `{ error }`. This is lower
   priority than clear `403` semantics.
 
@@ -647,26 +696,28 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| **Nesting widens who can grant access.** Anyone who can add members to a group nested inside an authorization group (for example the BoD group inside `*_access`) can grant app permissions | Privilege escalation outside IT control | **Accepted residual risk, mitigated by admin ownership.** Only domain admins own and administer the eight authorization groups **and every group nested in them**, including the BoD group. `docs/DEPLOYMENT.md` will state this as a standing requirement: no non-admin owners or managers, and "Who can join: only invited users" |
+| **Nesting widens who can grant access.** Anyone who can add members to a group nested inside an authorization group (for example the BoD group inside `*_write_access`) can grant app permissions | Privilege escalation outside IT control | **Accepted residual risk, mitigated by admin ownership.** Only domain admins own and administer the ten authorization groups (five per environment) **and every group nested in them**, including the BoD group. `docs/DEPLOYMENT.md` will state this as a standing requirement: no non-admin owners or managers, and "Who can join: only invited users" |
 | Cross-domain nesting is not resolved by `hasMember` | A nested user from another domain is denied | Not applicable today (single domain, org-internal OAuth client). Fails closed with a warning log if it ever happens |
 | Misconfigured or missing group email | Everyone mapped only through that group is denied | Startup validation fails the deploy (Section 4.6). A group deleted while instances are running is logged as an error at request time |
 | Startup check blocks new instances during a Google Directory outage | No scale-out or cold starts until Google recovers | Accepted trade-off of failing fast. Running instances keep serving, and authentication would return `503` on cache misses in that outage anyway |
 | Phase 3 cutover removes review access from FULL-only users | Reviewers locked out at deploy | Rollout runbook step 1 (Phase 3) populates `*_review_access` before deploy |
 | Stale grants after removal | Up to 15 minutes of continued access | Existing documented bound, kept. No last-known-good serving during outages |
 | Admin SDK quota or latency | Slower first request or `503` | Membership cache keyed by email, parallel checks, per-call timeout. There are only a few configured groups per user |
-| Two sources of group names during migration (UI `NEXT_PUBLIC_ROLE_FULL_ACCESS` and API env) | UI and API disagree. The UI blocks WRITE-only users entirely | Phases 1 to 3 keep them equal (same value today). Board members are not moved out of `*_full_access` until the Phase 4 UI is deployed (Phase 3 runbook step 3). Phase 4 removes the UI copy |
+| Two sources of group names during migration (UI `NEXT_PUBLIC_ROLE_FULL_ACCESS` and API env) | UI and API disagree. The UI blocks READ-only and WRITE-only users entirely | Phases 1 to 3 keep them equal (same value today). Board members are not moved out of `*_full_access` until the Phase 4 UI is deployed (Phase 3 runbook step 3). Phase 4 removes the UI copy |
 | Per-instance caches on Cloud Run | Instances can briefly disagree | Bounded by TTL. Acceptable |
 | Changing a `403` payload | Client error handling breaks | Keep the `{ message }` key. Only add `requiredPermission` |
 
-## 9. Decisions (approved 2026-10-01)
+## 9. Decisions (approved 2026-10-01, amended the same day)
 
 | # | Topic | Decision |
 |---|---|---|
-| 1 | Domain and groups | Single Workspace domain, `starsandstripeshonorflight.org`. Four groups per environment map to the roles WRITE (`*_access`), FULL (`*_full_access`), MEDICAL (`*_medical_access`), and REVIEW (`*_review_access`). Exact emails are in Section 5. Cloud Identity transitive APIs are not needed |
-| 2 | Roles and rollout | Today everyone is in full access. After rollout, most board members move to WRITE through BoD group nesting, and a few stay in FULL. Review endpoints require REVIEW, and review group membership is adjusted. MEDICAL endpoints and permissions come later. No read-only role now; one can be added later by tightening `POST`/`PUT`/`PATCH` permissions |
+| 1 | Domain and groups | Single Workspace domain, `starsandstripeshonorflight.org`. Five groups per environment map to the roles: READ (`*_read_access`), WRITE (`*_write_access`), FULL (`*_full_access`), MEDICAL (`*_medical_access`), and REVIEW (`*_review_access`), with `sshf_app_dev_*` and `sshf_app_prd_*` variants. Exact emails are in Section 5. Cloud Identity transitive APIs are not needed |
+| 2 | Roles and inheritance | Five roles from the start: READ (read-only logistics), WRITE (READ plus common logistics writes), FULL (WRITE plus admin and batch), MEDICAL (reserved for future sensitive medical information), and REVIEW (intake review and acceptance). WRITE includes READ. FULL includes WRITE. FULL does not include MEDICAL or REVIEW unless the user is also in those groups |
+| 2a | Rollout | Today everyone is in full access. After rollout, most board members move to WRITE through BoD group nesting, and a few stay in FULL. Review endpoints require REVIEW, and review group membership is adjusted. MEDICAL endpoints and permissions come later |
+| 2b | Medical indicators | `PATCH /veterans/:id/medical-form` and `PATCH /veterans/:id/medical-review` are boolean indicators (form turned in, doctors need to review), not sensitive medical information. They stay under `records:write` (WRITE and FULL), not MEDICAL |
 | 3 | Negative-cache TTL | About 2 minutes is acceptable |
 | 4 | Error semantics | Standard HTTP: `401` for authentication and `403` for authorization, with clear reason text (Section 3.3). The UI maps these to friendlier copy and hides unauthorized actions. Unifying `{ message }`/`{ error }` is a separate, lower-priority cleanup |
-| 5 | Config naming | `AUTHZ_ROLE_<ROLE>_GROUPS` with `<ROLE>` one of `WRITE`, `FULL`, `MEDICAL`, `REVIEW`. Group emails are environment-specific values |
+| 5 | Config naming | `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS`. Group emails are environment-specific values. `ALLOWED_GROUP_EMAILS` becomes a deprecated alias for `AUTHZ_ROLE_FULL_GROUPS` and is removed in Phase 4 |
 | 6 | Startup validation | Yes. On Cloud Run, fail fast when a configured group is missing or Google is unreachable at startup (Section 4.6) |
 | 7 | Group ownership | Only domain admins own and administer these groups and the nested grant path. Nesting-based grants are an accepted residual risk, mitigated by admin ownership (Section 8) |
 
@@ -677,7 +728,9 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
   review).
 - Whether any REVIEW-only users exist who also need `records:read` (for
   example, duplicate search before accepting), or whether all reviewers are
-  also in `*_access` (Phase 3 review).
+  also in `*_read_access` or `*_write_access` (Phase 3 review).
+- Whether exports belong in READ (proposed, since they are read-only) or
+  should require WRITE (Phase 3 review).
 - The startup retry budget, proposed as 3 attempts over about 15 seconds
   (Phase 2 review).
 
