@@ -99,4 +99,23 @@ describe('User authentication cache', () => {
         expect(cache.size()).to.equal(1);
         expect(cache.get('token-a').id).to.equal('user-updated');
     });
+
+    it('honors a shorter per-entry TTL and never keeps an entry past the cache maximum', () => {
+        let now = 1_000;
+        const ttlMs = 1_000;
+        const cache = createUserCache({ now: () => now, ttlMs, maxEntries: 10 });
+
+        cache.set('short', user, { ttlMs: 400 });
+        cache.set('capped', { ...user, id: 'capped' }, { ttlMs: 5_000 });
+        cache.set('invalid', { ...user, id: 'invalid' }, { ttlMs: 0 });
+
+        now += 400;
+        expect(cache.get('short')).to.equal(undefined);
+        expect(cache.get('capped').id).to.equal('capped');
+        expect(cache.get('invalid').id).to.equal('invalid');
+
+        now += 600;
+        expect(cache.get('capped')).to.equal(undefined);
+        expect(cache.get('invalid')).to.equal(undefined);
+    });
 });

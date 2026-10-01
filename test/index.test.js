@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { app, validateGroupAuthorization, getUserInfo } from '../index.js';
+import { app, validateGroupAuthorization, getUserInfo, resolveRequestGroupMemberships } from '../index.js';
 import { google } from 'googleapis';
 
 describe('Express application', () => {
@@ -143,6 +143,55 @@ describe('Express application', () => {
 
             expect(consoleErrorStub.called).to.be.true;
             expect(processExitStub.calledOnceWith(1)).to.be.true;
+        });
+    });
+
+    describe('resolveRequestGroupMemberships', () => {
+        const originalEnv = { ...process.env };
+
+        afterEach(() => {
+            sinon.restore();
+            process.env = { ...originalEnv };
+        });
+
+        it('checks ALLOWED_GROUP_EMAILS with members.hasMember for nested membership', async () => {
+            process.env.ALLOWED_GROUP_EMAILS = 'sshf_app_dev_full_access@starsandstripeshonorflight.org';
+            delete process.env.K_SERVICE;
+            delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+            delete process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+
+            const list = sinon.stub().resolves({
+                data: { groups: [{ id: 'n1', name: 'Nested', email: 'nested@starsandstripeshonorflight.org' }] }
+            });
+            const hasMember = sinon.stub().resolves({ data: { isMember: true } });
+            sinon.stub(console, 'log');
+            sinon.stub(console, 'error');
+            sinon.stub(console, 'warn');
+            sinon.stub(google, 'admin').returns({
+                groups: { list },
+                members: { hasMember }
+            });
+            sinon.stub(google.auth, 'GoogleAuth').callsFake(function FakeGoogleAuth() {
+                return { scopes: [] };
+            });
+
+            const result = await resolveRequestGroupMemberships({
+                email: 'index-nested@starsandstripeshonorflight.org'
+            });
+
+            expect(hasMember.calledOnce).to.be.true;
+            expect(hasMember.firstCall.args[0]).to.deep.equal({
+                groupKey: 'sshf_app_dev_full_access@starsandstripeshonorflight.org',
+                memberKey: 'index-nested@starsandstripeshonorflight.org'
+            });
+            expect(result.groups).to.deep.equal([
+                { id: 'n1', name: 'Nested', email: 'nested@starsandstripeshonorflight.org' },
+                {
+                    email: 'sshf_app_dev_full_access@starsandstripeshonorflight.org',
+                    membership: 'nested'
+                }
+            ]);
+            expect(result.userCacheTtlMs).to.equal(15 * 60 * 1000);
         });
     });
 });

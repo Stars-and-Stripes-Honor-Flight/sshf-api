@@ -228,6 +228,16 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
   live service has `ALLOWED_GROUP_EMAILS` set to the environment's Workspace
   group (do not record the secret value in tickets).
 
+  Membership in that group includes nested groups. Admin SDK `members.hasMember`
+  is true when the user is a direct member or a member of a group that belongs
+  to the allowed group. The existing Groups Reader role and
+  `admin.directory.group.readonly` scope are sufficient; do not add a scope.
+  Positive membership is cached for up to 15 minutes, a negative result for
+  about 2 minutes, and Directory errors are not cached. After changing group
+  membership, allow a few minutes for Google to propagate and then sign in
+  again. Only domain admins should own the allowed group and every group
+  nested inside it.
+
 ```bash
 # Dev
 gcloud run services update sshf-api --region us-central1 --project sshf-api-dev \
@@ -276,5 +286,6 @@ promotion workflow breaks:
 | Every authenticated request returns 401 after a deploy | The token audience no longer matches. `GOOGLE_CLIENT_ID` on the service must equal the OAuth client the UI/Swagger mint tokens with; if the UI uses a different client, add it to `ALLOWED_CLIENT_IDS`. |
 | Revision fails to start, or every data route returns 403 | On Cloud Run, `ALLOWED_GROUP_EMAILS` is missing or empty. Set it to the environment Workspace group and deploy a new revision. Local runs without `K_SERVICE` may omit it. |
 | Some users get 403 | `ALLOWED_EMAIL_DOMAINS` is set and rejects an unverified or out-of-domain email, or `ALLOWED_GROUP_EMAILS` is set and a successful group lookup shows they are not in a listed Workspace group. `ALLOWED_EMAIL_DOMAINS` is optional; group membership is the required Cloud Run gate. A Directory outage is `503`, not this `403`. |
+| Nested member is denied, or a removed member still has access | Configured groups are checked with `members.hasMember` (direct and nested). A misspelled or deleted group is treated as not a member and logged against `ALLOWED_GROUP_EMAILS`. Negative results refresh in about 2 minutes; granted membership can linger up to 15 minutes. Allow a few minutes for Google to propagate, then sign in again. A Directory outage is still `503` on Cloud Run. |
 | New secret value not taking effect | Revisions pin secret versions at deploy time. Force a new revision (see Configuration and secrets). |
 | CORS errors from the UI | The UI origin is missing from the service's `ALLOWED_ORIGINS` env var. |

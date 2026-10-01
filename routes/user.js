@@ -6,7 +6,9 @@
  *     description: >
  *       Auth-only probe used by the UI during sign-in. Does not require
  *       membership in ALLOWED_GROUP_EMAILS so non-members can still discover
- *       that they are unauthorized. Data routes enforce group membership
+ *       that they are unauthorized. For groups listed in ALLOWED_GROUP_EMAILS,
+ *       hasgroup is true for a direct or nested Workspace member. Any other
+ *       group is a direct membership only. Data routes enforce group membership
  *       separately via the authorize middleware. groupEmail is compared to
  *       role emails case-insensitively, matching authorize.
  *     tags: [User]
