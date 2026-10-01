@@ -190,7 +190,7 @@ READ  ⊂  WRITE  ⊂  FULL          MEDICAL (separate)      REVIEW (separate)
 | Permission | Granted by | Endpoints |
 |---|---|---|
 | `records:read` | READ, WRITE, FULL | `GET /search`, `POST /query` (read-only Mango proxy), `GET /docs/:id`, `GET /docs/:id/revisions`, `GET /docs/:id/diff`, `GET /veterans/search`, `GET /veterans/:id`, `GET /guardians/:id`, `GET /flights`, `GET /flights/:id`, `GET /flights/:id/assignments`, `GET /flights/:id/detail`, `GET /waitlist`, `GET /waitlist/veteran-groups`, `GET /recent-activity` |
-| `exports:read` | READ, WRITE, FULL | `GET /exports/flight`, `GET /exports/callcenterfollowup`, `GET /exports/tourlead` |
+| `exports:read` | READ, WRITE, FULL | `GET /exports/flight`, `GET /exports/callcenterfollowup`, `GET /exports/tourlead` (decided: the existing exports are READ) |
 | `records:write` | WRITE, FULL | `POST /veterans`, `PUT /veterans/:id`, `POST /guardians`, `PUT /guardians/:id`, and every `PATCH /veterans/:id/*` and `PATCH /guardians/:id/*` field endpoint, **including `PATCH /veterans/:id/medical-form` and `PATCH /veterans/:id/medical-review`** |
 | `records:delete` | FULL | `DELETE /veterans/:id`, `DELETE /guardians/:id` |
 | `documents:admin` | FULL | `POST /docs`, `PUT /docs/:id`, `DELETE /docs/:id`. These are the generic document writes that bypass the type-specific routes |
@@ -218,6 +218,14 @@ Notes:
   review it. They stay under `records:write` (WRITE and FULL) and will not
   move to MEDICAL. MEDICAL is only for future endpoints that expose
   sensitive medical content.
+- **Existing exports are READ (decided), and future exports are reserved.**
+  The three current export routes require only `exports:read`. A future
+  export whose content needs more protection, such as sensitive medical
+  fields (MEDICAL) or admin or bulk data (FULL), will be a **new endpoint
+  with its own permission**, for example `exports:medical` or
+  `exports:admin`. Today's export routes are not overloaded with
+  content-dependent permission checks, and their `exports:read` requirement
+  does not change.
 - **READ is a strict read-only set.** Every `POST`/`PUT`/`PATCH`/`DELETE`
   route requires a write-level or admin permission, so a READ-only user
   gets `403` on all of them. `POST /query` counts as a read because it is a
@@ -252,18 +260,24 @@ Notes:
 
 ## 4. Resolving direct and nested membership
 
-### 4.1 Options considered
+### 4.1 Decided approach: Admin SDK `members.hasMember` (Option B)
 
-| Option | Nested? | Scope / privilege | Edition requirement | Verdict |
-|---|---|---|---|---|
-| A. Admin SDK `groups.list?userKey=` (today) | No, direct only | `admin.directory.group.readonly` + Groups Reader | Any | Insufficient on its own |
-| B. Admin SDK `members.hasMember(groupKey, memberKey)` for each configured group | **Yes**, direct or nested. Nested checks require the user and group to be in the same domain, otherwise `400 Invalid input` | `admin.directory.group.member.readonly` is the narrowest accepted scope. The current `group.readonly` also works | Any Workspace edition | **Recommended** |
-| C. Recursive `groups.list?userKey=<group email>` walking parent groups | Yes | Same as today | Any | Works, but costs many calls per level and needs cycle and depth handling. Keep as a fallback only |
-| D. `members.list?includeDerivedMembership=true` to expand each configured group ahead of time | Yes | `group.member.readonly` | Any | Needs a background refresh job and memory for every member. Too heavy for Cloud Run scale-to-zero |
-| E. Cloud Identity `checkTransitiveMembership` / `searchTransitiveGroups` | Yes, including cross-domain | `cloud-identity.groups.readonly` | **Workspace Enterprise Standard/Plus, Enterprise for Education, or Cloud Identity Premium only** | Not needed. Its only advantage over B is cross-domain nesting, and SSHF uses a single domain |
-| F. Domain-wide delegation impersonating an admin | n/a | Service account can act as any user | Any | Rejected. Far broader than needed |
+The API checks membership with Admin SDK Directory
+`members.hasMember(groupKey, memberKey)`
+(`GET admin/directory/v1/groups/{groupKey}/hasMember/{memberKey}`, response
+`{ "isMember": boolean }`):
 
-### 4.2 Recommended approach (option B)
+- **Direct and nested.** The result is true for direct members and for members
+  of nested groups. Google evaluates nesting depth and cycles on its side.
+- **Same-domain nesting only.** For nested membership, the user and group must
+  be in the same domain, otherwise Google returns `400 Invalid input`. SSHF
+  uses a single domain, so this limit does not apply.
+- **Any Workspace edition.** No Enterprise or Cloud Identity Premium license is
+  needed.
+- **No new access.** It works under the scope already in use,
+  `admin.directory.group.readonly`, and the service account's existing Groups
+  Reader admin role. The narrowest scope it accepts is
+  `admin.directory.group.member.readonly`.
 
 For each authenticated user on a cache miss:
 
@@ -275,8 +289,6 @@ For each authenticated user on a cache miss:
 2. Call `admin.members.hasMember({ groupKey, memberKey: userEmail })` for
    each group in that set, in parallel. That is 1 group in Phase 1 and 5
    from Phase 2.
-   The result is exact for direct and nested membership, and Google evaluates
-   nesting depth and cycles on its side.
 3. Group memberships that are not in the authorization set are ignored.
    Everything the API needs to know is "which configured groups is this user
    in", so it never has to list, page through, or hold every group the user
@@ -288,13 +300,13 @@ authorization set. Configured groups already found in the direct list skip
 their `hasMember` call. Phase 4 removes `groups.list` once the UI no longer
 uses `/user/hasgroup`.
 
-### 4.3 Credentials and least privilege
+### 4.2 Credentials and least privilege
 
 - **No change in Phase 1.** Reuse the runtime service account, its Groups
   Reader admin role, and the existing `admin.directory.group.readonly` scope.
 - **Phase 4 narrowing (evaluate).** After `groups.list` is removed,
   `hasMember` alone works with `admin.directory.group.member.readonly`. The
-  startup existence check (Section 4.6) also works under that scope if it uses
+  startup existence check (Section 4.5) also works under that scope if it uses
   `members.list` with `maxResults: 1`, discarding the result, instead of
   `groups.get`. Consider replacing Groups Reader with a custom Workspace admin
   role limited to reading group membership, if the Admin console allows that
@@ -309,7 +321,7 @@ uses `/user/hasgroup`.
   level is acceptable. The current `logGroupFetchError` logs
   `error.response.data`; confirm that stays free of credentials.
 
-### 4.4 Caching
+### 4.3 Caching
 
 - Keep the existing token-keyed user cache (15-minute TTL). It stores the
   resolved `roles` and, from Phase 2, `permissions`.
@@ -333,13 +345,13 @@ uses `/user/hasgroup`.
 - Google also takes time to propagate membership changes. The runbook should
   say "allow a few minutes, then sign in again".
 
-### 4.5 Failure modes
+### 4.4 Failure modes
 
 | Condition | Behavior | Rationale |
 |---|---|---|
 | `hasMember` returns `{ isMember: true }` | Grant that group's role | |
 | `hasMember` returns `{ isMember: false }` | No role from that group | |
-| `404` (group not found, meaning a misconfigured email or a group deleted after startup) | Treat as not a member. Log an `error` naming the configured group env var, not the user | Fail closed. Startup validation (Section 4.6) catches typos at deploy time. This row covers a group deleted while instances are running |
+| `404` (group not found, meaning a misconfigured email or a group deleted after startup) | Treat as not a member. Log an `error` naming the configured group env var, not the user | Fail closed. Startup validation (Section 4.5) catches typos at deploy time. This row covers a group deleted while instances are running |
 | `400 Invalid input` (cross-domain nesting, or a user outside the domain) | Treat as not a member. Log a `warn` | Documented limit of `hasMember`. Not expected with SSHF's single domain and org-internal OAuth client |
 | `403` from Google (service account lost Groups Reader or scope) | Treat as unavailable: `503` on Cloud Run | Configuration outage, not a user decision |
 | `5xx`, timeout, or network error | Throw `DirectoryGroupsUnavailableError`: `503` on Cloud Run, no roles locally | Same as today's contract |
@@ -349,7 +361,7 @@ uses `/user/hasgroup`.
 Serving a last-known-good result during a Directory outage is **not**
 proposed. It would extend access for removed users past the 15-minute bound.
 
-### 4.6 Startup validation (approved: fail fast)
+### 4.5 Startup validation (approved: fail fast)
 
 On Cloud Run (`K_SERVICE` set), the process validates authorization config
 **before** `app.listen`, extending today's `validateGroupAuthorization`:
@@ -419,7 +431,7 @@ Rules:
 - On Cloud Run, `AUTHZ_ROLE_FULL_GROUPS` must be non-empty (after the alias
   below is applied), otherwise startup fails. This replaces today's
   `ALLOWED_GROUP_EMAILS` check. READ, WRITE, MEDICAL, and REVIEW may be
-  unset, but every group that is set must exist (Section 4.6).
+  unset, but every group that is set must exist (Section 4.5).
 - **Migration from `ALLOWED_GROUP_EMAILS` to FULL.** Today
   `ALLOWED_GROUP_EMAILS` holds `sshf_app_{dev,prd}_full_access@`, which is
   exactly the FULL group. The plan migrates it in three steps:
@@ -499,7 +511,7 @@ avoids telling any signed-in user which groups control access.
   `expiresAt`, and whenever an API call returns `403` with
   `requiredPermission`.
 - The server result can be up to one TTL stale (15 minutes for a granted
-  role, 2 minutes for a missing role, per Section 4.4). The API still
+  role, 2 minutes for a missing role, per Section 4.3). The API still
   enforces permissions on every request, so a stale UI can only show a
   control that then returns `403`. It cannot grant access.
 
@@ -554,7 +566,7 @@ Files likely to change:
 
 - `utils/groups.js`: add `checkGroupMembership(userEmail, groupEmail, auth)`
   wrapping `admin.members.hasMember` with the failure mapping from Section
-  4.5. Add `resolveAuthorizationGroups(userData, groupEmails, options)`,
+  4.4. Add `resolveAuthorizationGroups(userData, groupEmails, options)`,
   which runs checks in parallel and reuses the existing JWT/ADC fallback
   and Cloud Run / local split in `getGroupMemberships`.
 - `utils/authenticate.js`: merge direct roles with nested matches for
@@ -603,7 +615,7 @@ Acceptance criteria:
   FULL inheritance (Sections 3.1 and 3.2), parsing of
   `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS` with the
   `ALLOWED_GROUP_EMAILS` → FULL alias, and Cloud Run startup validation
-  (Section 4.6). The validation replaces `assertGroupAuthorizationConfigured`
+  (Section 4.5). The validation replaces `assertGroupAuthorizationConfigured`
   and runs in `validateGroupAuthorization` before `app.listen`.
 - `authenticate` resolves membership in all configured role groups (nested,
   through the Phase 1 resolver) and computes `req.user.roles` (role IDs) and
@@ -679,7 +691,7 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
   unauthorized actions and maps `403` to friendlier copy.
 - sshf-api then deprecates `/user/hasgroup` (marked deprecated in OpenAPI
   for one release, then removed), removes `groups.list` and its paging code,
-  evaluates narrowing the Directory scope (Section 4.3), removes the
+  evaluates narrowing the Directory scope (Section 4.2), removes the
   Directory scope from Swagger's implicit flow, and removes the
   `ALLOWED_GROUP_EMAILS` alias.
 
@@ -698,7 +710,7 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 |---|---|---|
 | **Nesting widens who can grant access.** Anyone who can add members to a group nested inside an authorization group (for example the BoD group inside `*_write_access`) can grant app permissions | Privilege escalation outside IT control | **Accepted residual risk, mitigated by admin ownership.** Only domain admins own and administer the ten authorization groups (five per environment) **and every group nested in them**, including the BoD group. `docs/DEPLOYMENT.md` will state this as a standing requirement: no non-admin owners or managers, and "Who can join: only invited users" |
 | Cross-domain nesting is not resolved by `hasMember` | A nested user from another domain is denied | Not applicable today (single domain, org-internal OAuth client). Fails closed with a warning log if it ever happens |
-| Misconfigured or missing group email | Everyone mapped only through that group is denied | Startup validation fails the deploy (Section 4.6). A group deleted while instances are running is logged as an error at request time |
+| Misconfigured or missing group email | Everyone mapped only through that group is denied | Startup validation fails the deploy (Section 4.5). A group deleted while instances are running is logged as an error at request time |
 | Startup check blocks new instances during a Google Directory outage | No scale-out or cold starts until Google recovers | Accepted trade-off of failing fast. Running instances keep serving, and authentication would return `503` on cache misses in that outage anyway |
 | Phase 3 cutover removes review access from FULL-only users | Reviewers locked out at deploy | Rollout runbook step 1 (Phase 3) populates `*_review_access` before deploy |
 | Stale grants after removal | Up to 15 minutes of continued access | Existing documented bound, kept. No last-known-good serving during outages |
@@ -707,18 +719,20 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 | Per-instance caches on Cloud Run | Instances can briefly disagree | Bounded by TTL. Acceptable |
 | Changing a `403` payload | Client error handling breaks | Keep the `{ message }` key. Only add `requiredPermission` |
 
-## 9. Decisions (approved 2026-10-01, amended the same day)
+## 9. Decisions (approved 2026-10-01, with later amendments)
 
 | # | Topic | Decision |
 |---|---|---|
-| 1 | Domain and groups | Single Workspace domain, `starsandstripeshonorflight.org`. Five groups per environment map to the roles: READ (`*_read_access`), WRITE (`*_write_access`), FULL (`*_full_access`), MEDICAL (`*_medical_access`), and REVIEW (`*_review_access`), with `sshf_app_dev_*` and `sshf_app_prd_*` variants. Exact emails are in Section 5. Cloud Identity transitive APIs are not needed |
+| 1 | Domain and groups | Single Workspace domain, `starsandstripeshonorflight.org`. Five groups per environment map to the roles: READ (`*_read_access`), WRITE (`*_write_access`), FULL (`*_full_access`), MEDICAL (`*_medical_access`), and REVIEW (`*_review_access`), with `sshf_app_dev_*` and `sshf_app_prd_*` variants. Exact emails are in Section 5 |
 | 2 | Roles and inheritance | Five roles from the start: READ (read-only logistics), WRITE (READ plus common logistics writes), FULL (WRITE plus admin and batch), MEDICAL (reserved for future sensitive medical information), and REVIEW (intake review and acceptance). WRITE includes READ. FULL includes WRITE. FULL does not include MEDICAL or REVIEW unless the user is also in those groups |
 | 2a | Rollout | Today everyone is in full access. After rollout, most board members move to WRITE through BoD group nesting, and a few stay in FULL. Review endpoints require REVIEW, and review group membership is adjusted. MEDICAL endpoints and permissions come later |
 | 2b | Medical indicators | `PATCH /veterans/:id/medical-form` and `PATCH /veterans/:id/medical-review` are boolean indicators (form turned in, doctors need to review), not sensitive medical information. They stay under `records:write` (WRITE and FULL), not MEDICAL |
+| 2c | Exports | The existing exports (`/exports/flight`, `/exports/callcenterfollowup`, `/exports/tourlead`) require `exports:read`, which READ, WRITE, and FULL have. Future exports whose content needs MEDICAL or FULL will be new endpoints with their own permissions. Today's export routes are not overloaded (Section 3.2) |
+| 2d | Nested membership mechanism | Option B: Admin SDK `members.hasMember` for each configured group, with the caching, failure handling, and startup validation in Section 4. No other mechanism is planned |
 | 3 | Negative-cache TTL | About 2 minutes is acceptable |
 | 4 | Error semantics | Standard HTTP: `401` for authentication and `403` for authorization, with clear reason text (Section 3.3). The UI maps these to friendlier copy and hides unauthorized actions. Unifying `{ message }`/`{ error }` is a separate, lower-priority cleanup |
 | 5 | Config naming | `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS`. Group emails are environment-specific values. `ALLOWED_GROUP_EMAILS` becomes a deprecated alias for `AUTHZ_ROLE_FULL_GROUPS` and is removed in Phase 4 |
-| 6 | Startup validation | Yes. On Cloud Run, fail fast when a configured group is missing or Google is unreachable at startup (Section 4.6) |
+| 6 | Startup validation | Yes. On Cloud Run, fail fast when a configured group is missing or Google is unreachable at startup (Section 4.5) |
 | 7 | Group ownership | Only domain admins own and administer these groups and the nested grant path. Nesting-based grants are an accepted residual risk, mitigated by admin ownership (Section 8) |
 
 ### Remaining items to confirm during the phase PRs
@@ -729,8 +743,6 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 - Whether any REVIEW-only users exist who also need `records:read` (for
   example, duplicate search before accepting), or whether all reviewers are
   also in `*_read_access` or `*_write_access` (Phase 3 review).
-- Whether exports belong in READ (proposed, since they are read-only) or
-  should require WRITE (Phase 3 review).
 - The startup retry budget, proposed as 3 attempts over about 15 seconds
   (Phase 2 review).
 
@@ -738,7 +750,7 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 
 - **Unit (mocha, chai, sinon):** Directory client fakes injected through the
   existing `createAdmin`, `createJwtAuth`, `createAdcAuth`, and
-  `listGroups`-style options, with no network access. Cover the Section 4.5
+  `listGroups`-style options, with no network access. Cover the Section 4.4
   failure table row by row.
 - **Middleware:** `createAuthenticator` with injected resolvers, as in
   `test/authenticate.test.js`, for `401`/`403`/`503` and cache behavior.
