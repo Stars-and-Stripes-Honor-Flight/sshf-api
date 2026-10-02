@@ -8,8 +8,9 @@ import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession, reviewDbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
 import { authenticateIntake } from './utils/intake_auth.js';
-import { authorize, assertGroupAuthorizationConfigured, getAllowedGroupEmails } from './utils/auth.js';
-import { resolveAuthorizationGroups } from './utils/groups.js';
+import { authorize, assertGroupAuthorizationConfigured } from './utils/auth.js';
+import { ensureAuthorizationGroupsExist, resolveAuthorizationGroups } from './utils/groups.js';
+import { listConfiguredGroupEntries, startupWarnings } from './utils/permissions.js';
 import { createMembershipCache } from './utils/membership_cache.js';
 import { createUserCache } from './utils/user_cache.js';
 import { createAuthenticator } from './utils/authenticate.js';
@@ -86,14 +87,22 @@ const userCache = createUserCache();
 const membershipCache = createMembershipCache();
 
 /**
- * Resolve direct groups plus nested membership in ALLOWED_GROUP_EMAILS.
+ * Resolve direct groups plus nested membership in every configured role
+ * group. ALLOWED_GROUP_EMAILS is the deprecated alias for FULL.
  * The membership cache is per process and is not a substitute for the
  * token-keyed sign-in cache.
  */
 export function resolveRequestGroupMemberships(userData) {
-    return resolveAuthorizationGroups(userData, getAllowedGroupEmails(), {
-        membershipCache
-    });
+    const entries = listConfiguredGroupEntries();
+    const groupEnvVars = {};
+    for (const entry of entries) {
+        groupEnvVars[entry.email] = entry.envVar;
+    }
+    return resolveAuthorizationGroups(
+        userData,
+        entries.map((entry) => entry.email),
+        { membershipCache, groupEnvVars }
+    );
 }
 
 // Client used only to introspect incoming access tokens (validate audience)
@@ -113,7 +122,8 @@ export async function getUserInfo(token) {
 // Middleware to authenticate Google users. On Cloud Run, Directory outages
 // return 503 (see utils/authenticate.js) and are not cached as an empty role
 // list. Local runs continue with no roles when Directory credentials fail.
-// ALLOWED_GROUP_EMAILS is checked with members.hasMember so nested members pass.
+// Configured role groups are checked with members.hasMember so nested members
+// are resolved. authorize still admits only FULL.
 const authenticate = createAuthenticator({
     getTokenInfo: (token) => tokenInfoClient.getTokenInfo(token),
     getUserInfo,
@@ -215,14 +225,34 @@ app.get('/openapi.json', (req, res) => {
 
 app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 
-// Cloud Run must not boot a revision that skips the Workspace group gate.
-// Local development (no K_SERVICE) may omit ALLOWED_GROUP_EMAILS.
-export function validateGroupAuthorization() {
+// Cloud Run must not boot a revision with a missing FULL group, an unknown
+// role variable, a malformed group email, or a configured group Directory
+// cannot find. Local development (no K_SERVICE) warns and continues.
+export async function validateGroupAuthorization(options = {}) {
+    const env = options.env ?? process.env;
+    for (const warning of startupWarnings(env)) {
+        console.warn(warning);
+    }
     try {
-        assertGroupAuthorizationConfigured();
+        assertGroupAuthorizationConfigured(env);
     } catch (error) {
         console.error(error.message);
         process.exit(1);
+        return;
+    }
+    const entries = listConfiguredGroupEntries(env);
+    if (entries.length === 0) {
+        return;
+    }
+    try {
+        await ensureAuthorizationGroupsExist(entries, { ...options, env });
+    } catch (error) {
+        if (typeof env.K_SERVICE === 'string' && env.K_SERVICE.trim() !== '') {
+            console.error(error.message);
+            process.exit(1);
+            return;
+        }
+        console.warn(error.message);
     }
 }
 
@@ -232,9 +262,10 @@ export { app };
 // Start the Express server only when run directly
 /* c8 ignore start */
 if (import.meta.url === `file://${process.argv[1]}`) {
-    validateGroupAuthorization();
-    app.listen(port, () => {
-        console.log(`Server running at http://localhost:${port}`);
+    validateGroupAuthorization().then(() => {
+        app.listen(port, () => {
+            console.log(`Server running at http://localhost:${port}`);
+        });
     });
 }
 /* c8 ignore stop */

@@ -6,6 +6,7 @@ import {
     HAS_MEMBER_TIMEOUT_MS,
     DirectoryGroupsUnavailableError,
     checkGroupMembership,
+    ensureAuthorizationGroupsExist,
     resolveAuthorizationGroups
 } from '../utils/groups.js';
 import {
@@ -225,6 +226,64 @@ describe('Admin SDK members.hasMember', () => {
             expect(error.message).to.include('timeout');
         }
     });
+
+    it('swallows a hasMember rejection that arrives after the timeout', async () => {
+        const late = [];
+        const onUnhandled = (error) => late.push(error);
+        process.on('unhandledRejection', onUnhandled);
+        let rejectLate;
+        const hasMember = sinon.stub().returns(new Promise((_, reject) => {
+            rejectLate = reject;
+        }));
+
+        try {
+            await checkGroupMembership(USER_EMAIL, FULL_ACCESS_GROUP, {}, {
+                createAdmin: () => ({ members: { hasMember } }),
+                timeoutMs: 15
+            });
+            expect.fail('expected timeout');
+        } catch (error) {
+            expect(error).to.be.instanceOf(DirectoryGroupsUnavailableError);
+            expect(error.message).to.include('timeout');
+        }
+
+        rejectLate(new Error('late directory rejection'));
+        await new Promise((resolve) => {
+            setTimeout(resolve, 30);
+        });
+        process.off('unhandledRejection', onUnhandled);
+        expect(late).to.deep.equal([]);
+    });
+});
+
+describe('startup Directory group existence', () => {
+    afterEach(() => {
+        sinon.restore();
+    });
+
+    it('reports a missing group instead of treating Directory 404 as a local outage', async () => {
+        silenceLogs();
+        const groupsGet = sinon.stub().rejects(googleError(404, { access_token: 'ya29.super-secret' }));
+
+        try {
+            await ensureAuthorizationGroupsExist(
+                [{ email: FULL_ACCESS_GROUP, envVar: 'AUTHZ_ROLE_FULL_GROUPS' }],
+                {
+                    env: {},
+                    createAdcAuth: () => ({ kind: 'adc' }),
+                    createAdmin: () => ({ groups: { get: groupsGet } }),
+                    sleep: async () => {}
+                }
+            );
+            expect.fail('expected missing group to throw');
+        } catch (error) {
+            expect(error.code).to.equal('GROUP_NOT_FOUND');
+            expect(error.message).to.include('AUTHZ_ROLE_FULL_GROUPS');
+            expect(error.message).to.include(FULL_ACCESS_GROUP);
+        }
+        expect(loggedText('error')).to.not.include('ya29.super-secret');
+        expect(groupsGet.calledOnce).to.be.true;
+    });
 });
 
 describe('resolveAuthorizationGroups', () => {
@@ -276,6 +335,25 @@ describe('resolveAuthorizationGroups', () => {
             { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
         ]);
         expect(result.userCacheTtlMs).to.equal(POSITIVE_MEMBERSHIP_TTL_MS);
+    });
+
+    it('does not grant membership for a nested group outside the authorization set', async () => {
+        const outsider = 'volunteers-leads@starsandstripeshonorflight.org';
+        const listGroups = sinon.stub().resolves([
+            { id: 'n1', name: 'Volunteers', email: NESTED_GROUP }
+        ]);
+        const checkMembership = sinon.stub().callsFake((userEmail, groupEmail) => (
+            Promise.resolve({ isMember: groupEmail === outsider })
+        ));
+
+        const result = await resolve([FULL_ACCESS_GROUP], { listGroups, checkMembership });
+
+        expect(checkMembership.calledOnce).to.be.true;
+        expect(checkMembership.firstCall.args[1]).to.equal(FULL_ACCESS_GROUP);
+        expect(result.groups.map((group) => group.email)).to.not.include(outsider);
+        expect(result.groups).to.deep.equal([
+            { id: 'n1', name: 'Volunteers', email: NESTED_GROUP }
+        ]);
     });
 
     it('does not call hasMember for a configured group already in the direct list', async () => {
