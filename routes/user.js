@@ -5,12 +5,12 @@
  *     summary: Check whether the authenticated user belongs to a Workspace group
  *     description: >
  *       Auth-only probe used by the UI during sign-in. Does not require
- *       membership in ALLOWED_GROUP_EMAILS so non-members can still discover
- *       that they are unauthorized. For groups listed in ALLOWED_GROUP_EMAILS,
- *       hasgroup is true for a direct or nested Workspace member. Any other
- *       group is a direct membership only. Data routes enforce group membership
- *       separately via the authorize middleware. groupEmail is compared to
- *       role emails case-insensitively, matching authorize.
+ *       FULL membership, so non-members can still discover that they are
+ *       unauthorized. For groups listed in AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS
+ *       (ALLOWED_GROUP_EMAILS is the deprecated alias for FULL), hasgroup is
+ *       true for a direct or nested Workspace member. Any other group is a
+ *       direct membership only. Data routes still require FULL via authorize.
+ *       groupEmail is compared to role emails case-insensitively.
  *     tags: [User]
  *     security:
  *       - GoogleAuth: []

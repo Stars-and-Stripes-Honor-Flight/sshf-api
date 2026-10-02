@@ -51,7 +51,12 @@ Required environment variables:
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI auth, and the client whose access tokens the API accepts (audience validation) |
 | `ALLOWED_CLIENT_IDS` | Optional. Comma-separated OAuth client IDs accepted for token audience validation (overrides `GOOGLE_CLIENT_ID` when set) |
 | `ALLOWED_EMAIL_DOMAINS` | Optional defense in depth. When set, unverified emails and addresses outside these domains are rejected. Production does not require it. |
-| `ALLOWED_GROUP_EMAILS` | Required on Cloud Run (`K_SERVICE` set): empty or unset fails startup and data-route authorization. Optional locally (no `K_SERVICE`). Direct or nested membership. Dev: `sshf_app_dev_full_access@…`; prod: `sshf_app_prd_full_access@…` |
+| `AUTHZ_ROLE_READ_GROUPS` | Comma-separated Workspace groups for the READ role. Optional. Dev: `sshf_app_dev_read_access@starsandstripeshonorflight.org`. Prod: `sshf_app_prd_read_access@…` |
+| `AUTHZ_ROLE_WRITE_GROUPS` | Groups for WRITE (includes READ permissions). Optional. Dev: `sshf_app_dev_write_access@…`. Prod: `sshf_app_prd_write_access@…` |
+| `AUTHZ_ROLE_FULL_GROUPS` | Groups for FULL (includes WRITE). Required on Cloud Run. Dev: `sshf_app_dev_full_access@…`. Prod: `sshf_app_prd_full_access@…`. Data routes still require this role |
+| `AUTHZ_ROLE_MEDICAL_GROUPS` | Groups for MEDICAL (no logistics permissions). Optional. Dev: `sshf_app_dev_medical_access@…`. Prod: `sshf_app_prd_medical_access@…` |
+| `AUTHZ_ROLE_REVIEW_GROUPS` | Groups for REVIEW (no logistics permissions). Optional. Dev: `sshf_app_dev_review_access@…`. Prod: `sshf_app_prd_review_access@…` |
+| `ALLOWED_GROUP_EMAILS` | Deprecated alias for `AUTHZ_ROLE_FULL_GROUPS`. Used only when that variable is unset. If both are set, `AUTHZ_ROLE_FULL_GROUPS` wins |
 | `REVIEW_DB_NAME` | CouchDB database name for online applications (VeteranApp/GuardianApp); required for `/review/applications` routes |
 | `REVIEW_DB_URL` | Optional. CouchDB URL for the review database; defaults to `DB_URL` |
 | `REVIEW_DB_USER` | Optional. CouchDB username for the review database; defaults to `DB_USER` |
@@ -61,7 +66,7 @@ Required environment variables:
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
-> **Note**: In Cloud Run, Application Default Credentials are used automatically. A Directory failure there is `503`. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership. If local Directory credentials are missing or unusable, authentication continues with no roles. Leave `ALLOWED_GROUP_EMAILS` unset for that local path; data routes then proceed to CouchDB.
+> **Note**: In Cloud Run, Application Default Credentials are used automatically. A Directory failure there is `503`. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership. If local Directory credentials are missing or unusable, authentication continues with no roles. Leave `AUTHZ_ROLE_FULL_GROUPS` and `ALLOWED_GROUP_EMAILS` unset for that local path; data routes then proceed to CouchDB.
 
 ### Installation
 
@@ -161,19 +166,25 @@ The API enforces these checks before a request proceeds:
    account must have a verified email in one of those domains or the request
    is rejected with `403`. Unverified emails are rejected whenever the list is
    set. Production does not require this variable.
-3. **Workspace group membership** — on Cloud Run (`K_SERVICE` set),
-   `ALLOWED_GROUP_EMAILS` is required. An empty list fails process startup and
-   data routes return `403`. When the list is set, data routes require
-   membership in at least one listed group (`403` otherwise, including when
-   Admin SDK returns no roles). Membership in those groups counts when it is
-   direct or nested (`members.hasMember`). Local development without `K_SERVICE`
-   may omit the list. `GET /user/hasgroup` stays auth-only so the UI can probe
-   membership during sign-in. Local Directory lookup prefers
+3. **Workspace group membership** — roles are `READ`, `WRITE`, `FULL`,
+   `MEDICAL`, and `REVIEW`, mapped from `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS`.
+   On Cloud Run (`K_SERVICE` set), `AUTHZ_ROLE_FULL_GROUPS` is required
+   (`ALLOWED_GROUP_EMAILS` is a deprecated alias when the new variable is
+   unset). An empty FULL list, an unknown `AUTHZ_ROLE_*_GROUPS` name, a
+   malformed group email, or a configured group that Directory cannot find
+   fails process startup. Data routes still require **FULL** membership
+   (`403` otherwise, including when Admin SDK returns no roles). READ, WRITE,
+   MEDICAL, and REVIEW are resolved and cached on the user, but they do not
+   grant route access yet. Membership in a configured role group counts when
+   it is direct or nested (`members.hasMember`). Local development without
+   `K_SERVICE` may omit the lists; startup problems are warnings there.
+   `GET /user/hasgroup` stays auth-only so the UI can probe membership during
+   sign-in. Local Directory lookup prefers
    `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
    When those are missing or gcloud user ADC cannot call Directory
    (`invalid_rapt`, missing scopes), local authentication continues with no
    roles so requests still reach CouchDB (including a tunneled dev database).
-   If `ALLOWED_GROUP_EMAILS` is set locally, those empty roles still `403`.
+   If FULL is configured locally, those empty roles still `403`.
 
 Responses: `401` for a missing, invalid, expired, or wrong-audience token;
 `403` for a permitted-token account that is not allowed (domain or group);
@@ -184,20 +195,23 @@ the group allow-list is set. Off Cloud Run that lookup failure continues
 with no roles.
 
 Direct memberships are listed with `groups.list`, following `nextPageToken`
-up to a documented page cap (2,000 memberships). Each group in
-`ALLOWED_GROUP_EMAILS` is also checked with Admin SDK `members.hasMember`,
-which is true for a direct member and for a member of a nested group. A
-configured group already present in the direct list is not checked again.
-No additional OAuth scope or Workspace role is required.
+up to a documented page cap (2,000 memberships). Each configured role group
+is also checked with Admin SDK `members.hasMember`, which is true for a
+direct member and for a member of a nested group. A configured group already
+present in the direct list is not checked again. A group that is not in the
+role configuration is never added from nested membership. No additional
+OAuth scope or Workspace role is required.
 
 Positive membership is cached for up to 15 minutes. A negative result ("not
 a member") is cached for about 2 minutes. Directory errors are not cached.
 The sign-in cache expires with the earliest of those membership results, so
 a newly granted membership is seen within about 2 minutes. Google can also
 take a few minutes to propagate a group change; sign in again after that.
-`GET /user/hasgroup` is true for nested membership in `ALLOWED_GROUP_EMAILS`
-and remains direct-only for any other group. `groupEmail` is compared
-case-insensitively.
+`GET /user/hasgroup` is true for nested membership in any configured role
+group (`AUTHZ_ROLE_*_GROUPS`, or `ALLOWED_GROUP_EMAILS` while it still
+aliases FULL) and remains direct-only for any other group. `groupEmail` is
+compared case-insensitively. WRITE includes every READ permission and FULL
+includes every WRITE permission. FULL does not include MEDICAL or REVIEW.
 
 ## API Documentation
 

@@ -39,6 +39,11 @@ describe('Auth token validation utilities', () => {
         restore('ALLOWED_EMAIL_DOMAINS', originalAllowedDomains);
         restore('ALLOWED_GROUP_EMAILS', originalAllowedGroups);
         restore('K_SERVICE', originalKService);
+        for (const key of Object.keys(process.env)) {
+            if (key.startsWith('AUTHZ_ROLE_')) {
+                delete process.env[key];
+            }
+        }
     });
 
     describe('getAllowedClientIds', () => {
@@ -247,6 +252,25 @@ describe('Auth token validation utilities', () => {
 
         it('reads allowed groups from the environment when options are omitted', () => {
             process.env.ALLOWED_GROUP_EMAILS = FULL_ACCESS_GROUP;
+            expect(() => assertUserInAllowedGroups(memberRoles)).to.not.throw();
+            expect(() => assertUserInAllowedGroups(otherRoles)).to.throw(GroupNotAllowedError);
+        });
+
+        it('uses AUTHZ_ROLE_FULL_GROUPS as the gate and does not admit a READ group', () => {
+            delete process.env.K_SERVICE;
+            delete process.env.ALLOWED_GROUP_EMAILS;
+            process.env.AUTHZ_ROLE_FULL_GROUPS = FULL_ACCESS_GROUP;
+            process.env.AUTHZ_ROLE_READ_GROUPS = 'sshf_app_dev_read_access@starsandstripeshonorflight.org';
+            expect(() => assertUserInAllowedGroups(memberRoles)).to.not.throw();
+            expect(() => assertUserInAllowedGroups([
+                { email: 'sshf_app_dev_read_access@starsandstripeshonorflight.org' }
+            ])).to.throw(GroupNotAllowedError);
+        });
+
+        it('prefers AUTHZ_ROLE_FULL_GROUPS when it differs from ALLOWED_GROUP_EMAILS', () => {
+            delete process.env.K_SERVICE;
+            process.env.AUTHZ_ROLE_FULL_GROUPS = FULL_ACCESS_GROUP;
+            process.env.ALLOWED_GROUP_EMAILS = OTHER_GROUP;
             expect(() => assertUserInAllowedGroups(memberRoles)).to.not.throw();
             expect(() => assertUserInAllowedGroups(otherRoles)).to.throw(GroupNotAllowedError);
         });

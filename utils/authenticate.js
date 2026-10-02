@@ -12,6 +12,7 @@
  */
 import { assertValidTokenClaims, TokenAudienceError } from './auth.js';
 import { DirectoryGroupsUnavailableError } from './groups.js';
+import { resolveAccessFromMemberships } from './permissions.js';
 
 function toRole(group) {
     const role = { email: group.email };
@@ -103,6 +104,9 @@ export function createAuthenticator({
                 : membershipResult.userCacheTtlMs;
 
             const roles = groups.map((group) => toRole(group));
+            // Role ids and permissions are computed once per cache fill.
+            // authorize still ignores every role except FULL.
+            const access = resolveAccessFromMemberships(roles);
 
             const user = {
                 id: userData.sub,
@@ -110,7 +114,9 @@ export function createAuthenticator({
                 firstName: userData.given_name,
                 lastName: userData.family_name,
                 avatar: userData.picture,
-                roles
+                roles,
+                authorizationRoles: access.roles,
+                permissions: access.permissions
             };
 
             if (Number.isFinite(userCacheTtlMs)) {

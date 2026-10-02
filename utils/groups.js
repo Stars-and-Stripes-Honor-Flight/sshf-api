@@ -16,14 +16,16 @@
  * stops a stuck page token from looping. Membership past the cap is not
  * visible to authorization.
  *
- * Configured authorization groups (ALLOWED_GROUP_EMAILS in Phase 1) are also
- * checked with members.hasMember, which is true for direct and nested members.
+ * Configured authorization groups (every AUTHZ_ROLE_*_GROUPS email, with
+ * ALLOWED_GROUP_EMAILS as the deprecated FULL alias) are also checked with
+ * members.hasMember, which is true for direct and nested members.
  * A configured group already present in the direct list skips that call.
  * Positive answers are cached for up to USER_CACHE_TTL_MS. Negative answers
  * are cached for about 2 minutes. Directory errors are not cached.
  */
 import { google } from 'googleapis';
 import { isRunningOnCloudRun } from './auth.js';
+import { confirmConfiguredGroupsExist } from './permissions.js';
 import {
     createMembershipCache,
     POSITIVE_MEMBERSHIP_TTL_MS
@@ -173,14 +175,26 @@ function directoryStatus(error) {
 
 function withTimeout(promise, timeoutMs) {
     let timer;
-    const timeout = new Promise((_, reject) => {
+    let settled = false;
+    return new Promise((resolve, reject) => {
+        const finish = (settle, value) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            clearTimeout(timer);
+            settle(value);
+        };
         timer = setTimeout(() => {
             const error = new Error(`Directory membership lookup timed out after ${timeoutMs}ms`);
             error.code = 'ETIMEDOUT';
-            reject(error);
+            finish(reject, error);
         }, timeoutMs);
+        Promise.resolve(promise).then(
+            (value) => finish(resolve, value),
+            (error) => finish(reject, error)
+        );
     });
-    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -191,6 +205,11 @@ function withTimeout(promise, timeoutMs) {
 async function withDirectoryAuth(env, options, operation, onLocalFailure) {
     const createJwtAuth = options.createJwtAuth ?? (() => createDirectoryJwtAuth(env));
     const createAdcAuth = options.createAdcAuth ?? createDirectoryAdcAuth;
+    const propagate = (error) => {
+        if (options.passthroughError?.(error)) {
+            throw error;
+        }
+    };
 
     const unavailable = (error) => new DirectoryGroupsUnavailableError(
         error?.message || 'Directory group lookup failed',
@@ -223,10 +242,12 @@ async function withDirectoryAuth(env, options, operation, onLocalFailure) {
         try {
             return await tryJwt();
         } catch (error) {
+            propagate(error);
             logGroupFetchError('JWT group fetch failed, trying ADC', error);
             try {
                 return await tryAdc();
             } catch (adcError) {
+                propagate(adcError);
                 return giveUp(adcError);
             }
         }
@@ -235,11 +256,13 @@ async function withDirectoryAuth(env, options, operation, onLocalFailure) {
     try {
         return await tryAdc();
     } catch (error) {
+        propagate(error);
         if (shouldFallbackToServiceAccountJwt(error, env)) {
             console.log('ADC authentication failed, falling back to JWT with env vars:', error.message);
             try {
                 return await tryJwt();
             } catch (jwtError) {
+                propagate(jwtError);
                 return giveUp(jwtError);
             }
         }
@@ -343,7 +366,7 @@ export async function resolveAuthorizationGroups(userData, groupEmails, options 
         ?? ((userEmail, groupEmail, auth) => checkGroupMembership(userEmail, groupEmail, auth, {
             createAdmin: options.createAdmin,
             timeoutMs: options.timeoutMs,
-            groupEnvVar: options.groupEnvVar
+            groupEnvVar: options.groupEnvVars?.[groupEmail] ?? options.groupEnvVar
         }));
     const membershipCache = options.membershipCache ?? defaultMembershipCache;
     const now = options.now ?? Date.now;
@@ -462,4 +485,43 @@ async function mergeAuthorizationGroups({
         Math.max(0, earliest - current)
     );
     return { groups, userCacheTtlMs };
+}
+
+/**
+ * Startup existence check for configured role groups. Inject getGroup in tests.
+ * Otherwise one Directory client calls groups.get, with the same JWT / ADC
+ * fallback as membership lookup. A missing group (404) is not retried as an
+ * outage and is not swallowed on a local run.
+ */
+export async function ensureAuthorizationGroupsExist(entries, options = {}) {
+    if (!Array.isArray(entries) || entries.length === 0) {
+        return;
+    }
+    if (typeof options.getGroup === 'function') {
+        return confirmConfiguredGroupsExist(entries, options);
+    }
+
+    const env = options.env ?? process.env;
+    const createAdmin = options.createAdmin
+        ?? ((directoryAuth) => google.admin({ version: 'directory_v1', auth: directoryAuth }));
+    const passthroughError = (error) => (
+        error?.code === 'GROUP_NOT_FOUND' || error?.code === 'GROUP_CHECK_FAILED'
+    );
+
+    await withDirectoryAuth(
+        env,
+        { ...options, passthroughError },
+        async (auth) => {
+            const admin = createAdmin(auth);
+            await confirmConfiguredGroupsExist(entries, {
+                attempts: options.attempts,
+                backoffMs: options.backoffMs,
+                sleep: options.sleep,
+                getGroup: (email) => admin.groups.get({ groupKey: email })
+            });
+        },
+        () => {
+            throw new DirectoryGroupsUnavailableError('Directory group existence check failed');
+        }
+    );
 }

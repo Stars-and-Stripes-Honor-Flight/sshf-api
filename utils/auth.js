@@ -1,11 +1,20 @@
 /**
  * Access-token authorization helpers.
  *
+ * Phase 2 resolves READ, WRITE, FULL, MEDICAL, and REVIEW, but authorize
+ * still admits only FULL. ALLOWED_GROUP_EMAILS is a deprecated alias for
+ * AUTHZ_ROLE_FULL_GROUPS when that variable is unset.
+ *
  * The API receives an opaque Google OAuth2 access token as a Bearer token.
  * A valid Google token is not sufficient: it must have been issued for THIS
  * application's OAuth client. Optionally, an allow-list of email domains 
  * provides defense in depth on top of the OAuth client's org-internal consent restriction.
  */
+
+import {
+    cloudRunAuthorizationProblems,
+    getFullAccessGroupEmails
+} from './permissions.js';
 
 /** Token was not issued for one of this application's OAuth clients. */
 export class TokenAudienceError extends Error {
@@ -62,10 +71,8 @@ export function getAllowedEmailDomains(env = process.env) {
 }
 
 /**
- * Workspace group emails permitted to access protected data routes. Empty
- * disables the group check off Cloud Run so local development can omit it.
- * On Cloud Run (K_SERVICE set) an empty list fails closed. When the list is
- * set, membership is required (fail closed if Admin SDK returns no roles).
+ * Raw ALLOWED_GROUP_EMAILS list. Phase 2 reads this only as the deprecated
+ * alias for AUTHZ_ROLE_FULL_GROUPS (see getFullAccessGroupEmails).
  */
 export function getAllowedGroupEmails(env = process.env) {
     return parseList(env.ALLOWED_GROUP_EMAILS).map((email) => email.toLowerCase());
@@ -79,18 +86,19 @@ export function isRunningOnCloudRun(env = process.env) {
 }
 
 /**
- * Deployed Cloud Run revisions must configure ALLOWED_GROUP_EMAILS. An empty
- * list would otherwise accept any access token minted for the public OAuth
- * client. Local development without K_SERVICE may omit the list.
+ * Deployed Cloud Run revisions must configure AUTHZ_ROLE_FULL_GROUPS, or
+ * the deprecated ALLOWED_GROUP_EMAILS alias. An empty FULL list would
+ * otherwise accept any access token minted for the public OAuth client.
+ * Unknown role variables and malformed group emails also fail startup.
+ * Local development without K_SERVICE may omit the list.
  *
  * @param {NodeJS.ProcessEnv} [env]
- * @throws {GroupNotAllowedError} when Cloud Run has no group allow-list
+ * @throws {GroupNotAllowedError} when Cloud Run authorization config is invalid
  */
 export function assertGroupAuthorizationConfigured(env = process.env) {
-    if (isRunningOnCloudRun(env) && getAllowedGroupEmails(env).length === 0) {
-        throw new GroupNotAllowedError(
-            'ALLOWED_GROUP_EMAILS must be set when running on Cloud Run'
-        );
+    const problems = cloudRunAuthorizationProblems(env);
+    if (problems.length > 0) {
+        throw new GroupNotAllowedError(problems.join('; '));
     }
 }
 
@@ -144,7 +152,7 @@ export function assertValidTokenClaims(claims = {}, options = {}) {
  */
 export function assertUserInAllowedGroups(roles, options = {}) {
     const env = options.env ?? process.env;
-    const allowedGroupEmails = options.allowedGroupEmails ?? getAllowedGroupEmails(env);
+    const allowedGroupEmails = options.allowedGroupEmails ?? getFullAccessGroupEmails(env);
 
     if (allowedGroupEmails.length === 0) {
         assertGroupAuthorizationConfigured(env);
@@ -162,7 +170,8 @@ export function assertUserInAllowedGroups(roles, options = {}) {
 }
 
 /**
- * Express middleware: enforce ALLOWED_GROUP_EMAILS against req.user.roles.
+ * Express middleware: enforce FULL membership against req.user.roles.
+ * READ, WRITE, MEDICAL, and REVIEW do not pass this gate (Phase 3).
  * Intended to run after authenticate on data routes (not on /user/hasgroup).
  */
 export function authorize(req, res, next) {
