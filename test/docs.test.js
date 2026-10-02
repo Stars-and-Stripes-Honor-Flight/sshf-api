@@ -67,15 +67,15 @@ describe('Document revision routes', () => {
     });
 
     describe('route registration', () => {
-        it('registers revision routes before /docs/:id with authenticate, authorize, and dbSession', () => {
+        it('registers revision routes before /docs/:id with authenticate, requirePermission, and dbSession', () => {
             const revisions = indexSource.indexOf(
-                'app.get("/docs/:id/revisions", authenticate, authorize, dbSession, listDocumentRevisions)'
+                'app.get("/docs/:id/revisions", authenticate, requireRoutePermission(\'GET\', \'/docs/:id/revisions\'), dbSession, listDocumentRevisions)'
             );
             const diff = indexSource.indexOf(
-                'app.get("/docs/:id/diff", authenticate, authorize, dbSession, diffDocument)'
+                'app.get("/docs/:id/diff", authenticate, requireRoutePermission(\'GET\', \'/docs/:id/diff\'), dbSession, diffDocument)'
             );
             const retrieve = indexSource.indexOf(
-                'app.get("/docs/:id", authenticate, authorize, dbSession, retrieveDocument)'
+                'app.get("/docs/:id", authenticate, requireRoutePermission(\'GET\', \'/docs/:id\'), dbSession, retrieveDocument)'
             );
 
             expect(revisions).to.be.greaterThan(-1);

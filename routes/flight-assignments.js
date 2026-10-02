@@ -115,6 +115,7 @@ function sendAddVeteransResult(res, result) {
  *     tags: [Flight Assignments]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id
@@ -135,6 +136,8 @@ function sendAddVeteransResult(res, result) {
  *         description: Flight not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -235,6 +238,7 @@ export async function getFlightAssignments(req, res) {
  *     tags: [Flight Assignments]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: flights:manage
  *     parameters:
  *       - in: path
  *         name: id
@@ -269,6 +273,8 @@ export async function getFlightAssignments(req, res) {
  *         description: Flight not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       409:
  *         description: |
  *           One or more veteran or guardian documents conflicted. The handler

@@ -15,6 +15,7 @@ const dbName = process.env.DB_NAME;
  *     tags: [Waitlist]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     responses:
  *       200:
  *         description: Veteran groups retrieved successfully
@@ -34,6 +35,8 @@ const dbName = process.env.DB_NAME;
  *                   - "Philip Schultz"
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *         content:

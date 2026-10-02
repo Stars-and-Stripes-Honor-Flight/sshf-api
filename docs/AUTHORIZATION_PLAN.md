@@ -1,7 +1,9 @@
 # Authorization by Group Membership: Design and Phased Plan
 
-Status: **Direction approved** (2026-10-01). Product-owner decisions are
-recorded in Section 9. Implementation starts with Phase 1.
+Status: **Phases 1–3 implemented** (2026-10-02). Phase 4 (UI migration and
+API cleanup, including removal of `/user/hasgroup`, `groups.list`, and the
+`ALLOWED_GROUP_EMAILS` alias) is not done. Product-owner decisions are
+recorded in Section 9. Section 2 is the pre-change baseline.
 Tracking issue: [#130 Authorization by Group Membership](https://github.com/Stars-and-Stripes-Honor-Flight/sshf-api/issues/130)
 
 This document is planning only. It does not change runtime behavior. Each

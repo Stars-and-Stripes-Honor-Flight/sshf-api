@@ -253,7 +253,7 @@ describe('Phase 2 role groups and permissions', () => {
         });
     });
 
-    describe('FULL-only gate', () => {
+    describe('authorize FULL helper', () => {
         function runAuthorize(roles) {
             const req = { user: { roles } };
             const res = {
@@ -275,7 +275,7 @@ describe('Phase 2 role groups and permissions', () => {
             return { res, nextCalled };
         }
 
-        it('still admits only FULL membership on data routes', () => {
+        it('still admits only FULL membership', () => {
             delete process.env.K_SERVICE;
             delete process.env.ALLOWED_GROUP_EMAILS;
             Object.assign(process.env, roleEnv());
@@ -341,6 +341,9 @@ describe('Phase 2 role groups and permissions', () => {
                 [...new Set([...ROLE_PERMISSIONS.WRITE, ...ROLE_PERMISSIONS.REVIEW])].sort()
             );
             expect(cache.set.firstCall.args[1].authorizationRoles).to.deep.equal(['REVIEW', 'WRITE']);
+            expect(req.user.evaluatedAt).to.match(/^\d{4}-\d{2}-\d{2}T/);
+            expect(Date.parse(req.user.expiresAt) - Date.parse(req.user.evaluatedAt)).to.equal(120000);
+            expect(cache.set.firstCall.args[1].evaluatedAt).to.equal(req.user.evaluatedAt);
 
             const gate = runGate(req);
             expect(gate.nextCalled).to.equal(false);
