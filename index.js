@@ -237,8 +237,9 @@ app.get('/openapi.json', (req, res) => {
 app.use('/api-docs', swaggerUiServe, swaggerUiSetup);
 
 // Cloud Run must not boot a revision with a missing FULL group, an unknown
-// role variable, a malformed group email, or a configured group Directory
-// cannot find. Local development (no K_SERVICE) warns and continues.
+// role variable, a malformed group email, AUTHZ_DEV_OVERRIDE_ROLES, or a
+// configured group Directory cannot find. Local development (no K_SERVICE)
+// warns and continues. The local override is never honored on Cloud Run.
 export async function validateGroupAuthorization(options = {}) {
     const env = options.env ?? process.env;
     for (const warning of startupWarnings(env)) {

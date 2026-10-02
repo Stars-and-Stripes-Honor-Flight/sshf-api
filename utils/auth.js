@@ -14,6 +14,7 @@
 
 import {
     cloudRunAuthorizationProblems,
+    describeDevOverride,
     getFullAccessGroupEmails,
     listConfiguredGroupEntries
 } from './permissions.js';
@@ -193,9 +194,10 @@ export function authorize(req, res, next) {
  *
  * A signed-in user with no permissions gets the existing account-not-permitted
  * body. A user who holds some other permission gets requiredPermission for the
- * first missing one. Off Cloud Run, when no role groups are configured, the
- * check is skipped so local CouchDB testing still works. On Cloud Run it
- * fails closed.
+ * first missing one. Off Cloud Run, when no role groups and no
+ * AUTHZ_DEV_OVERRIDE_ROLES are configured, the check is skipped so local
+ * CouchDB testing still works. A local override is enforced. On Cloud Run the
+ * check fails closed and the override is never honored.
  *
  * @param {...string} permissions
  */
@@ -203,7 +205,10 @@ export function requirePermission(...permissions) {
     const requiredPermissions = Object.freeze([...permissions]);
 
     function requirePermission(req, res, next) {
-        if (!isRunningOnCloudRun() && listConfiguredGroupEntries().length === 0) {
+        const localGateOpen = !isRunningOnCloudRun()
+            && listConfiguredGroupEntries().length === 0
+            && !describeDevOverride().configured;
+        if (localGateOpen) {
             return next();
         }
 

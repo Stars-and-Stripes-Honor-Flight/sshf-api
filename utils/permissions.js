@@ -253,6 +253,55 @@ export function listConfiguredGroupEntries(env = process.env) {
     return [...byEmail.values()];
 }
 
+export const DEV_OVERRIDE_ENV = 'AUTHZ_DEV_OVERRIDE_ROLES';
+
+/**
+ * Local-only role projection. Blank or missing is not configured.
+ * Unknown tokens are reported and omitted. Inherited roles are not added:
+ * FULL stays FULL, and permissionsForRoles applies WRITE/READ inheritance.
+ */
+export function describeDevOverride(env = process.env) {
+    const raw = env?.[DEV_OVERRIDE_ENV];
+    const configured = raw != null && String(raw).trim() !== '';
+    const roles = [];
+    const unknown = [];
+    const seen = new Set();
+    if (configured) {
+        for (const part of String(raw).split(',')) {
+            const roleId = part.trim().toUpperCase();
+            if (!roleId) {
+                continue;
+            }
+            if (!ROLE_IDS.includes(roleId)) {
+                unknown.push(roleId);
+                continue;
+            }
+            if (seen.has(roleId)) {
+                continue;
+            }
+            seen.add(roleId);
+            roles.push(roleId);
+        }
+    }
+    roles.sort();
+    return { configured, roles, unknown };
+}
+
+/**
+ * Role ids to project for this process. Null when the override is unset or
+ * when running on Cloud Run, where the variable is never honored.
+ */
+export function devOverrideRoles(env = process.env) {
+    if (isCloudRun(env)) {
+        return null;
+    }
+    const described = describeDevOverride(env);
+    if (!described.configured) {
+        return null;
+    }
+    return described.roles;
+}
+
 export function startupWarnings(env = process.env) {
     const described = describeRoleConfig(env);
     const warnings = [];
@@ -272,6 +321,18 @@ export function startupWarnings(env = process.env) {
     }
     for (const entry of described.malformed) {
         warnings.push(malformedMessage(entry));
+    }
+    if (!isCloudRun(env)) {
+        const override = describeDevOverride(env);
+        if (override.configured) {
+            warnings.push(
+                'AUTHZ_DEV_OVERRIDE_ROLES is a local-only authorization override. ' +
+                'Do not set it on Cloud Run.'
+            );
+            for (const roleId of override.unknown) {
+                warnings.push(`AUTHZ_DEV_OVERRIDE_ROLES contains an unknown role: ${roleId}`);
+            }
+        }
     }
     return warnings;
 }
@@ -297,6 +358,11 @@ export function cloudRunAuthorizationProblems(env = process.env) {
         problems.push(
             'AUTHZ_ROLE_FULL_GROUPS must be set when running on Cloud Run ' +
             '(ALLOWED_GROUP_EMAILS remains a deprecated alias)'
+        );
+    }
+    if (describeDevOverride(env).configured) {
+        problems.push(
+            'AUTHZ_DEV_OVERRIDE_ROLES must not be set when running on Cloud Run'
         );
     }
     return problems;

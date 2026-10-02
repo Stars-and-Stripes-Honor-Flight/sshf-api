@@ -12,7 +12,7 @@
  */
 import { assertValidTokenClaims, TokenAudienceError } from './auth.js';
 import { DirectoryGroupsUnavailableError } from './groups.js';
-import { resolveAccessFromMemberships } from './permissions.js';
+import { devOverrideRoles, permissionsForRoles, resolveAccessFromMemberships } from './permissions.js';
 import { resolveUserCacheTtlMs } from './user_cache.js';
 
 function toRole(group) {
@@ -86,27 +86,40 @@ export function createAuthenticator({
                 throw new Error('Failed to fetch user info');
             }
 
-            let membershipResult;
-            try {
-                membershipResult = await getGroupMemberships(userData);
-            } catch (error) {
-                if (error instanceof DirectoryGroupsUnavailableError) {
-                    console.error('Directory group lookup unavailable:', error.message);
-                    return res.status(503).json({ message: 'Authentication service unavailable' });
+            const overrideRoles = devOverrideRoles();
+            let roles;
+            let userCacheTtlMs;
+            let access;
+            if (overrideRoles) {
+                // Local projection. Directory is not consulted, and Cloud Run
+                // never reaches this branch (devOverrideRoles returns null).
+                roles = [];
+                userCacheTtlMs = undefined;
+                access = {
+                    roles: [...overrideRoles].sort(),
+                    permissions: permissionsForRoles(overrideRoles)
+                };
+            } else {
+                let membershipResult;
+                try {
+                    membershipResult = await getGroupMemberships(userData);
+                } catch (error) {
+                    if (error instanceof DirectoryGroupsUnavailableError) {
+                        console.error('Directory group lookup unavailable:', error.message);
+                        return res.status(503).json({ message: 'Authentication service unavailable' });
+                    }
+                    throw error;
                 }
-                throw error;
+
+                const groups = Array.isArray(membershipResult)
+                    ? membershipResult
+                    : membershipResult.groups;
+                userCacheTtlMs = Array.isArray(membershipResult)
+                    ? undefined
+                    : membershipResult.userCacheTtlMs;
+                roles = groups.map((group) => toRole(group));
+                access = resolveAccessFromMemberships(roles);
             }
-
-            const groups = Array.isArray(membershipResult)
-                ? membershipResult
-                : membershipResult.groups;
-            const userCacheTtlMs = Array.isArray(membershipResult)
-                ? undefined
-                : membershipResult.userCacheTtlMs;
-
-            const roles = groups.map((group) => toRole(group));
-            // Role ids and permissions are computed once per cache fill.
-            const access = resolveAccessFromMemberships(roles);
             const evaluatedAtMs = Date.now();
             const cacheTtlMs = resolveUserCacheTtlMs(userCacheTtlMs);
 

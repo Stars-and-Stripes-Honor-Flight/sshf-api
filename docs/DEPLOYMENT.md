@@ -235,6 +235,12 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
   medical-only user is denied on every current route. `GET /user/permissions`
   is auth-only and returns roles plus the effective permission union
   (`Cache-Control: no-store`). `GET /user/hasgroup` stays auth-only.
+  `AUTHZ_DEV_OVERRIDE_ROLES` is a local-only override (no `K_SERVICE`). A
+  comma-separated list of role ids, for example `FULL,REVIEW`, skips Directory
+  membership after the token is accepted and projects those roles onto
+  `GET /user/permissions` and `requirePermission`. Inheritance is unchanged.
+  Never set it on Cloud Run: startup fails if `K_SERVICE` is set and the
+  variable is non-empty, and deployed revisions do not honor it.
   `ALLOWED_GROUP_EMAILS` is a deprecated alias
   for `AUTHZ_ROLE_FULL_GROUPS`: it is used only when the new variable is unset,
   and if both are set the new variable wins (a warning is logged when they

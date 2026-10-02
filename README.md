@@ -182,16 +182,20 @@ The API enforces these checks before a request proceeds:
    `records:write`. Membership in a configured role group counts when it is
    direct or nested (`members.hasMember`). Local development without
    `K_SERVICE` may omit the lists; startup problems are warnings there, and
-   with no role groups configured the permission check is skipped so requests
-   still reach CouchDB. `GET /user/hasgroup` and `GET /user/permissions` stay
+   with no role groups configured and `AUTHZ_DEV_OVERRIDE_ROLES` unset, the
+   permission check is skipped so requests still reach CouchDB. Set
+   `AUTHZ_DEV_OVERRIDE_ROLES` (for example `FULL,REVIEW`) only on a machine
+   without `K_SERVICE` to project those roles without Directory credentials.
+   Cloud Run refuses to start if that variable is set. `GET /user/hasgroup` and `GET /user/permissions` stay
    auth-only. `/user/permissions` returns the caller's roles and effective
    permissions with `Cache-Control: no-store`. Local Directory lookup prefers
    `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
    When those are missing or gcloud user ADC cannot call Directory
    (`invalid_rapt`, missing scopes), local authentication continues with no
    roles so requests still reach CouchDB (including a tunneled dev database)
-   when no role groups are configured. If any role groups are configured
-   locally, a user with no matching permission gets `403`.
+   when no role groups are configured and the local override is unset. If any
+   role groups are configured, or the override is set, a user with no matching
+   permission gets `403`.
 
 Responses: `401` for a missing, invalid, expired, or wrong-audience token;
 `403` with `{ message }` for a domain rejection or a signed-in user with no
