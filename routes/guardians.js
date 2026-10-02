@@ -17,6 +17,7 @@ const dbBase = `${dbUrl}/${dbName}`;
  *     tags: [Guardians]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     requestBody:
  *       required: true
  *       content:
@@ -41,6 +42,8 @@ const dbBase = `${dbUrl}/${dbName}`;
  *                   type: string
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -104,6 +107,7 @@ export async function createGuardian(req, res) {
  *     tags: [Guardians]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id
@@ -124,6 +128,8 @@ export async function createGuardian(req, res) {
  *         description: Guardian not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -286,6 +292,7 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
  *     tags: [Guardians]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     parameters:
  *       - in: path
  *         name: id
@@ -312,6 +319,8 @@ async function updateVeteranGuardianReference(veteranId, guardianId, guardianNam
  *         description: Guardian not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -503,6 +512,7 @@ export async function updateGuardian(req, res) {
  *     tags: [Guardians]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:delete
  *     parameters:
  *       - in: path
  *         name: id
@@ -530,6 +540,8 @@ export async function updateGuardian(req, res) {
  *         description: Guardian not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -599,6 +611,7 @@ export async function deleteGuardian(req, res) {
  *     tags: [Guardians]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     parameters:
  *       - in: path
  *         name: id
@@ -640,6 +653,8 @@ export async function deleteGuardian(req, res) {
  *         description: Guardian not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -755,6 +770,7 @@ export async function updateGuardianSeat(req, res) {
  *     tags: [Guardians]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     parameters:
  *       - in: path
  *         name: id
@@ -797,6 +813,8 @@ export async function updateGuardianSeat(req, res) {
  *         description: Guardian not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -1014,6 +1032,47 @@ async function patchGuardianField(req, res, config) {
     }
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/training-notes:
+ *   patch:
+ *     summary: Update guardian training notes
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianTrainingNotes(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'flight.training_notes',
@@ -1026,6 +1085,47 @@ export async function updateGuardianTrainingNotes(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/training-complete:
+ *   patch:
+ *     summary: Update the guardian training-complete indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianTrainingComplete(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'flight.training_complete',
@@ -1038,6 +1138,47 @@ export async function updateGuardianTrainingComplete(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/waiver:
+ *   patch:
+ *     summary: Update the guardian waiver-received indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianWaiver(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'flight.waiver',
@@ -1050,6 +1191,47 @@ export async function updateGuardianWaiver(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/training-see-doc:
+ *   patch:
+ *     summary: Update the guardian training-see-doctor indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianTrainingSeeDoc(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'flight.training_see_doc',
@@ -1062,6 +1244,47 @@ export async function updateGuardianTrainingSeeDoc(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/vaccinated:
+ *   patch:
+ *     summary: Update the guardian vaccinated indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianVaccinated(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'flight.vaccinated',
@@ -1074,6 +1297,47 @@ export async function updateGuardianVaccinated(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/medical-form:
+ *   patch:
+ *     summary: Update the guardian medical-form-received indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianMedicalForm(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'medical.form',
@@ -1086,6 +1350,47 @@ export async function updateGuardianMedicalForm(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/paid:
+ *   patch:
+ *     summary: Update the guardian paid indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianPaid(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'flight.paid',
@@ -1098,6 +1403,49 @@ export async function updateGuardianPaid(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/books-ordered:
+ *   patch:
+ *     summary: Update how many books were ordered for a guardian
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 9
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianBooksOrdered(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'flight.booksOrdered',
@@ -1110,6 +1458,47 @@ export async function updateGuardianBooksOrdered(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/apparel-shirt-size:
+ *   patch:
+ *     summary: Update a guardian apparel shirt size
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianApparelShirtSize(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'apparel.shirt_size',
@@ -1122,6 +1511,47 @@ export async function updateGuardianApparelShirtSize(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/apparel-jacket-size:
+ *   patch:
+ *     summary: Update a guardian apparel jacket size
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianApparelJacketSize(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'apparel.jacket_size',
@@ -1134,6 +1564,47 @@ export async function updateGuardianApparelJacketSize(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /guardians/{id}/apparel-notes:
+ *   patch:
+ *     summary: Update guardian apparel notes
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Guardians]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Guardian not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateGuardianApparelNotes(req, res) {
     return patchGuardianField(req, res, {
         docPath: 'apparel.notes',

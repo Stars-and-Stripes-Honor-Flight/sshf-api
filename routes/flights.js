@@ -17,6 +17,7 @@ const dbBase = `${dbUrl}/${dbName}`;
  *     tags: [Flights]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     responses:
  *       200:
  *         description: List of flights retrieved successfully
@@ -51,6 +52,8 @@ const dbBase = `${dbUrl}/${dbName}`;
  *                 completed: true
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *         content:
@@ -121,6 +124,7 @@ export async function listFlights(req, res) {
  *     tags: [Flights]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: flights:manage
  *     requestBody:
  *       required: true
  *       content:
@@ -145,6 +149,8 @@ export async function listFlights(req, res) {
  *                   type: string
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -210,6 +216,7 @@ export async function createFlight(req, res) {
  *     tags: [Flights]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id
@@ -230,6 +237,8 @@ export async function createFlight(req, res) {
  *         description: Flight not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -284,6 +293,7 @@ export async function retrieveFlight(req, res) {
  *     tags: [Flights]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: flights:manage
  *     parameters:
  *       - in: path
  *         name: id
@@ -310,6 +320,8 @@ export async function retrieveFlight(req, res) {
  *         description: Flight not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:

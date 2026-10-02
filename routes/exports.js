@@ -93,6 +93,7 @@ async function proxyCsvExport(req, res, options) {
  *     tags: [Exports]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: exports:read
  *     parameters:
  *       - in: query
  *         name: flightName
@@ -124,6 +125,8 @@ async function proxyCsvExport(req, res, options) {
  *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Failed to retrieve export data
  *         content:
@@ -170,6 +173,7 @@ export async function exportFlightCsv(req, res) {
  *     tags: [Exports]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: exports:read
  *     parameters:
  *       - in: query
  *         name: flightName
@@ -193,6 +197,8 @@ export async function exportFlightCsv(req, res) {
  *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Failed to retrieve export data
  *         content:
@@ -233,6 +239,7 @@ export async function exportCallCenterFollowUpCsv(req, res) {
  *     tags: [Exports]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: exports:read
  *     parameters:
  *       - in: query
  *         name: flightName
@@ -256,6 +263,8 @@ export async function exportCallCenterFollowUpCsv(req, res) {
  *               $ref: '#/components/schemas/Error'
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Failed to retrieve export data
  *         content:

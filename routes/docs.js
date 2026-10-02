@@ -60,6 +60,7 @@ function sendDocumentError(res, error, logLabel) {
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: documents:admin
  *     requestBody:
  *       required: true
  *       content:
@@ -145,6 +146,7 @@ export async function createDocument(req, res) {
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id
@@ -185,6 +187,7 @@ export async function createDocument(req, res) {
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: documents:admin
  *     parameters:
  *       - in: path
  *         name: id
@@ -228,6 +231,7 @@ export async function createDocument(req, res) {
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: documents:admin
  *     parameters:
  *       - in: path
  *         name: id
@@ -379,6 +383,7 @@ export async function deleteDocument(req, res) {
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id
@@ -468,6 +473,7 @@ export async function listDocumentRevisions(req, res) {
  *     tags: [Documents]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id

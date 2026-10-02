@@ -21,6 +21,16 @@ export const USER_CACHE_TTL_MS = 15 * 60 * 1000;
 export const USER_CACHE_MAX_ENTRIES = 1000;
 
 /**
+ * TTL actually stored for one cache entry. Non-positive or missing requests
+ * use the cache maximum. Longer requests are capped at that maximum.
+ */
+export function resolveUserCacheTtlMs(requested, maxTtlMs = USER_CACHE_TTL_MS) {
+    return Number.isFinite(requested) && requested > 0
+        ? Math.min(requested, maxTtlMs)
+        : maxTtlMs;
+}
+
+/**
  * One-way cache key for a bearer token. SHA-256 cannot be reversed to the token.
  */
 export function hashBearerToken(token) {
@@ -82,10 +92,7 @@ export function createUserCache({
             if (entries.has(key)) {
                 entries.delete(key);
             }
-            const requested = options.ttlMs;
-            const entryTtlMs = Number.isFinite(requested) && requested > 0
-                ? Math.min(requested, ttlMs)
-                : ttlMs;
+            const entryTtlMs = resolveUserCacheTtlMs(options.ttlMs, ttlMs);
             entries.set(key, { user, timestamp: now(), ttlMs: entryTtlMs });
             evictOverflow();
         },

@@ -32,6 +32,7 @@ const dbName = process.env.DB_NAME;
  *     tags: [Search]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     requestBody:
  *       required: true
  *       content:

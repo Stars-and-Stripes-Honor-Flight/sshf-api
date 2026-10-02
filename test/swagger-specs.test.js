@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { specs } from '../swagger/swagger.js';
+import { ROUTE_PERMISSIONS } from '../utils/permissions.js';
 
 describe('OpenAPI spec generation', () => {
     it('loads a valid OpenAPI 3 document with API metadata', () => {
@@ -235,5 +236,64 @@ describe('OpenAPI spec generation', () => {
         expect(schema.properties.failed.items.properties).to.include.all.keys('id', 'type', 'status', 'error');
         expect(schema.properties.failed.items.properties.type.enum).to.deep.equal(['veteran', 'guardian']);
         expect(schema.properties.failed.description).to.match(/id/i);
+    });
+
+    it('documents UserPermissions and matches x-required-permission to ROUTE_PERMISSIONS', () => {
+        const schema = specs.components?.schemas?.UserPermissions;
+        expect(schema, 'missing UserPermissions schema').to.be.an('object');
+        expect(schema.type).to.equal('object');
+        expect(schema.required).to.include.members([
+            'email', 'hasAccess', 'roles', 'permissions', 'evaluatedAt', 'expiresAt'
+        ]);
+        expect(schema.properties.roles.items.enum).to.deep.equal([
+            'READ', 'WRITE', 'FULL', 'MEDICAL', 'REVIEW'
+        ]);
+        expect(schema.properties.hasAccess.type).to.equal('boolean');
+
+        const permissions = specs.paths['/user/permissions']?.get;
+        expect(permissions, 'missing GET /user/permissions').to.be.an('object');
+        expect(permissions.security).to.deep.equal([{ GoogleAuth: [] }]);
+        expect(permissions['x-required-permission']).to.equal(undefined);
+        expect(permissions.responses).to.include.all.keys('200', '401', '403', '503');
+        expect(permissions.responses['200'].content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/UserPermissions');
+        expect(JSON.stringify(permissions.responses['200'].headers)).to.match(/no-store/);
+
+        function openApiPath(expressPath) {
+            return expressPath.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+        }
+
+        const documented = new Set();
+        for (const [key, required] of Object.entries(ROUTE_PERMISSIONS)) {
+            const space = key.indexOf(' ');
+            const method = key.slice(0, space).toLowerCase();
+            const path = openApiPath(key.slice(space + 1));
+            const operation = specs.paths[path]?.[method];
+            expect(operation, `missing OpenAPI operation ${key}`).to.be.an('object');
+            const extension = operation['x-required-permission'];
+            const documentedPermissions = Array.isArray(extension) ? extension : [extension];
+            expect(documentedPermissions, key).to.deep.equal([...required]);
+            expect(operation.responses, key).to.have.property('403');
+            documented.add(`${method.toUpperCase()} ${path}`);
+        }
+
+        const publicOperations = new Set([
+            'POST /review/applications',
+            'GET /user/hasgroup',
+            'GET /user/permissions'
+        ]);
+        for (const [path, methods] of Object.entries(specs.paths)) {
+            for (const [method, operation] of Object.entries(methods)) {
+                if (!operation || typeof operation !== 'object' || !operation.responses) {
+                    continue;
+                }
+                const key = `${method.toUpperCase()} ${path}`;
+                if (publicOperations.has(key)) {
+                    expect(operation['x-required-permission'], key).to.equal(undefined);
+                    continue;
+                }
+                expect(documented.has(key), `OpenAPI operation ${key} is not in ROUTE_PERMISSIONS`).to.equal(true);
+            }
+        }
     });
 });

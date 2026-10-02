@@ -18,6 +18,7 @@ const dbBase = `${dbUrl}/${dbName}`;
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     requestBody:
  *       required: true
  *       content:
@@ -42,6 +43,8 @@ const dbBase = `${dbUrl}/${dbName}`;
  *                   type: string
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -105,6 +108,7 @@ export async function createVeteran(req, res) {
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id
@@ -125,6 +129,8 @@ export async function createVeteran(req, res) {
  *         description: Veteran not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -179,6 +185,7 @@ export async function retrieveVeteran(req, res) {
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     parameters:
  *       - in: path
  *         name: id
@@ -205,6 +212,8 @@ export async function retrieveVeteran(req, res) {
  *         description: Veteran not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -307,6 +316,7 @@ export async function updateVeteran(req, res) {
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:delete
  *     parameters:
  *       - in: path
  *         name: id
@@ -334,6 +344,8 @@ export async function updateVeteran(req, res) {
  *         description: Veteran not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -424,6 +436,7 @@ async function searchUnpaired(searchRequest, req) {
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: query
  *         name: paired
@@ -478,6 +491,8 @@ async function searchUnpaired(searchRequest, req) {
  *                   type: string
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *         content:
@@ -530,6 +545,7 @@ export async function searchUnpairedVeterans(req, res) {
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     parameters:
  *       - in: path
  *         name: id
@@ -571,6 +587,8 @@ export async function searchUnpairedVeterans(req, res) {
  *         description: Veteran not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -685,6 +703,7 @@ export async function updateVeteranSeat(req, res) {
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:write
  *     parameters:
  *       - in: path
  *         name: id
@@ -727,6 +746,8 @@ export async function updateVeteranSeat(req, res) {
  *         description: Veteran not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:
@@ -945,6 +966,47 @@ async function patchVeteranField(req, res, config) {
     }
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/mail-call-received:
+ *   patch:
+ *     summary: Update whether a veteran mail call was received
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranMailCallReceived(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'mail_call.received',
@@ -958,6 +1020,47 @@ export async function updateVeteranMailCallReceived(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/mail-call-adopt:
+ *   patch:
+ *     summary: Update whether a veteran mail call was adopted
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranMailCallAdopt(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'mail_call.adopt',
@@ -971,6 +1074,47 @@ export async function updateVeteranMailCallAdopt(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/medical-form:
+ *   patch:
+ *     summary: Update the veteran medical-form-received indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranMedicalForm(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'medical.form',
@@ -984,6 +1128,47 @@ export async function updateVeteranMedicalForm(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/medical-review:
+ *   patch:
+ *     summary: Update the veteran medical-review indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranMedicalReview(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'medical.review',
@@ -997,6 +1182,47 @@ export async function updateVeteranMedicalReview(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/vaccinated:
+ *   patch:
+ *     summary: Update the veteran vaccinated indicator
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranVaccinated(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'flight.vaccinated',
@@ -1010,6 +1236,47 @@ export async function updateVeteranVaccinated(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/homecoming-destination:
+ *   patch:
+ *     summary: Update a veteran homecoming destination
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranHomecomingDestination(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'homecoming.destination',
@@ -1023,6 +1290,47 @@ export async function updateVeteranHomecomingDestination(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/apparel-shirt-size:
+ *   patch:
+ *     summary: Update a veteran apparel shirt size
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranApparelShirtSize(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'apparel.shirt_size',
@@ -1036,6 +1344,47 @@ export async function updateVeteranApparelShirtSize(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/apparel-jacket-size:
+ *   patch:
+ *     summary: Update a veteran apparel jacket size
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranApparelJacketSize(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'apparel.jacket_size',
@@ -1049,6 +1398,47 @@ export async function updateVeteranApparelJacketSize(req, res) {
     });
 }
 
+/**
+ * @swagger
+ * /veterans/{id}/apparel-notes:
+ *   patch:
+ *     summary: Update veteran apparel notes
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
 export async function updateVeteranApparelNotes(req, res) {
     return patchVeteranField(req, res, {
         docPath: 'apparel.notes',

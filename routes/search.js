@@ -59,6 +59,7 @@ function filterPhoneSearchResults(searchRequest, dbResult) {
  *     tags: [Search]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: query
  *         name: limit
@@ -114,6 +115,8 @@ function filterPhoneSearchResults(searchRequest, dbResult) {
  *                     pairingId: "guard1"
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *         content:

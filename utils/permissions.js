@@ -5,9 +5,8 @@
  * permission catalog are code. WRITE includes every READ permission. FULL
  * includes every WRITE permission. FULL does not include MEDICAL or REVIEW.
  *
- * Data routes still use the FULL group only (authorize). READ, WRITE,
- * MEDICAL, and REVIEW are resolved onto the user and are not enforced per
- * endpoint until Phase 3. ALLOWED_GROUP_EMAILS remains a deprecated alias
+ * Protected routes enforce these permissions with requirePermission
+ * (ROUTE_PERMISSIONS). ALLOWED_GROUP_EMAILS remains a deprecated alias
  * for AUTHZ_ROLE_FULL_GROUPS.
  */
 
@@ -26,6 +25,77 @@ const WRITE_ONLY_PERMISSIONS = Object.freeze(['records:write']);
 const FULL_ONLY_PERMISSIONS = Object.freeze(['documents:admin', 'flights:manage', 'records:delete']);
 const MEDICAL_PERMISSIONS = Object.freeze(['medical:read', 'medical:write']);
 const REVIEW_PERMISSIONS = Object.freeze(['applications:accept', 'applications:review']);
+
+/**
+ * Method + Express path → permissions required by requirePermission.
+ * This is the source of truth for route registration, the router matrix,
+ * and the OpenAPI x-required-permission check.
+ *
+ * FULL-only (confirmed for Phase 3 review): records:delete, documents:admin,
+ * and flights:manage. REVIEW does not inherit those, and FULL does not
+ * include applications:* or medical:*.
+ */
+export const ROUTE_PERMISSIONS = Object.freeze({
+    'GET /search': Object.freeze(['records:read']),
+    'POST /query': Object.freeze(['records:read']),
+    'GET /docs/:id/revisions': Object.freeze(['records:read']),
+    'GET /docs/:id/diff': Object.freeze(['records:read']),
+    'POST /docs': Object.freeze(['documents:admin']),
+    'GET /docs/:id': Object.freeze(['records:read']),
+    'PUT /docs/:id': Object.freeze(['documents:admin']),
+    'DELETE /docs/:id': Object.freeze(['documents:admin']),
+    'POST /veterans': Object.freeze(['records:write']),
+    'GET /veterans/search': Object.freeze(['records:read']),
+    'GET /veterans/:id': Object.freeze(['records:read']),
+    'PUT /veterans/:id': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/seat': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/bus': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/mail-call-received': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/mail-call-adopt': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/medical-form': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/medical-review': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/vaccinated': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/homecoming-destination': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/apparel-shirt-size': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/apparel-jacket-size': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/apparel-notes': Object.freeze(['records:write']),
+    'DELETE /veterans/:id': Object.freeze(['records:delete']),
+    'POST /guardians': Object.freeze(['records:write']),
+    'GET /guardians/:id': Object.freeze(['records:read']),
+    'PUT /guardians/:id': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/seat': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/bus': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/training-notes': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/training-complete': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/waiver': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/training-see-doc': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/vaccinated': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/medical-form': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/paid': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/books-ordered': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/apparel-shirt-size': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/apparel-jacket-size': Object.freeze(['records:write']),
+    'PATCH /guardians/:id/apparel-notes': Object.freeze(['records:write']),
+    'DELETE /guardians/:id': Object.freeze(['records:delete']),
+    'GET /flights': Object.freeze(['records:read']),
+    'POST /flights': Object.freeze(['flights:manage']),
+    'GET /flights/:id': Object.freeze(['records:read']),
+    'PUT /flights/:id': Object.freeze(['flights:manage']),
+    'GET /flights/:id/assignments': Object.freeze(['records:read']),
+    'POST /flights/:id/assignments': Object.freeze(['flights:manage']),
+    'GET /flights/:id/detail': Object.freeze(['records:read']),
+    'GET /waitlist': Object.freeze(['records:read']),
+    'GET /waitlist/veteran-groups': Object.freeze(['records:read']),
+    'GET /recent-activity': Object.freeze(['records:read']),
+    'GET /exports/flight': Object.freeze(['exports:read']),
+    'GET /exports/callcenterfollowup': Object.freeze(['exports:read']),
+    'GET /exports/tourlead': Object.freeze(['exports:read']),
+    'GET /review/applications': Object.freeze(['applications:review']),
+    'GET /review/applications/:id': Object.freeze(['applications:review']),
+    'PUT /review/applications/:id': Object.freeze(['applications:review']),
+    'PATCH /review/applications/:id/status': Object.freeze(['applications:review']),
+    'POST /review/applications/:id/accept': Object.freeze(['applications:accept'])
+});
 
 export const ROLE_PERMISSIONS = Object.freeze({
     READ: READ_PERMISSIONS,
@@ -183,6 +253,55 @@ export function listConfiguredGroupEntries(env = process.env) {
     return [...byEmail.values()];
 }
 
+export const DEV_OVERRIDE_ENV = 'AUTHZ_DEV_OVERRIDE_ROLES';
+
+/**
+ * Local-only role projection. Blank or missing is not configured.
+ * Unknown tokens are reported and omitted. Inherited roles are not added:
+ * FULL stays FULL, and permissionsForRoles applies WRITE/READ inheritance.
+ */
+export function describeDevOverride(env = process.env) {
+    const raw = env?.[DEV_OVERRIDE_ENV];
+    const configured = raw != null && String(raw).trim() !== '';
+    const roles = [];
+    const unknown = [];
+    const seen = new Set();
+    if (configured) {
+        for (const part of String(raw).split(',')) {
+            const roleId = part.trim().toUpperCase();
+            if (!roleId) {
+                continue;
+            }
+            if (!ROLE_IDS.includes(roleId)) {
+                unknown.push(roleId);
+                continue;
+            }
+            if (seen.has(roleId)) {
+                continue;
+            }
+            seen.add(roleId);
+            roles.push(roleId);
+        }
+    }
+    roles.sort();
+    return { configured, roles, unknown };
+}
+
+/**
+ * Role ids to project for this process. Null when the override is unset or
+ * when running on Cloud Run, where the variable is never honored.
+ */
+export function devOverrideRoles(env = process.env) {
+    if (isCloudRun(env)) {
+        return null;
+    }
+    const described = describeDevOverride(env);
+    if (!described.configured) {
+        return null;
+    }
+    return described.roles;
+}
+
 export function startupWarnings(env = process.env) {
     const described = describeRoleConfig(env);
     const warnings = [];
@@ -202,6 +321,18 @@ export function startupWarnings(env = process.env) {
     }
     for (const entry of described.malformed) {
         warnings.push(malformedMessage(entry));
+    }
+    if (!isCloudRun(env)) {
+        const override = describeDevOverride(env);
+        if (override.configured) {
+            warnings.push(
+                'AUTHZ_DEV_OVERRIDE_ROLES is a local-only authorization override. ' +
+                'Do not set it on Cloud Run.'
+            );
+            for (const roleId of override.unknown) {
+                warnings.push(`AUTHZ_DEV_OVERRIDE_ROLES contains an unknown role: ${roleId}`);
+            }
+        }
     }
     return warnings;
 }
@@ -227,6 +358,11 @@ export function cloudRunAuthorizationProblems(env = process.env) {
         problems.push(
             'AUTHZ_ROLE_FULL_GROUPS must be set when running on Cloud Run ' +
             '(ALLOWED_GROUP_EMAILS remains a deprecated alias)'
+        );
+    }
+    if (describeDevOverride(env).configured) {
+        problems.push(
+            'AUTHZ_DEV_OVERRIDE_ROLES must not be set when running on Cloud Run'
         );
     }
     return problems;

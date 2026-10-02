@@ -53,7 +53,7 @@ Required environment variables:
 | `ALLOWED_EMAIL_DOMAINS` | Optional defense in depth. When set, unverified emails and addresses outside these domains are rejected. Production does not require it. |
 | `AUTHZ_ROLE_READ_GROUPS` | Comma-separated Workspace groups for the READ role. Optional. Dev: `sshf_app_dev_read_access@starsandstripeshonorflight.org`. Prod: `sshf_app_prd_read_access@…` |
 | `AUTHZ_ROLE_WRITE_GROUPS` | Groups for WRITE (includes READ permissions). Optional. Dev: `sshf_app_dev_write_access@…`. Prod: `sshf_app_prd_write_access@…` |
-| `AUTHZ_ROLE_FULL_GROUPS` | Groups for FULL (includes WRITE). Required on Cloud Run. Dev: `sshf_app_dev_full_access@…`. Prod: `sshf_app_prd_full_access@…`. Data routes still require this role |
+| `AUTHZ_ROLE_FULL_GROUPS` | Groups for FULL (includes WRITE, not MEDICAL or REVIEW). Required on Cloud Run. Dev: `sshf_app_dev_full_access@…`. Prod: `sshf_app_prd_full_access@…` |
 | `AUTHZ_ROLE_MEDICAL_GROUPS` | Groups for MEDICAL (no logistics permissions). Optional. Dev: `sshf_app_dev_medical_access@…`. Prod: `sshf_app_prd_medical_access@…` |
 | `AUTHZ_ROLE_REVIEW_GROUPS` | Groups for REVIEW (no logistics permissions). Optional. Dev: `sshf_app_dev_review_access@…`. Prod: `sshf_app_prd_review_access@…` |
 | `ALLOWED_GROUP_EMAILS` | Deprecated alias for `AUTHZ_ROLE_FULL_GROUPS`. Used only when that variable is unset. If both are set, `AUTHZ_ROLE_FULL_GROUPS` wins |
@@ -172,23 +172,36 @@ The API enforces these checks before a request proceeds:
    (`ALLOWED_GROUP_EMAILS` is a deprecated alias when the new variable is
    unset). An empty FULL list, an unknown `AUTHZ_ROLE_*_GROUPS` name, a
    malformed group email, or a configured group that Directory cannot find
-   fails process startup. Data routes still require **FULL** membership
-   (`403` otherwise, including when Admin SDK returns no roles). READ, WRITE,
-   MEDICAL, and REVIEW are resolved and cached on the user, but they do not
-   grant route access yet. Membership in a configured role group counts when
-   it is direct or nested (`members.hasMember`). Local development without
-   `K_SERVICE` may omit the lists; startup problems are warnings there.
-   `GET /user/hasgroup` stays auth-only so the UI can probe membership during
-   sign-in. Local Directory lookup prefers
+   fails process startup. Each protected route requires one permission from
+   `ROUTE_PERMISSIONS` (`records:read`, `exports:read`, `records:write`,
+   `records:delete`, `documents:admin`, `flights:manage`,
+   `applications:review`, `applications:accept`). WRITE includes every READ
+   permission. FULL includes every WRITE permission. FULL does not include
+   MEDICAL or REVIEW. `medical:read` and `medical:write` have no endpoints
+   yet. `PATCH /veterans/:id/medical-form` and `medical-review` stay under
+   `records:write`. Membership in a configured role group counts when it is
+   direct or nested (`members.hasMember`). Local development without
+   `K_SERVICE` may omit the lists; startup problems are warnings there, and
+   with no role groups configured and `AUTHZ_DEV_OVERRIDE_ROLES` unset, the
+   permission check is skipped so requests still reach CouchDB. Set
+   `AUTHZ_DEV_OVERRIDE_ROLES` (for example `FULL,REVIEW`) only on a machine
+   without `K_SERVICE` to project those roles without Directory credentials.
+   Cloud Run refuses to start if that variable is set. `GET /user/hasgroup` and `GET /user/permissions` stay
+   auth-only. `/user/permissions` returns the caller's roles and effective
+   permissions with `Cache-Control: no-store`. Local Directory lookup prefers
    `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
    When those are missing or gcloud user ADC cannot call Directory
    (`invalid_rapt`, missing scopes), local authentication continues with no
-   roles so requests still reach CouchDB (including a tunneled dev database).
-   If FULL is configured locally, those empty roles still `403`.
+   roles so requests still reach CouchDB (including a tunneled dev database)
+   when no role groups are configured and the local override is unset. If any
+   role groups are configured, or the override is set, a user with no matching
+   permission gets `403`.
 
 Responses: `401` for a missing, invalid, expired, or wrong-audience token;
-`403` for a permitted-token account that is not allowed (domain or group);
-`503` if token introspection is temporarily unavailable, or if the Workspace
+`403` with `{ message }` for a domain rejection or a signed-in user with no
+role (`Forbidden: Account not permitted`). A signed-in user who holds a role
+but lacks the route permission gets `403` with that same `message` key plus
+`requiredPermission`. `503` if token introspection is temporarily unavailable, or if the Workspace
 Directory group lookup fails on Cloud Run. A Cloud Run Directory failure is
 not treated as an empty role list, which would otherwise become `403` when
 the group allow-list is set. Off Cloud Run that lookup failure continues
@@ -210,8 +223,10 @@ take a few minutes to propagate a group change; sign in again after that.
 `GET /user/hasgroup` is true for nested membership in any configured role
 group (`AUTHZ_ROLE_*_GROUPS`, or `ALLOWED_GROUP_EMAILS` while it still
 aliases FULL) and remains direct-only for any other group. `groupEmail` is
-compared case-insensitively. WRITE includes every READ permission and FULL
-includes every WRITE permission. FULL does not include MEDICAL or REVIEW.
+compared case-insensitively. `GET /user/permissions` is the summary the UI
+will use later. It lists direct role ids (a FULL user is `["FULL"]`) and the
+effective permission union. The deployed UI still probes `hasgroup` for the
+full-access group until sshf-ui #234.
 
 ## API Documentation
 

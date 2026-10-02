@@ -204,6 +204,7 @@ export async function createReviewApplication(req, res) {
  *     tags: [Review Applications]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: applications:review
  *     parameters:
  *       - in: query
  *         name: status
@@ -287,6 +288,7 @@ export async function listReviewApplications(req, res) {
  *     tags: [Review Applications]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: applications:review
  *     parameters:
  *       - in: path
  *         name: id
@@ -340,6 +342,7 @@ export async function retrieveReviewApplication(req, res) {
  *     tags: [Review Applications]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: applications:review
  *     parameters:
  *       - in: path
  *         name: id
@@ -431,6 +434,7 @@ export async function updateReviewApplication(req, res) {
  *     tags: [Review Applications]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: applications:review
  *     parameters:
  *       - in: path
  *         name: id
@@ -520,6 +524,7 @@ export async function updateReviewApplicationStatus(req, res) {
  *     tags: [Review Applications]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: applications:accept
  *     parameters:
  *       - in: path
  *         name: id

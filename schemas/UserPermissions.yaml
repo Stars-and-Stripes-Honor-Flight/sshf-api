@@ -1,0 +1,50 @@
+type: object
+required:
+  - email
+  - hasAccess
+  - roles
+  - permissions
+  - evaluatedAt
+  - expiresAt
+properties:
+  email:
+    type: string
+    description: Authenticated account, for display and support
+  hasAccess:
+    type: boolean
+    description: True when permissions is non-empty
+  roles:
+    type: array
+    description: Role ids granted directly by group membership. Inherited roles are not listed.
+    items:
+      type: string
+      enum:
+        - READ
+        - WRITE
+        - FULL
+        - MEDICAL
+        - REVIEW
+  permissions:
+    type: array
+    description: Effective permission union, including permissions inherited from WRITE and FULL
+    items:
+      type: string
+      enum:
+        - applications:accept
+        - applications:review
+        - documents:admin
+        - exports:read
+        - flights:manage
+        - medical:read
+        - medical:write
+        - records:delete
+        - records:read
+        - records:write
+  evaluatedAt:
+    type: string
+    format: date-time
+    description: When membership was resolved (cache fill time)
+  expiresAt:
+    type: string
+    format: date-time
+    description: When the server-side cache entry expires

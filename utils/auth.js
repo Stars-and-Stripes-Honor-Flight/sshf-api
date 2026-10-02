@@ -1,8 +1,9 @@
 /**
  * Access-token authorization helpers.
  *
- * Phase 2 resolves READ, WRITE, FULL, MEDICAL, and REVIEW, but authorize
- * still admits only FULL. ALLOWED_GROUP_EMAILS is a deprecated alias for
+ * Phase 3 enforces per-route permissions with requirePermission.
+ * authorize remains the FULL-only helper and is no longer the data-route
+ * gate. ALLOWED_GROUP_EMAILS is a deprecated alias for
  * AUTHZ_ROLE_FULL_GROUPS when that variable is unset.
  *
  * The API receives an opaque Google OAuth2 access token as a Bearer token.
@@ -13,7 +14,9 @@
 
 import {
     cloudRunAuthorizationProblems,
-    getFullAccessGroupEmails
+    describeDevOverride,
+    getFullAccessGroupEmails,
+    listConfiguredGroupEntries
 } from './permissions.js';
 
 /** Token was not issued for one of this application's OAuth clients. */
@@ -171,8 +174,8 @@ export function assertUserInAllowedGroups(roles, options = {}) {
 
 /**
  * Express middleware: enforce FULL membership against req.user.roles.
- * READ, WRITE, MEDICAL, and REVIEW do not pass this gate (Phase 3).
- * Intended to run after authenticate on data routes (not on /user/hasgroup).
+ * Data routes use requirePermission instead. This helper remains for the
+ * FULL-group check and its existing tests.
  */
 export function authorize(req, res, next) {
     try {
@@ -184,4 +187,46 @@ export function authorize(req, res, next) {
         }
         throw error;
     }
+}
+
+/**
+ * Require every listed permission. Runs after authenticate.
+ *
+ * A signed-in user with no permissions gets the existing account-not-permitted
+ * body. A user who holds some other permission gets requiredPermission for the
+ * first missing one. Off Cloud Run, when no role groups and no
+ * AUTHZ_DEV_OVERRIDE_ROLES are configured, the check is skipped so local
+ * CouchDB testing still works. A local override is enforced. On Cloud Run the
+ * check fails closed and the override is never honored.
+ *
+ * @param {...string} permissions
+ */
+export function requirePermission(...permissions) {
+    const requiredPermissions = Object.freeze([...permissions]);
+
+    function requirePermission(req, res, next) {
+        const localGateOpen = !isRunningOnCloudRun()
+            && listConfiguredGroupEntries().length === 0
+            && !describeDevOverride().configured;
+        if (localGateOpen) {
+            return next();
+        }
+
+        const heldList = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+        const held = new Set(heldList);
+        const missing = requiredPermissions.find((permission) => !held.has(permission));
+        if (!missing) {
+            return next();
+        }
+        if (held.size === 0) {
+            return res.status(403).json({ message: 'Forbidden: Account not permitted' });
+        }
+        return res.status(403).json({
+            message: `Forbidden: requires permission ${missing}`,
+            requiredPermission: missing
+        });
+    }
+
+    requirePermission.requiredPermissions = requiredPermissions;
+    return requirePermission;
 }

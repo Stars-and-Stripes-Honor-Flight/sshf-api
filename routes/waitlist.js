@@ -19,6 +19,7 @@ const dbName = process.env.DB_NAME;
  *     tags: [Waitlist]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: query
  *         name: type
@@ -86,6 +87,8 @@ const dbName = process.env.DB_NAME;
  *               error: "type parameter is required"
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *         content:

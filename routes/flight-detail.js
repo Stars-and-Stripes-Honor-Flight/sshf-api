@@ -33,6 +33,7 @@ const dbBase = `${dbUrl}/${dbName}`;
  *     tags: [Flight Detail]
  *     security:
  *       - GoogleAuth: []
+ *     x-required-permission: records:read
  *     parameters:
  *       - in: path
  *         name: id
@@ -53,6 +54,8 @@ const dbBase = `${dbUrl}/${dbName}`;
  *         description: Flight not found
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
  *       500:
  *         description: Server error
  *       503:

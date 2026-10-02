@@ -65,7 +65,7 @@ const definition = {
   openapi: '3.0.0',
   info: {
     title: 'SSHF API',
-    version: '1.0.3',
+    version: '1.1.0',
     description: 'API for managing veterans documents with Google authentication',
   },
   servers: getServers(),
@@ -78,17 +78,17 @@ const definition = {
           'configured OAuth client; tokens from other clients are rejected ' +
           'with 401. Protected data endpoints return 401 for a missing, ' +
           'invalid, or wrong-audience token and 403 when the account email ' +
-          'domain or Workspace group membership is not permitted ' +
+          'domain is not permitted or the user lacks the route permission ' +
           '(ALLOWED_EMAIL_DOMAINS is optional; AUTHZ_ROLE_FULL_GROUPS, or the ' +
           'deprecated ALLOWED_GROUP_EMAILS alias, is required on Cloud Run ' +
-          'and fails closed when empty). ' +
+          'and fails closed when empty). A 403 for a missing route permission ' +
+          'includes requiredPermission. ' +
           'On Cloud Run an Admin SDK group-lookup failure returns 503 instead ' +
           'of an empty role list. Off Cloud Run that failure continues with ' +
-          'no roles. GET /user/hasgroup is auth-only so clients can probe ' +
-          'group membership and compares group emails case-insensitively. ' +
+          'no roles. GET /user/hasgroup and GET /user/permissions are auth-only. ' +
           'Groups in AUTHZ_ROLE_*_GROUPS and ALLOWED_GROUP_EMAILS match direct ' +
           'or nested Workspace membership. Other groups are direct memberships ' +
-          'only. Data routes still require the FULL group.',
+          'only. Each protected route declares x-required-permission.',
         flows: {
           implicit: {
             authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -144,7 +144,8 @@ const definition = {
       'DocRevisionList',
       'DocDiffChange',
       'DocDiff',
-      'GenericDocumentWrite'
+      'GenericDocumentWrite',
+      'UserPermissions'
     )
   },
   security: [
