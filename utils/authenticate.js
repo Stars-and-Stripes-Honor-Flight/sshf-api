@@ -5,9 +5,27 @@
  * and caches a successful result. On Cloud Run, Directory lookup failures are
  * 503 so a transient Admin SDK outage is not cached or turned into an empty
  * role list. Off Cloud Run, getGroupMemberships returns no roles instead.
+ *
+ * Group lookup may return { groups, userCacheTtlMs } so a negative membership
+ * expires the sign-in cache in about 2 minutes. An array is the direct list
+ * only and keeps the default cache lifetime.
  */
 import { assertValidTokenClaims, TokenAudienceError } from './auth.js';
 import { DirectoryGroupsUnavailableError } from './groups.js';
+
+function toRole(group) {
+    const role = { email: group.email };
+    if (group.id !== undefined) {
+        role.id = group.id;
+    }
+    if (group.name !== undefined) {
+        role.name = group.name;
+    }
+    if (group.membership === 'direct' || group.membership === 'nested') {
+        role.membership = group.membership;
+    }
+    return role;
+}
 
 /**
  * @param {object} options
@@ -66,9 +84,9 @@ export function createAuthenticator({
                 throw new Error('Failed to fetch user info');
             }
 
-            let groups;
+            let membershipResult;
             try {
-                groups = await getGroupMemberships(userData);
+                membershipResult = await getGroupMemberships(userData);
             } catch (error) {
                 if (error instanceof DirectoryGroupsUnavailableError) {
                     console.error('Directory group lookup unavailable:', error.message);
@@ -77,11 +95,14 @@ export function createAuthenticator({
                 throw error;
             }
 
-            const roles = groups.map(group => ({
-                id: group.id,
-                name: group.name,
-                email: group.email
-            }));
+            const groups = Array.isArray(membershipResult)
+                ? membershipResult
+                : membershipResult.groups;
+            const userCacheTtlMs = Array.isArray(membershipResult)
+                ? undefined
+                : membershipResult.userCacheTtlMs;
+
+            const roles = groups.map((group) => toRole(group));
 
             const user = {
                 id: userData.sub,
@@ -92,7 +113,11 @@ export function createAuthenticator({
                 roles
             };
 
-            cache.set(token, user);
+            if (Number.isFinite(userCacheTtlMs)) {
+                cache.set(token, user, { ttlMs: userCacheTtlMs });
+            } else {
+                cache.set(token, user);
+            }
             req.user = user;
             next();
         } catch (error) {

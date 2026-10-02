@@ -84,7 +84,9 @@ const definition = {
           'On Cloud Run an Admin SDK group-lookup failure returns 503 instead ' +
           'of an empty role list. Off Cloud Run that failure continues with ' +
           'no roles. GET /user/hasgroup is auth-only so clients can probe ' +
-          'group membership and compares group emails case-insensitively.',
+          'group membership and compares group emails case-insensitively. ' +
+          'Groups in ALLOWED_GROUP_EMAILS match direct or nested Workspace ' +
+          'membership. Other groups are direct memberships only.',
         flows: {
           implicit: {
             authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',

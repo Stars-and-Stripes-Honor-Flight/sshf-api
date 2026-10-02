@@ -51,7 +51,7 @@ Required environment variables:
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID for Swagger UI auth, and the client whose access tokens the API accepts (audience validation) |
 | `ALLOWED_CLIENT_IDS` | Optional. Comma-separated OAuth client IDs accepted for token audience validation (overrides `GOOGLE_CLIENT_ID` when set) |
 | `ALLOWED_EMAIL_DOMAINS` | Optional defense in depth. When set, unverified emails and addresses outside these domains are rejected. Production does not require it. |
-| `ALLOWED_GROUP_EMAILS` | Required on Cloud Run (`K_SERVICE` set): empty or unset fails startup and data-route authorization. Optional locally (no `K_SERVICE`). Dev: `sshf_app_dev_full_access@…`; prod: `sshf_app_prd_full_access@…` |
+| `ALLOWED_GROUP_EMAILS` | Required on Cloud Run (`K_SERVICE` set): empty or unset fails startup and data-route authorization. Optional locally (no `K_SERVICE`). Direct or nested membership. Dev: `sshf_app_dev_full_access@…`; prod: `sshf_app_prd_full_access@…` |
 | `REVIEW_DB_NAME` | CouchDB database name for online applications (VeteranApp/GuardianApp); required for `/review/applications` routes |
 | `REVIEW_DB_URL` | Optional. CouchDB URL for the review database; defaults to `DB_URL` |
 | `REVIEW_DB_USER` | Optional. CouchDB username for the review database; defaults to `DB_USER` |
@@ -165,8 +165,9 @@ The API enforces these checks before a request proceeds:
    `ALLOWED_GROUP_EMAILS` is required. An empty list fails process startup and
    data routes return `403`. When the list is set, data routes require
    membership in at least one listed group (`403` otherwise, including when
-   Admin SDK returns no roles). Local development without `K_SERVICE` may omit
-   the list. `GET /user/hasgroup` stays auth-only so the UI can probe
+   Admin SDK returns no roles). Membership in those groups counts when it is
+   direct or nested (`members.hasMember`). Local development without `K_SERVICE`
+   may omit the list. `GET /user/hasgroup` stays auth-only so the UI can probe
    membership during sign-in. Local Directory lookup prefers
    `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
    When those are missing or gcloud user ADC cannot call Directory
@@ -182,8 +183,21 @@ not treated as an empty role list, which would otherwise become `403` when
 the group allow-list is set. Off Cloud Run that lookup failure continues
 with no roles.
 
-Group lookup follows `nextPageToken` up to a documented page cap (2,000
-memberships). `GET /user/hasgroup` compares `groupEmail` case-insensitively.
+Direct memberships are listed with `groups.list`, following `nextPageToken`
+up to a documented page cap (2,000 memberships). Each group in
+`ALLOWED_GROUP_EMAILS` is also checked with Admin SDK `members.hasMember`,
+which is true for a direct member and for a member of a nested group. A
+configured group already present in the direct list is not checked again.
+No additional OAuth scope or Workspace role is required.
+
+Positive membership is cached for up to 15 minutes. A negative result ("not
+a member") is cached for about 2 minutes. Directory errors are not cached.
+The sign-in cache expires with the earliest of those membership results, so
+a newly granted membership is seen within about 2 minutes. Google can also
+take a few minutes to propagate a group change; sign in again after that.
+`GET /user/hasgroup` is true for nested membership in `ALLOWED_GROUP_EMAILS`
+and remains direct-only for any other group. `groupEmail` is compared
+case-insensitively.
 
 ## API Documentation
 

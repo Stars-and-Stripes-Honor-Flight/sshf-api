@@ -1,9 +1,11 @@
 /**
  * In-memory cache of successful Google user authentications.
  *
- * Successful lookups are reused for USER_CACHE_TTL_MS (15 minutes). That
- * bounds how long a revoked token, or a user removed from an allowed group,
- * can keep access without another token introspection and Admin SDK lookup.
+ * Successful lookups are reused for USER_CACHE_TTL_MS (15 minutes), or for a
+ * shorter per-entry TTL when a negative group membership must be rechecked
+ * sooner (about 2 minutes). That bounds how long a revoked token, or a user
+ * removed from an allowed group, can keep access without another token
+ * introspection and Admin SDK lookup.
  * Every read and write drops expired entries, including tokens that were not
  * presented again. The map holds at most USER_CACHE_MAX_ENTRIES; past that
  * cap the least-recently-used live entry is removed.
@@ -41,7 +43,7 @@ export function createUserCache({
     function evictExpired() {
         const current = now();
         for (const [key, entry] of entries) {
-            if (current - entry.timestamp >= ttlMs) {
+            if (current - entry.timestamp >= (entry.ttlMs ?? ttlMs)) {
                 entries.delete(key);
             }
         }
@@ -67,13 +69,24 @@ export function createUserCache({
             return entry.user;
         },
 
-        set(token, user) {
+        /**
+         * @param {string} token
+         * @param {object} user
+         * @param {{ttlMs?: number}} [options] Shorter than the cache maximum
+         *   when membership must be rechecked sooner. Longer values are capped
+         *   at ttlMs. Non-positive values keep the default lifetime.
+         */
+        set(token, user, options = {}) {
             evictExpired();
             const key = hashBearerToken(token);
             if (entries.has(key)) {
                 entries.delete(key);
             }
-            entries.set(key, { user, timestamp: now() });
+            const requested = options.ttlMs;
+            const entryTtlMs = Number.isFinite(requested) && requested > 0
+                ? Math.min(requested, ttlMs)
+                : ttlMs;
+            entries.set(key, { user, timestamp: now(), ttlMs: entryTtlMs });
             evictOverflow();
         },
 

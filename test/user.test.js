@@ -45,6 +45,18 @@ describe('getHasGroup', () => {
         expect(res.body).to.deep.equal({ hasgroup: false });
     });
 
+    it('returns hasgroup true for a nested membership role', () => {
+        const req = {
+            user: {
+                roles: [{ email: FULL_ACCESS_GROUP, membership: 'nested' }]
+            },
+            query: { groupEmail: FULL_ACCESS_GROUP }
+        };
+        const res = createRes();
+        getHasGroup(req, res);
+        expect(res.body).to.deep.equal({ hasgroup: true });
+    });
+
     it('returns hasgroup false when the user has no roles (probe still works)', () => {
         const req = {
             user: { roles: [] },

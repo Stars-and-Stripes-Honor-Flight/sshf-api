@@ -8,8 +8,9 @@ import { swaggerUiServe, swaggerUiSetup } from './swagger/swagger-ui.js';
 import { dbSession, reviewDbSession } from './utils/db.js';
 import { buildCorsOptions } from './utils/cors.js';
 import { authenticateIntake } from './utils/intake_auth.js';
-import { authorize, assertGroupAuthorizationConfigured } from './utils/auth.js';
-import { getGroupMemberships } from './utils/groups.js';
+import { authorize, assertGroupAuthorizationConfigured, getAllowedGroupEmails } from './utils/auth.js';
+import { resolveAuthorizationGroups } from './utils/groups.js';
+import { createMembershipCache } from './utils/membership_cache.js';
 import { createUserCache } from './utils/user_cache.js';
 import { createAuthenticator } from './utils/authenticate.js';
 
@@ -77,10 +78,23 @@ const port = 8080;
 // Enable CORS for all routes with specific options
 app.use(cors(buildCorsOptions()));
 
-// Successful authentications are cached for 15 minutes (see utils/user_cache.js).
-// Keys are SHA-256 hashes of the bearer token, expired entries are swept on
-// access, and the map is capped at USER_CACHE_MAX_ENTRIES.
+// Successful authentications are cached for up to 15 minutes (see utils/user_cache.js).
+// A negative group membership shortens that entry to about 2 minutes. Keys are
+// SHA-256 hashes of the bearer token, expired entries are swept on access, and
+// the map is capped at USER_CACHE_MAX_ENTRIES.
 const userCache = createUserCache();
+const membershipCache = createMembershipCache();
+
+/**
+ * Resolve direct groups plus nested membership in ALLOWED_GROUP_EMAILS.
+ * The membership cache is per process and is not a substitute for the
+ * token-keyed sign-in cache.
+ */
+export function resolveRequestGroupMemberships(userData) {
+    return resolveAuthorizationGroups(userData, getAllowedGroupEmails(), {
+        membershipCache
+    });
+}
 
 // Client used only to introspect incoming access tokens (validate audience)
 const tokenInfoClient = new OAuth2Client();
@@ -99,10 +113,11 @@ export async function getUserInfo(token) {
 // Middleware to authenticate Google users. On Cloud Run, Directory outages
 // return 503 (see utils/authenticate.js) and are not cached as an empty role
 // list. Local runs continue with no roles when Directory credentials fail.
+// ALLOWED_GROUP_EMAILS is checked with members.hasMember so nested members pass.
 const authenticate = createAuthenticator({
     getTokenInfo: (token) => tokenInfoClient.getTokenInfo(token),
     getUserInfo,
-    getGroupMemberships,
+    getGroupMemberships: resolveRequestGroupMemberships,
     cache: userCache
 });
 

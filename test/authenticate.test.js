@@ -368,6 +368,54 @@ describe('Authenticate middleware', () => {
                 name: 'Developers',
                 email: 'dev@example.com'
             });
+            expect(cache.set.firstCall.args).to.have.length(2);
+        });
+
+        it('caches a resolved membership for the earliest membership TTL and keeps nested roles', async () => {
+            req.headers.authorization = 'Bearer valid-token';
+            getGroupMemberships.resolves({
+                groups: [
+                    { id: '1', name: 'Developers', email: 'dev@example.com', membership: 'direct' },
+                    { email: 'sshf_app_dev_full_access@starsandstripeshonorflight.org', membership: 'nested' }
+                ],
+                userCacheTtlMs: 120000
+            });
+
+            const authenticate = createAuthenticator({
+                getTokenInfo,
+                getUserInfo,
+                getGroupMemberships,
+                cache
+            });
+
+            await authenticate(req, res, next);
+
+            expect(next.calledOnce).to.be.true;
+            expect(req.user.roles).to.deep.equal([
+                { id: '1', name: 'Developers', email: 'dev@example.com', membership: 'direct' },
+                { email: 'sshf_app_dev_full_access@starsandstripeshonorflight.org', membership: 'nested' }
+            ]);
+            expect(cache.set.firstCall.args[2]).to.deep.equal({ ttlMs: 120000 });
+        });
+
+        it('uses the default user-cache TTL when a membership result omits userCacheTtlMs', async () => {
+            req.headers.authorization = 'Bearer valid-token';
+            getGroupMemberships.resolves({
+                groups: [],
+                userCacheTtlMs: undefined
+            });
+
+            const authenticate = createAuthenticator({
+                getTokenInfo,
+                getUserInfo,
+                getGroupMemberships,
+                cache
+            });
+
+            await authenticate(req, res, next);
+
+            expect(next.calledOnce).to.be.true;
+            expect(cache.set.firstCall.args).to.have.length(2);
         });
 
         it('should use cached user when token is in cache', async () => {

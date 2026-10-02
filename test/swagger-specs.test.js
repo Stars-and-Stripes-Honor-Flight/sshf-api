@@ -69,6 +69,14 @@ describe('OpenAPI spec generation', () => {
         expect(accept.responses).to.include.all.keys('200', '400', '404', '409', '503');
     });
 
+    it('documents nested membership for configured groups on /user/hasgroup', () => {
+        const hasGroup = specs.paths['/user/hasgroup'].get;
+        expect(hasGroup.description).to.match(/nested/i);
+        expect(hasGroup.description).to.match(/ALLOWED_GROUP_EMAILS/);
+        expect(hasGroup.description).to.match(/direct/i);
+        expect(specs.components.securitySchemes.GoogleAuth.description).to.match(/nested/i);
+    });
+
     it('parses @swagger JSDoc YAML into real path items', () => {
         expect(specs.paths).to.be.an('object');
 
