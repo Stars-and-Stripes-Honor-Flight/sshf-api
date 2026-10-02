@@ -79,24 +79,22 @@ const definition = {
           'with 401. Protected data endpoints return 401 for a missing, ' +
           'invalid, or wrong-audience token and 403 when the account email ' +
           'domain is not permitted or the user lacks the route permission ' +
-          '(ALLOWED_EMAIL_DOMAINS is optional; AUTHZ_ROLE_FULL_GROUPS, or the ' +
-          'deprecated ALLOWED_GROUP_EMAILS alias, is required on Cloud Run ' +
-          'and fails closed when empty). A 403 for a missing route permission ' +
-          'includes requiredPermission. ' +
+          '(ALLOWED_EMAIL_DOMAINS is optional; AUTHZ_ROLE_FULL_GROUPS is required ' +
+          'on Cloud Run and fails closed when empty). A 403 for a missing route ' +
+          'permission includes requiredPermission. ' +
           'On Cloud Run an Admin SDK group-lookup failure returns 503 instead ' +
           'of an empty role list. Off Cloud Run that failure continues with ' +
-          'no roles. GET /user/hasgroup and GET /user/permissions are auth-only. ' +
-          'Groups in AUTHZ_ROLE_*_GROUPS and ALLOWED_GROUP_EMAILS match direct ' +
-          'or nested Workspace membership. Other groups are direct memberships ' +
-          'only. Each protected route declares x-required-permission.',
+          'no roles. GET /user/permissions is auth-only. ' +
+          'Groups in AUTHZ_ROLE_*_GROUPS match direct or nested Workspace ' +
+          'membership via members.hasMember. Each protected route declares ' +
+          'x-required-permission.',
         flows: {
           implicit: {
             authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
             scopes: {
               'openid': 'OpenID Connect scope',
               'email': 'Email scope',
-              'profile': 'Profile scope',
-              'https://www.googleapis.com/auth/admin.directory.group.readonly': 'Group Read Only Scope'
+              'profile': 'Profile scope'
             }
           }
         },

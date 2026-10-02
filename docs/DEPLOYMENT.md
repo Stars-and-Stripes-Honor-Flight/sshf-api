@@ -121,7 +121,7 @@ Anyone can verify; no GCP access needed for the first three:
    reports the released version in `info.version`.
 3. **App works** — open `https://sshf-api-928260206537.us-central1.run.app/api-docs/`,
    sign in with a production Google account, and exercise a protected endpoint
-   (e.g. `GET /user/hasgroup`). Roles should reflect your Workspace groups.
+   (e.g. `GET /user/permissions`). Roles should reflect your Workspace groups.
    Note: the API caches a signed-in token's roles for 15 minutes; use a fresh
    sign-in when validating authorization changes.
 
@@ -225,7 +225,8 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
   cannot find a configured group (`groups.get`, 3 attempts, about 15 seconds).
   A Directory outage at startup also exits, so the new revision does not take
   traffic. Local runs without `K_SERVICE` log warnings and continue.
-  `GET /user/hasgroup` remains auth-only for UI login probes.
+  `AUTHZ_ROLE_FULL_GROUPS` is the only FULL source. `ALLOWED_GROUP_EMAILS` is
+  ignored; remove it from the service after this revision is serving.
 
   Protected routes require the permission declared for that method and path
   (`records:read`, `exports:read`, `records:write`, `records:delete`,
@@ -234,17 +235,13 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
   not include MEDICAL or REVIEW. MEDICAL has no endpoints yet, so a
   medical-only user is denied on every current route. `GET /user/permissions`
   is auth-only and returns roles plus the effective permission union
-  (`Cache-Control: no-store`). `GET /user/hasgroup` stays auth-only.
+  (`Cache-Control: no-store`).
   `AUTHZ_DEV_OVERRIDE_ROLES` is a local-only override (no `K_SERVICE`). A
   comma-separated list of role ids, for example `FULL,REVIEW`, skips Directory
   membership after the token is accepted and projects those roles onto
   `GET /user/permissions` and `requirePermission`. Inheritance is unchanged.
   Never set it on Cloud Run: startup fails if `K_SERVICE` is set and the
   variable is non-empty, and deployed revisions do not honor it.
-  `ALLOWED_GROUP_EMAILS` is a deprecated alias
-  for `AUTHZ_ROLE_FULL_GROUPS`: it is used only when the new variable is unset,
-  and if both are set the new variable wins (a warning is logged when they
-  differ). Existing services keep working until the five variables are set.
 
   | Env var | Role | Dev group | Prod group |
   |---|---|---|---|
@@ -259,8 +256,11 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
 
   Membership in a configured role group includes nested groups. Admin SDK
   `members.hasMember` is true when the user is a direct member or a member of
-  a group that belongs to that role group. The existing Groups Reader role and
-  `admin.directory.group.readonly` scope are sufficient; do not add a scope.
+  a group that belongs to that role group. The API does not call `groups.list`.
+  Startup still calls `groups.get`, so the existing Groups Reader role and
+  `admin.directory.group.readonly` scope stay in place. Do not narrow that
+  scope in this change. A follow-up could switch the startup check to
+  `members.list` and then evaluate `admin.directory.group.member.readonly`.
   Positive membership is cached for up to 15 minutes, a negative result for
   about 2 minutes, and Directory errors are not cached. After changing group
   membership, allow a few minutes for Google to propagate and then sign in
@@ -273,16 +273,13 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-dev 
   --update-env-vars "^;^AUTHZ_ROLE_READ_GROUPS=sshf_app_dev_read_access@starsandstripeshonorflight.org;AUTHZ_ROLE_WRITE_GROUPS=sshf_app_dev_write_access@starsandstripeshonorflight.org;AUTHZ_ROLE_FULL_GROUPS=sshf_app_dev_full_access@starsandstripeshonorflight.org;AUTHZ_ROLE_MEDICAL_GROUPS=sshf_app_dev_medical_access@starsandstripeshonorflight.org;AUTHZ_ROLE_REVIEW_GROUPS=sshf_app_dev_review_access@starsandstripeshonorflight.org"
 ```
 
-  Until those variables are set, the deprecated alias still supplies FULL:
+  After `AUTHZ_ROLE_FULL_GROUPS` is set on the serving revision, delete the
+  old variable. It is ignored and does not grant FULL:
 
 ```bash
-# Dev
+# Dev, then prod (sshf-api-prd)
 gcloud run services update sshf-api --region us-central1 --project sshf-api-dev \
-  --update-env-vars "ALLOWED_GROUP_EMAILS=sshf_app_dev_full_access@starsandstripeshonorflight.org"
-
-# Prod
-gcloud run services update sshf-api --region us-central1 --project sshf-api-prd \
-  --update-env-vars "ALLOWED_GROUP_EMAILS=sshf_app_prd_full_access@starsandstripeshonorflight.org"
+  --remove-env-vars ALLOWED_GROUP_EMAILS
 ```
 
   **Phase 3 rollout (dev first, then prod).** Do this before the revision that
@@ -291,14 +288,12 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-prd 
   1. Add current application reviewers to `*_review_access`. Nest the BoD
      group in `*_write_access` if that is the intended WRITE path, and add
      any read-only users to `*_read_access`. Leave everyone in `*_full_access`
-     until the UI no longer depends on that group (sshf-ui #234).
+     until the UI no longer depends on that group.
   2. Deploy. Check `GET /user/permissions` for a READ-only user, a WRITE-only
      user, a REVIEW user, and a FULL user.
-  3. Only after the Phase 4 UI is deployed in that environment, remove most
-     board members from `*_full_access`. They keep WRITE through the nested
-     BoD group. A few people stay in FULL. Until that UI ships,
-     `full-access-guard` shows "Not authorized" to anyone outside the
-     full-access group, even when the API would allow them.
+  3. The UI migration (sshf-ui #234) is in production. Remove most board
+     members from `*_full_access` when you are ready. They keep WRITE through
+     the nested BoD group. A few people stay in FULL.
 
   If step 1 is skipped, a FULL user who reviews applications loses review
   access at deploy time, because FULL does not include REVIEW. Adding them
@@ -341,8 +336,8 @@ promotion workflow breaks:
 | Smoke test fails, traffic unchanged | The new revision does not boot or `/api-docs/` errors. Check revision logs in the prod project; production users are unaffected. Fix and release again. |
 | Users authenticate but have no roles | Successful Directory lookup returned no groups, or a cached token (15-minute cache — re-sign-in). When role groups are configured, a user in none of them gets data-route `403` `{ message: "Forbidden: Account not permitted" }`. A user in READ, WRITE, FULL, or REVIEW can call the routes those roles grant. MEDICAL alone is `403` on every current route. On Cloud Run an Admin SDK outage returns `503` from authentication instead of that empty role list. Off Cloud Run a failed lookup continues with no roles so local API testing can reach CouchDB when no role groups are set. |
 | Every authenticated request returns 401 after a deploy | The token audience no longer matches. `GOOGLE_CLIENT_ID` on the service must equal the OAuth client the UI/Swagger mint tokens with; if the UI uses a different client, add it to `ALLOWED_CLIENT_IDS`. |
-| Revision fails to start, or every data route returns 403 | On Cloud Run, FULL is missing or empty, a role variable name is unknown, a group email is malformed, or Directory could not confirm a configured group (404 or an outage after retries). Set `AUTHZ_ROLE_FULL_GROUPS` (or the deprecated `ALLOWED_GROUP_EMAILS` alias) to a group that exists and deploy a new revision. Local runs without `K_SERVICE` warn and continue. |
+| Revision fails to start, or every data route returns 403 | On Cloud Run, FULL is missing or empty, a role variable name is unknown, a group email is malformed, or Directory could not confirm a configured group (404 or an outage after retries). Set `AUTHZ_ROLE_FULL_GROUPS` to a group that exists and deploy a new revision. `ALLOWED_GROUP_EMAILS` is ignored and does not satisfy FULL. Local runs without `K_SERVICE` warn and continue. |
 | Some users get 403 | `ALLOWED_EMAIL_DOMAINS` is set and rejects an unverified or out-of-domain email (`Forbidden: Account not permitted`), the user holds no role, or the user lacks that route's permission. The missing-permission body keeps `message` and adds `requiredPermission` (for example `records:delete` or `applications:review`). FULL does not include review or medical. A Directory outage is `503`, not this `403`. |
-| Nested member is denied, or a removed member still has access | Every configured role group is checked with `members.hasMember` (direct and nested). A misspelled or deleted group is treated as not a member and logged against its `AUTHZ_ROLE_*_GROUPS` variable (or `ALLOWED_GROUP_EMAILS` when that alias is in use). Startup on Cloud Run fails if the group is already missing. Negative results refresh in about 2 minutes; granted membership can linger up to 15 minutes. Allow a few minutes for Google to propagate, then sign in again. A Directory outage is still `503` on Cloud Run. |
+| Nested member is denied, or a removed member still has access | Every configured role group is checked with `members.hasMember` (direct and nested). A misspelled or deleted group is treated as not a member and logged against its `AUTHZ_ROLE_*_GROUPS` variable. Startup on Cloud Run fails if the group is already missing. Negative results refresh in about 2 minutes; granted membership can linger up to 15 minutes. Allow a few minutes for Google to propagate, then sign in again. A Directory outage is still `503` on Cloud Run. |
 | New secret value not taking effect | Revisions pin secret versions at deploy time. Force a new revision (see Configuration and secrets). |
 | CORS errors from the UI | The UI origin is missing from the service's `ALLOWED_ORIGINS` env var. |

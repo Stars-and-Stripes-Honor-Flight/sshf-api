@@ -9,19 +9,12 @@
  * to CouchDB. Cloud Run (K_SERVICE) still throws so authenticate returns 503
  * instead of treating an Admin SDK outage as an empty allow-list miss.
  *
- * groups.list is paged. Each request uses GROUP_LIST_PAGE_SIZE (100), the
- * historical page size, which is within the Admin SDK maximum of 200.
- * Lookup follows nextPageToken until the user has no further pages or
- * MAX_GROUP_LIST_PAGES pages have been read (2,000 memberships). That cap
- * stops a stuck page token from looping. Membership past the cap is not
- * visible to authorization.
- *
- * Configured authorization groups (every AUTHZ_ROLE_*_GROUPS email, with
- * ALLOWED_GROUP_EMAILS as the deprecated FULL alias) are also checked with
- * members.hasMember, which is true for direct and nested members.
- * A configured group already present in the direct list skips that call.
- * Positive answers are cached for up to USER_CACHE_TTL_MS. Negative answers
- * are cached for about 2 minutes. Directory errors are not cached.
+ * Authorization groups are the emails in AUTHZ_ROLE_*_GROUPS. Membership is
+ * members.hasMember, which is true for direct and nested members. The API
+ * does not call groups.list. Positive answers are cached for up to
+ * USER_CACHE_TTL_MS. Negative answers are cached for about 2 minutes.
+ * Directory errors are not cached. Startup still confirms configured groups
+ * with groups.get.
  */
 import { google } from 'googleapis';
 import { isRunningOnCloudRun } from './auth.js';
@@ -30,15 +23,6 @@ import {
     createMembershipCache,
     POSITIVE_MEMBERSHIP_TTL_MS
 } from './membership_cache.js';
-
-/** Groups requested per Directory groups.list call. */
-export const GROUP_LIST_PAGE_SIZE = 100;
-
-/**
- * High cap on groups.list pages per user (GROUP_LIST_PAGE_SIZE each).
- * 20 pages covers 2,000 memberships, well above a single ignored page of 100.
- */
-export const MAX_GROUP_LIST_PAGES = 20;
 
 const DIRECTORY_GROUP_SCOPE = 'https://www.googleapis.com/auth/admin.directory.group.readonly';
 
@@ -92,56 +76,6 @@ export function createDirectoryAdcAuth() {
     return new google.auth.GoogleAuth({
         scopes: [DIRECTORY_GROUP_SCOPE]
     });
-}
-
-/**
- * Follow nextPageToken until groups are exhausted or maxPages is reached.
- * fetchPage receives the current page token (undefined on the first page)
- * and returns the groups.list response body.
- */
-export async function collectPagedGroups(fetchPage, { maxPages = MAX_GROUP_LIST_PAGES } = {}) {
-    const groups = [];
-    let pageToken;
-
-    for (let page = 0; page < maxPages; page += 1) {
-        const data = await fetchPage(pageToken);
-        const pageGroups = Array.isArray(data?.groups) ? data.groups : [];
-        groups.push(...pageGroups);
-        if (!data?.nextPageToken) {
-            return groups;
-        }
-        pageToken = data.nextPageToken;
-    }
-
-    console.warn(
-        `Directory group lookup stopped after ${maxPages} pages ` +
-        `(${GROUP_LIST_PAGE_SIZE} groups per page; membership beyond this cap is ignored)`
-    );
-    return groups;
-}
-
-/**
- * List every Workspace group for a user, following nextPageToken.
- *
- * @param {{email: string}} userData
- * @param {object} auth Directory client auth
- * @param {{createAdmin?: Function, maxPages?: number}} [options]
- */
-export async function listGroupsForUser(userData, auth, options = {}) {
-    const createAdmin = options.createAdmin
-        ?? ((directoryAuth) => google.admin({ version: 'directory_v1', auth: directoryAuth }));
-    const admin = createAdmin(auth);
-    const domain = userData.email.split('@')[1];
-
-    return collectPagedGroups(async (pageToken) => {
-        const response = await admin.groups.list({
-            userKey: userData.email,
-            domain,
-            maxResults: GROUP_LIST_PAGE_SIZE,
-            ...(pageToken ? { pageToken } : {})
-        });
-        return response.data || {};
-    }, { maxPages: options.maxPages });
 }
 
 function normalizeEmail(value) {
@@ -277,22 +211,12 @@ async function withDirectoryAuth(env, options, operation, onLocalFailure) {
  *
  * On Cloud Run, an Admin SDK failure after credential fallbacks throws
  * DirectoryGroupsUnavailableError so authenticate returns 503 instead of an
- * empty role list. Off Cloud Run, that same exhaustion returns []: gcloud
- * user ADC is often unusable for Directory, and local development without
- * K_SERVICE may omit ALLOWED_GROUP_EMAILS so the request can still reach
- * CouchDB. A configured local allow-list still fail-closes on those empty roles.
+ * empty role list. Off Cloud Run, that same exhaustion returns no memberships:
+ * gcloud user ADC is often unusable for Directory, and local development
+ * without K_SERVICE may omit AUTHZ_ROLE_FULL_GROUPS so the request can still
+ * reach CouchDB. A configured local role list still fail-closes on those
+ * empty roles.
  */
-export async function getGroupMemberships(userData, options = {}) {
-    const env = options.env ?? process.env;
-    const listGroups = options.listGroups
-        ?? ((data, auth) => listGroupsForUser(data, auth, options));
-    return withDirectoryAuth(
-        env,
-        options,
-        (auth) => listGroups(userData, auth),
-        () => []
-    );
-}
 
 /**
  * Check one Workspace group with members.hasMember.
@@ -312,7 +236,7 @@ export async function checkGroupMembership(userEmail, groupEmail, auth, options 
         ?? ((directoryAuth) => google.admin({ version: 'directory_v1', auth: directoryAuth }));
     const admin = createAdmin(auth);
     const timeoutMs = options.timeoutMs ?? HAS_MEMBER_TIMEOUT_MS;
-    const groupEnvVar = options.groupEnvVar ?? 'ALLOWED_GROUP_EMAILS';
+    const groupEnvVar = options.groupEnvVar ?? 'AUTHZ_ROLE_FULL_GROUPS';
 
     try {
         const response = await withTimeout(
@@ -349,69 +273,23 @@ export async function checkGroupMembership(userEmail, groupEmail, auth, options 
 }
 
 /**
- * Merge direct groups.list results with members.hasMember for configured groups.
- * Phase 2 can pass the role-group union here without changing the check itself.
+ * Resolve membership in the configured authorization groups.
+ * An empty list skips Directory. Otherwise each uncached group is checked
+ * with members.hasMember, which covers direct and nested members.
  *
  * @param {{email: string}} userData
- * @param {string[]} groupEmails Authorization groups. Empty skips hasMember.
+ * @param {string[]} groupEmails Authorization groups. Empty skips Directory.
  * @param {object} [options]
  * @returns {Promise<{groups: object[], userCacheTtlMs: number}>}
  */
 export async function resolveAuthorizationGroups(userData, groupEmails, options = {}) {
     const env = options.env ?? process.env;
     const configured = normalizeGroupList(groupEmails);
-    const listGroups = options.listGroups
-        ?? ((data, auth) => listGroupsForUser(data, auth, options));
-    const checkMembership = options.checkMembership
-        ?? ((userEmail, groupEmail, auth) => checkGroupMembership(userEmail, groupEmail, auth, {
-            createAdmin: options.createAdmin,
-            timeoutMs: options.timeoutMs,
-            groupEnvVar: options.groupEnvVars?.[groupEmail] ?? options.groupEnvVar
-        }));
     const membershipCache = options.membershipCache ?? defaultMembershipCache;
     const now = options.now ?? Date.now;
 
     if (configured.length === 0) {
-        const groups = await getGroupMemberships(userData, {
-            ...options,
-            env,
-            listGroups
-        });
-        return { groups, userCacheTtlMs: POSITIVE_MEMBERSHIP_TTL_MS };
-    }
-
-    return withDirectoryAuth(
-        env,
-        options,
-        (auth) => mergeAuthorizationGroups({
-            userData,
-            configured,
-            auth,
-            listGroups,
-            checkMembership,
-            membershipCache,
-            now
-        }),
-        () => ({ groups: [], userCacheTtlMs: POSITIVE_MEMBERSHIP_TTL_MS })
-    );
-}
-
-async function mergeAuthorizationGroups({
-    userData,
-    configured,
-    auth,
-    listGroups,
-    checkMembership,
-    membershipCache,
-    now
-}) {
-    const directList = await listGroups(userData, auth);
-    const directByEmail = new Map();
-    for (const group of directList) {
-        const email = normalizeEmail(group?.email);
-        if (email && !directByEmail.has(email)) {
-            directByEmail.set(email, group);
-        }
+        return { groups: [], userCacheTtlMs: POSITIVE_MEMBERSHIP_TTL_MS };
     }
 
     const current = now();
@@ -420,38 +298,63 @@ async function mergeAuthorizationGroups({
     const pending = [];
 
     for (const groupEmail of configured) {
-        if (directByEmail.has(groupEmail)) {
-            known.push({ groupEmail, isMember: true, direct: true });
-            continue;
-        }
         const cached = membershipCache.get(userEmail, groupEmail);
         if (cached) {
             known.push({
                 groupEmail,
                 isMember: cached.isMember,
-                expiresAt: cached.expiresAt,
-                cached: true
+                expiresAt: cached.expiresAt
             });
             continue;
         }
         pending.push(groupEmail);
     }
 
-    const checked = await Promise.all(pending.map(async (groupEmail) => {
-        const result = await checkMembership(userEmail, groupEmail, auth);
-        return { groupEmail, isMember: result?.isMember === true };
-    }));
+    let checked = [];
+    if (pending.length > 0) {
+        const checkMembership = options.checkMembership
+            ?? ((email, groupEmail, auth) => checkGroupMembership(email, groupEmail, auth, {
+                createAdmin: options.createAdmin,
+                timeoutMs: options.timeoutMs,
+                groupEnvVar: options.groupEnvVars?.[groupEmail] ?? options.groupEnvVar
+            }));
+        const lookedUp = await withDirectoryAuth(
+            env,
+            options,
+            (auth) => Promise.all(pending.map(async (groupEmail) => {
+                const result = await checkMembership(userEmail, groupEmail, auth);
+                return { groupEmail, isMember: result?.isMember === true };
+            })),
+            () => null
+        );
+        if (lookedUp === null) {
+            return { groups: [], userCacheTtlMs: POSITIVE_MEMBERSHIP_TTL_MS };
+        }
+        checked = lookedUp;
+    }
 
+    return assembleMembershipResult({
+        userEmail,
+        configured,
+        known,
+        checked,
+        membershipCache,
+        current
+    });
+}
+
+function assembleMembershipResult({
+    userEmail,
+    configured,
+    known,
+    checked,
+    membershipCache,
+    current
+}) {
     const outcome = new Map();
     let earliest = current + POSITIVE_MEMBERSHIP_TTL_MS;
 
     for (const item of known) {
-        if (item.direct) {
-            const expiresAt = membershipCache.set(userEmail, item.groupEmail, true);
-            earliest = Math.min(earliest, expiresAt);
-            outcome.set(item.groupEmail, true);
-            continue;
-        }
         earliest = Math.min(earliest, item.expiresAt);
         outcome.set(item.groupEmail, item.isMember);
     }
@@ -462,21 +365,10 @@ async function mergeAuthorizationGroups({
         outcome.set(item.groupEmail, item.isMember);
     }
 
-    const configuredSet = new Set(configured);
-    const groups = directList.map((group) => {
-        const email = normalizeEmail(group?.email);
-        if (email && configuredSet.has(email)) {
-            return { ...group, membership: 'direct' };
-        }
-        return group;
-    });
-
+    const groups = [];
     for (const groupEmail of configured) {
-        if (directByEmail.has(groupEmail)) {
-            continue;
-        }
         if (outcome.get(groupEmail) === true) {
-            groups.push({ email: groupEmail, membership: 'nested' });
+            groups.push({ email: groupEmail });
         }
     }
 

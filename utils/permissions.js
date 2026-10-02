@@ -6,8 +6,7 @@
  * includes every WRITE permission. FULL does not include MEDICAL or REVIEW.
  *
  * Protected routes enforce these permissions with requirePermission
- * (ROUTE_PERMISSIONS). ALLOWED_GROUP_EMAILS remains a deprecated alias
- * for AUTHZ_ROLE_FULL_GROUPS.
+ * (ROUTE_PERMISSIONS). AUTHZ_ROLE_FULL_GROUPS is the only FULL source.
  */
 
 export const ROLE_IDS = Object.freeze(['READ', 'WRITE', 'FULL', 'MEDICAL', 'REVIEW']);
@@ -115,7 +114,6 @@ export const GROUP_EXISTENCE_BACKOFF_MS = Object.freeze([4000, 8000]);
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const KNOWN_ROLE_ENV = new Set(Object.values(ROLE_GROUP_ENV));
-const DEPRECATED_FULL_ALIAS = 'ALLOWED_GROUP_EMAILS';
 
 function isCloudRun(env) {
     return typeof env?.K_SERVICE === 'string' && env.K_SERVICE.trim() !== '';
@@ -152,21 +150,6 @@ function parseGroupEmails(raw, envVar) {
         emails.push(email);
     }
     return { emails, malformed };
-}
-
-function rawIsUnset(raw) {
-    if (raw == null) {
-        return true;
-    }
-    return String(raw).split(',').every((part) => part.trim() === '');
-}
-
-function sameEmailSet(left, right) {
-    if (left.length !== right.length) {
-        return false;
-    }
-    const rightSet = new Set(right);
-    return left.every((email) => rightSet.has(email));
 }
 
 function unknownRoleEnvVars(env) {
@@ -206,24 +189,10 @@ export function describeRoleConfig(env = process.env) {
         malformed.push(...parsed.malformed);
     }
 
-    const allowedParsed = parseGroupEmails(source[DEPRECATED_FULL_ALIAS], DEPRECATED_FULL_ALIAS);
-    const fullUnset = rawIsUnset(source[ROLE_GROUP_ENV.FULL]);
-    const aliasProvided = !rawIsUnset(source[DEPRECATED_FULL_ALIAS]);
-    const aliasUsed = fullUnset && aliasProvided;
-    const aliasDiffers = !fullUnset && aliasProvided &&
-        !sameEmailSet(groupsByRole.FULL, allowedParsed.emails);
-
-    if (aliasUsed) {
-        groupsByRole.FULL = allowedParsed.emails;
-        malformed.push(...allowedParsed.malformed);
-    }
-
     return {
         groupsByRole,
         unknownRoleEnvVars: unknownRoleEnvVars(source),
-        malformed,
-        aliasUsed,
-        aliasDiffers
+        malformed
     };
 }
 
@@ -235,9 +204,7 @@ export function listConfiguredGroupEntries(env = process.env) {
     const described = describeRoleConfig(env);
     const byEmail = new Map();
     for (const roleId of ROLE_IDS) {
-        const envVar = described.aliasUsed && roleId === 'FULL'
-            ? DEPRECATED_FULL_ALIAS
-            : ROLE_GROUP_ENV[roleId];
+        const envVar = ROLE_GROUP_ENV[roleId];
         for (const email of described.groupsByRole[roleId]) {
             const existing = byEmail.get(email);
             if (!existing) {
@@ -305,17 +272,6 @@ export function devOverrideRoles(env = process.env) {
 export function startupWarnings(env = process.env) {
     const described = describeRoleConfig(env);
     const warnings = [];
-    if (described.aliasUsed) {
-        warnings.push(
-            'ALLOWED_GROUP_EMAILS is deprecated and is being read as AUTHZ_ROLE_FULL_GROUPS. ' +
-            'Set AUTHZ_ROLE_FULL_GROUPS instead.'
-        );
-    }
-    if (described.aliasDiffers) {
-        warnings.push(
-            'AUTHZ_ROLE_FULL_GROUPS differs from ALLOWED_GROUP_EMAILS; AUTHZ_ROLE_FULL_GROUPS is used.'
-        );
-    }
     for (const envVar of described.unknownRoleEnvVars) {
         warnings.push(unknownRoleMessage(envVar));
     }
@@ -340,7 +296,7 @@ export function startupWarnings(env = process.env) {
 /**
  * Fatal configuration problems. Empty off Cloud Run so local development can
  * omit the group list. On Cloud Run an unknown role, a malformed email, or
- * an empty FULL list (after the ALLOWED_GROUP_EMAILS alias) is fatal.
+ * an empty AUTHZ_ROLE_FULL_GROUPS list is fatal.
  */
 export function cloudRunAuthorizationProblems(env = process.env) {
     if (!isCloudRun(env)) {
@@ -356,8 +312,7 @@ export function cloudRunAuthorizationProblems(env = process.env) {
     }
     if (described.groupsByRole.FULL.length === 0) {
         problems.push(
-            'AUTHZ_ROLE_FULL_GROUPS must be set when running on Cloud Run ' +
-            '(ALLOWED_GROUP_EMAILS remains a deprecated alias)'
+            'AUTHZ_ROLE_FULL_GROUPS must be set when running on Cloud Run'
         );
     }
     if (describeDevOverride(env).configured) {

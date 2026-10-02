@@ -14,11 +14,8 @@ import {
     POSITIVE_MEMBERSHIP_TTL_MS,
     createMembershipCache
 } from '../utils/membership_cache.js';
-import { getHasGroup } from '../routes/user.js';
-
 const FULL_ACCESS_GROUP = 'sshf_app_dev_full_access@starsandstripeshonorflight.org';
 const WRITE_ACCESS_GROUP = 'sshf_app_dev_write_access@starsandstripeshonorflight.org';
-const NESTED_GROUP = 'sshf_app_dev_nested_test@starsandstripeshonorflight.org';
 const OUR_CLIENT_ID = '111111111111-ourapp.apps.googleusercontent.com';
 const USER_EMAIL = 'nested.user@starsandstripeshonorflight.org';
 
@@ -107,7 +104,7 @@ describe('Admin SDK members.hasMember', () => {
 
         expect(result).to.deep.equal({ isMember: false });
         const logged = loggedText('error');
-        expect(logged).to.include('ALLOWED_GROUP_EMAILS');
+        expect(logged).to.include('AUTHZ_ROLE_FULL_GROUPS');
         expect(logged).to.include(FULL_ACCESS_GROUP);
         expect(logged).to.not.include(USER_EMAIL);
         expect(logged).to.not.include('ya29.super-secret');
@@ -316,79 +313,59 @@ describe('resolveAuthorizationGroups', () => {
         });
     }
 
-    it('does not call hasMember when no authorization groups are configured', async () => {
-        const listGroups = sinon.stub().resolves([
-            { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
-        ]);
+    it('does not call Directory when no authorization groups are configured', async () => {
         const checkMembership = sinon.stub().resolves({ isMember: true });
+        const createAdcAuth = sinon.stub().returns({ kind: 'adc' });
+        const createJwtAuth = sinon.stub().returns({ kind: 'jwt' });
 
         const result = await resolve([], {
             env: {},
-            listGroups,
             checkMembership,
-            createAdcAuth: () => ({ kind: 'adc' })
+            createAdcAuth,
+            createJwtAuth
         });
 
         expect(checkMembership.called).to.be.false;
-        expect(listGroups.calledOnce).to.be.true;
-        expect(result.groups).to.deep.equal([
-            { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
-        ]);
+        expect(createAdcAuth.called).to.be.false;
+        expect(createJwtAuth.called).to.be.false;
+        expect(result.groups).to.deep.equal([]);
         expect(result.userCacheTtlMs).to.equal(POSITIVE_MEMBERSHIP_TTL_MS);
     });
 
-    it('does not grant membership for a nested group outside the authorization set', async () => {
+    it('does not grant membership for a group outside the authorization set', async () => {
         const outsider = 'volunteers-leads@starsandstripeshonorflight.org';
-        const listGroups = sinon.stub().resolves([
-            { id: 'n1', name: 'Volunteers', email: NESTED_GROUP }
-        ]);
         const checkMembership = sinon.stub().callsFake((userEmail, groupEmail) => (
             Promise.resolve({ isMember: groupEmail === outsider })
         ));
 
-        const result = await resolve([FULL_ACCESS_GROUP], { listGroups, checkMembership });
+        const result = await resolve([FULL_ACCESS_GROUP], { checkMembership });
 
         expect(checkMembership.calledOnce).to.be.true;
         expect(checkMembership.firstCall.args[1]).to.equal(FULL_ACCESS_GROUP);
         expect(result.groups.map((group) => group.email)).to.not.include(outsider);
-        expect(result.groups).to.deep.equal([
-            { id: 'n1', name: 'Volunteers', email: NESTED_GROUP }
-        ]);
+        expect(result.groups).to.deep.equal([]);
     });
 
-    it('does not call hasMember for a configured group already in the direct list', async () => {
-        const listGroups = sinon.stub().resolves([
-            { id: 'f1', name: 'Full access', email: FULL_ACCESS_GROUP.toUpperCase() },
-            { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
-        ]);
+    it('calls hasMember for a configured group and returns only that membership', async () => {
         const checkMembership = sinon.stub().resolves({ isMember: true });
 
-        const result = await resolve([FULL_ACCESS_GROUP], { listGroups, checkMembership });
+        const result = await resolve([FULL_ACCESS_GROUP], { checkMembership });
 
-        expect(checkMembership.called).to.be.false;
+        expect(checkMembership.calledOnce).to.be.true;
         expect(result.userCacheTtlMs).to.equal(POSITIVE_MEMBERSHIP_TTL_MS);
         expect(result.groups).to.deep.equal([
-            {
-                id: 'f1',
-                name: 'Full access',
-                email: FULL_ACCESS_GROUP.toUpperCase(),
-                membership: 'direct'
-            },
-            { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
+            { email: FULL_ACCESS_GROUP }
         ]);
     });
 
-    it('adds a nested configured group, passes authorize, and reports hasgroup true', async () => {
+    it('adds a configured group membership and passes the FULL gate', async () => {
         const originalClientId = process.env.GOOGLE_CLIENT_ID;
         const originalAllowedClientIds = process.env.ALLOWED_CLIENT_IDS;
-        const originalAllowedGroups = process.env.ALLOWED_GROUP_EMAILS;
+        const originalFullGroups = process.env.AUTHZ_ROLE_FULL_GROUPS;
         process.env.GOOGLE_CLIENT_ID = OUR_CLIENT_ID;
         delete process.env.ALLOWED_CLIENT_IDS;
-        process.env.ALLOWED_GROUP_EMAILS = FULL_ACCESS_GROUP;
+        process.env.AUTHZ_ROLE_FULL_GROUPS = FULL_ACCESS_GROUP;
 
-        const listGroups = sinon.stub().resolves([
-            { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
-        ]);
         const checkMembership = sinon.stub().resolves({ isMember: true });
         const cache = { get: sinon.stub().returns(undefined), set: sinon.spy() };
 
@@ -400,11 +377,7 @@ describe('resolveAuthorizationGroups', () => {
                     email_verified: true
                 }),
                 getUserInfo: async () => userData,
-                getGroupMemberships: (data) => resolve([FULL_ACCESS_GROUP], {
-                    listGroups,
-                    checkMembership,
-                    userData: data
-                }),
+                getGroupMemberships: () => resolve([FULL_ACCESS_GROUP], { checkMembership }),
                 cache
             });
             const req = { headers: { authorization: 'Bearer token-nested' } };
@@ -418,8 +391,7 @@ describe('resolveAuthorizationGroups', () => {
             expect(checkMembership.firstCall.args[0]).to.equal(USER_EMAIL);
             expect(checkMembership.firstCall.args[1]).to.equal(FULL_ACCESS_GROUP);
             expect(req.user.roles).to.deep.equal([
-                { id: 'n1', name: 'Nested test', email: NESTED_GROUP },
-                { email: FULL_ACCESS_GROUP, membership: 'nested' }
+                { email: FULL_ACCESS_GROUP }
             ]);
             expect(cache.set.firstCall.args[2]).to.deep.equal({
                 ttlMs: POSITIVE_MEMBERSHIP_TTL_MS
@@ -430,31 +402,22 @@ describe('resolveAuthorizationGroups', () => {
             authorize(req, gateRes, gateNext);
             expect(gateNext.calledOnce).to.be.true;
             expect(gateRes.status.called).to.be.false;
-
-            const probeRes = { body: null, json(payload) { this.body = payload; return this; } };
-            getHasGroup({ user: req.user, query: { groupEmail: FULL_ACCESS_GROUP.toUpperCase() } }, probeRes);
-            expect(probeRes.body).to.deep.equal({ hasgroup: true });
         } finally {
             restoreEnv('GOOGLE_CLIENT_ID', originalClientId);
             restoreEnv('ALLOWED_CLIENT_IDS', originalAllowedClientIds);
-            restoreEnv('ALLOWED_GROUP_EMAILS', originalAllowedGroups);
+            restoreEnv('AUTHZ_ROLE_FULL_GROUPS', originalFullGroups);
         }
     });
 
     it('fail-closes a non-member with a short user-cache TTL', async () => {
-        const originalAllowedGroups = process.env.ALLOWED_GROUP_EMAILS;
-        process.env.ALLOWED_GROUP_EMAILS = FULL_ACCESS_GROUP;
-        const listGroups = sinon.stub().resolves([
-            { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
-        ]);
+        const originalFullGroups = process.env.AUTHZ_ROLE_FULL_GROUPS;
+        process.env.AUTHZ_ROLE_FULL_GROUPS = FULL_ACCESS_GROUP;
         const checkMembership = sinon.stub().resolves({ isMember: false });
 
         try {
-            const result = await resolve([FULL_ACCESS_GROUP], { listGroups, checkMembership });
+            const result = await resolve([FULL_ACCESS_GROUP], { checkMembership });
 
-            expect(result.groups).to.deep.equal([
-                { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
-            ]);
+            expect(result.groups).to.deep.equal([]);
             expect(result.userCacheTtlMs).to.equal(NEGATIVE_MEMBERSHIP_TTL_MS);
 
             const req = { user: { roles: result.groups } };
@@ -464,15 +427,8 @@ describe('resolveAuthorizationGroups', () => {
             expect(res.status.calledOnceWith(403)).to.be.true;
             expect(res.json.calledOnceWith({ message: 'Forbidden: Account not permitted' })).to.be.true;
             expect(next.called).to.be.false;
-
-            const probeRes = { body: null, json(payload) { this.body = payload; return this; } };
-            getHasGroup({
-                user: { roles: result.groups },
-                query: { groupEmail: FULL_ACCESS_GROUP }
-            }, probeRes);
-            expect(probeRes.body).to.deep.equal({ hasgroup: false });
         } finally {
-            restoreEnv('ALLOWED_GROUP_EMAILS', originalAllowedGroups);
+            restoreEnv('AUTHZ_ROLE_FULL_GROUPS', originalFullGroups);
         }
     });
 
@@ -480,7 +436,6 @@ describe('resolveAuthorizationGroups', () => {
         const releases = [];
         let inFlight = 0;
         let maxInFlight = 0;
-        const listGroups = sinon.stub().resolves([]);
         const checkMembership = sinon.stub().callsFake((userEmail, groupEmail) => {
             inFlight += 1;
             maxInFlight = Math.max(maxInFlight, inFlight);
@@ -494,7 +449,7 @@ describe('resolveAuthorizationGroups', () => {
 
         const pending = resolve(
             [FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP, FULL_ACCESS_GROUP.toUpperCase()],
-            { listGroups, checkMembership }
+            { checkMembership }
         );
         await waitUntil(() => checkMembership.callCount === 2);
         expect(maxInFlight).to.equal(2);
@@ -502,7 +457,7 @@ describe('resolveAuthorizationGroups', () => {
 
         const result = await pending;
         expect(result.groups).to.deep.equal([
-            { email: WRITE_ACCESS_GROUP, membership: 'nested' }
+            { email: WRITE_ACCESS_GROUP }
         ]);
         expect(result.userCacheTtlMs).to.equal(NEGATIVE_MEMBERSHIP_TTL_MS);
         expect(checkMembership.getCalls().map((call) => call.args[1])).to.deep.equal([
@@ -512,30 +467,25 @@ describe('resolveAuthorizationGroups', () => {
     });
 
     it('compares configured group emails case-insensitively when calling hasMember', async () => {
-        const listGroups = sinon.stub().resolves([]);
         const checkMembership = sinon.stub().resolves({ isMember: true });
 
         const result = await resolve([`  ${FULL_ACCESS_GROUP.toUpperCase()}  `], {
-            listGroups,
             checkMembership
         });
 
         expect(checkMembership.firstCall.args[1]).to.equal(FULL_ACCESS_GROUP);
         expect(result.groups[0]).to.deep.equal({
-            email: FULL_ACCESS_GROUP,
-            membership: 'nested'
+            email: FULL_ACCESS_GROUP
         });
     });
 
     it('reuses a positive membership and rechecks only an expired negative membership', async () => {
-        const listGroups = sinon.stub().resolves([]);
         const checkMembership = sinon.stub();
         checkMembership.onCall(0).resolves({ isMember: true });
         checkMembership.onCall(1).resolves({ isMember: false });
         checkMembership.onCall(2).resolves({ isMember: true });
 
         const first = await resolve([FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP], {
-            listGroups,
             checkMembership
         });
         expect(first.userCacheTtlMs).to.equal(NEGATIVE_MEMBERSHIP_TTL_MS);
@@ -543,7 +493,6 @@ describe('resolveAuthorizationGroups', () => {
 
         now += NEGATIVE_MEMBERSHIP_TTL_MS - 1;
         const withinNegative = await resolve([FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP], {
-            listGroups,
             checkMembership
         });
         expect(checkMembership.callCount).to.equal(2);
@@ -552,7 +501,6 @@ describe('resolveAuthorizationGroups', () => {
 
         now += 1;
         const afterNegative = await resolve([FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP], {
-            listGroups,
             checkMembership
         });
         expect(checkMembership.callCount).to.equal(3);
@@ -568,17 +516,18 @@ describe('resolveAuthorizationGroups', () => {
 
     it('does not cache Directory errors and calls hasMember again on the next lookup', async () => {
         silenceLogs();
-        const listGroups = sinon.stub().resolves([
-            { id: 'f1', name: 'Full access', email: FULL_ACCESS_GROUP }
-        ]);
-        const checkMembership = sinon.stub();
-        checkMembership.onCall(0).rejects(googleError(503));
-        checkMembership.onCall(1).resolves({ isMember: true });
+        let calls = 0;
+        const checkMembership = sinon.stub().callsFake(() => {
+            calls += 1;
+            if (calls <= 2) {
+                return Promise.reject(googleError(503));
+            }
+            return Promise.resolve({ isMember: true });
+        });
 
         try {
             await resolve([FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP], {
                 env: { K_SERVICE: 'sshf-api' },
-                listGroups,
                 checkMembership,
                 createAdcAuth: () => ({ kind: 'adc' })
             });
@@ -590,12 +539,14 @@ describe('resolveAuthorizationGroups', () => {
 
         const retried = await resolve([FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP], {
             env: { K_SERVICE: 'sshf-api' },
-            listGroups,
             checkMembership,
             createAdcAuth: () => ({ kind: 'adc' })
         });
-        expect(checkMembership.callCount).to.equal(2);
-        expect(retried.groups.map((group) => group.email)).to.include(WRITE_ACCESS_GROUP);
+        expect(checkMembership.callCount).to.equal(4);
+        expect(retried.groups.map((group) => group.email).sort()).to.deep.equal([
+            FULL_ACCESS_GROUP,
+            WRITE_ACCESS_GROUP
+        ]);
         expect(membershipCache.get(USER_EMAIL, FULL_ACCESS_GROUP).isMember).to.equal(true);
         expect(membershipCache.get(USER_EMAIL, WRITE_ACCESS_GROUP).isMember).to.equal(true);
     });
@@ -605,14 +556,10 @@ describe('resolveAuthorizationGroups', () => {
         const hasMember = sinon.stub().rejects(googleError(503, {
             access_token: 'ya29.super-secret'
         }));
-        const listGroups = sinon.stub().resolves([
-            { id: 'n1', name: 'Nested test', email: NESTED_GROUP }
-        ]);
 
         try {
             await resolve([FULL_ACCESS_GROUP], {
                 env: { K_SERVICE: 'sshf-api' },
-                listGroups,
                 createAdcAuth: () => ({ kind: 'adc' }),
                 createAdmin: () => ({ members: { hasMember } })
             });
@@ -625,7 +572,6 @@ describe('resolveAuthorizationGroups', () => {
 
         const local = await resolve([FULL_ACCESS_GROUP], {
             env: {},
-            listGroups,
             createAdcAuth: () => ({ kind: 'adc' }),
             createAdmin: () => ({ members: { hasMember } })
         });
@@ -636,7 +582,6 @@ describe('resolveAuthorizationGroups', () => {
 
     it('fails the whole lookup when one group succeeds and another returns 5xx', async () => {
         silenceLogs();
-        const listGroups = sinon.stub().resolves([]);
         const checkMembership = sinon.stub().callsFake((userEmail, groupEmail) => {
             if (groupEmail === WRITE_ACCESS_GROUP) {
                 return Promise.reject(googleError(500));
@@ -647,7 +592,6 @@ describe('resolveAuthorizationGroups', () => {
         try {
             await resolve([FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP], {
                 env: { K_SERVICE: 'sshf-api' },
-                listGroups,
                 checkMembership,
                 createAdcAuth: () => ({ kind: 'adc' })
             });
@@ -661,7 +605,6 @@ describe('resolveAuthorizationGroups', () => {
 
         const local = await resolve([FULL_ACCESS_GROUP, WRITE_ACCESS_GROUP], {
             env: {},
-            listGroups,
             checkMembership,
             createAdcAuth: () => ({ kind: 'adc' })
         });
@@ -672,10 +615,8 @@ describe('resolveAuthorizationGroups', () => {
     it('treats a 404 from hasMember as not a member of that configured group', async () => {
         silenceLogs();
         const hasMember = sinon.stub().rejects(googleError(404, { access_token: 'ya29.super-secret' }));
-        const listGroups = sinon.stub().resolves([]);
 
         const result = await resolve([FULL_ACCESS_GROUP], {
-            listGroups,
             createAdmin: () => ({ members: { hasMember } })
         });
 
@@ -683,37 +624,33 @@ describe('resolveAuthorizationGroups', () => {
         expect(result.groups).to.deep.equal([]);
         expect(result.userCacheTtlMs).to.equal(NEGATIVE_MEMBERSHIP_TTL_MS);
         const logged = loggedText('error');
-        expect(logged).to.include('ALLOWED_GROUP_EMAILS');
+        expect(logged).to.include('AUTHZ_ROLE_FULL_GROUPS');
         expect(logged).to.include(FULL_ACCESS_GROUP);
         expect(logged).to.not.include(USER_EMAIL);
         expect(logged).to.not.include('ya29.super-secret');
         expect(membershipCache.get(USER_EMAIL, FULL_ACCESS_GROUP).isMember).to.equal(false);
     });
 
-    it('falls back from JWT to ADC and still honors a nested member', async () => {
-        const listGroups = sinon.stub();
-        listGroups.onCall(0).rejects(new Error('JWT directory failed'));
-        listGroups.onCall(1).resolves([]);
-        const checkMembership = sinon.stub().resolves({ isMember: true });
+    it('falls back from JWT to ADC and still honors a member', async () => {
+        const checkMembership = sinon.stub();
+        checkMembership.onCall(0).rejects(new Error('JWT directory failed'));
+        checkMembership.onCall(1).resolves({ isMember: true });
         silenceLogs();
 
         const result = await resolve([FULL_ACCESS_GROUP], {
-            listGroups,
             checkMembership,
             createJwtAuth: () => ({ kind: 'jwt' }),
             createAdcAuth: () => ({ kind: 'adc' })
         });
 
-        expect(listGroups.callCount).to.equal(2);
-        expect(checkMembership.calledOnce).to.be.true;
-        expect(checkMembership.firstCall.args[2]).to.deep.equal({ kind: 'adc' });
+        expect(checkMembership.callCount).to.equal(2);
+        expect(checkMembership.secondCall.args[2]).to.deep.equal({ kind: 'adc' });
         expect(result.groups).to.deep.equal([
-            { email: FULL_ACCESS_GROUP, membership: 'nested' }
+            { email: FULL_ACCESS_GROUP }
         ]);
     });
 
     it('uses the shared membership cache when the caller does not inject one', async () => {
-        const listGroups = sinon.stub().resolves([]);
         const checkMembership = sinon.stub().resolves({ isMember: false });
         const isolatedUser = {
             email: 'cache-default@starsandstripeshonorflight.org'
@@ -721,13 +658,11 @@ describe('resolveAuthorizationGroups', () => {
 
         await resolveAuthorizationGroups(isolatedUser, [FULL_ACCESS_GROUP], {
             env: saEnv,
-            listGroups,
             checkMembership,
             createJwtAuth: () => ({})
         });
         await resolveAuthorizationGroups(isolatedUser, [FULL_ACCESS_GROUP], {
             env: saEnv,
-            listGroups,
             checkMembership,
             createJwtAuth: () => ({})
         });

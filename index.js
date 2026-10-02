@@ -16,7 +16,7 @@ import { createUserCache } from './utils/user_cache.js';
 import { createAuthenticator } from './utils/authenticate.js';
 
 // Import route handlers
-import { getHasGroup, getUserPermissions } from './routes/user.js';
+import { getUserPermissions } from './routes/user.js';
 import { getSearch } from './routes/search.js';
 import { postQuery } from './routes/query.js';
 import { createDocument, retrieveDocument, updateDocument, deleteDocument, listDocumentRevisions, diffDocument } from './routes/docs.js';
@@ -87,10 +87,9 @@ const userCache = createUserCache();
 const membershipCache = createMembershipCache();
 
 /**
- * Resolve direct groups plus nested membership in every configured role
- * group. ALLOWED_GROUP_EMAILS is the deprecated alias for FULL.
- * The membership cache is per process and is not a substitute for the
- * token-keyed sign-in cache.
+ * Resolve direct or nested membership in every configured AUTHZ_ROLE_*_GROUPS
+ * email with members.hasMember. The membership cache is per process and is
+ * not a substitute for the token-keyed sign-in cache.
  */
 export function resolveRequestGroupMemberships(userData) {
     const entries = listConfiguredGroupEntries();
@@ -124,8 +123,7 @@ export async function getUserInfo(token) {
 // list. Local runs continue with no roles when Directory credentials fail.
 // Configured role groups are checked with members.hasMember so nested members
 // are resolved. Protected routes then require the permission in
-// ROUTE_PERMISSIONS. GET /user/hasgroup and GET /user/permissions stay
-// auth-only.
+// ROUTE_PERMISSIONS. GET /user/permissions stays auth-only.
 const authenticate = createAuthenticator({
     getTokenInfo: (token) => tokenInfoClient.getTokenInfo(token),
     getUserInfo,
@@ -142,7 +140,6 @@ function requireRoutePermission(method, path) {
 }
 
 // Route definitions
-app.get('/user/hasgroup', authenticate, getHasGroup);
 app.get('/user/permissions', authenticate, getUserPermissions);
 app.get("/search", authenticate, requireRoutePermission('GET', '/search'), dbSession, getSearch);
 app.use(express.json()); // for parsing application/json

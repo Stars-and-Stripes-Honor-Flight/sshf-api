@@ -11,7 +11,7 @@ describe('Auth authorize rethrow', () => {
     });
 
     it('rethrows non-GroupNotAllowedError errors', () => {
-        process.env.ALLOWED_GROUP_EMAILS = FULL_ACCESS_GROUP;
+        process.env.AUTHZ_ROLE_FULL_GROUPS = FULL_ACCESS_GROUP;
         // Create a req object where roles map will throw TypeError
         const req = { 
             user: { 
