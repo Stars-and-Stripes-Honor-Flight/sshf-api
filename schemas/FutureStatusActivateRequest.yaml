@@ -1,0 +1,7 @@
+type: object
+required: [status]
+properties:
+  status:
+    type: string
+    pattern: '^Future-.+'
+    description: Any flight status that begins with Future-

@@ -82,6 +82,8 @@ export const ROUTE_PERMISSIONS = Object.freeze({
     'PUT /flights/:id': Object.freeze(['flights:manage']),
     'GET /flights/:id/assignments': Object.freeze(['records:read']),
     'POST /flights/:id/assignments': Object.freeze(['flights:manage']),
+    'POST /flights/:id/complete': Object.freeze(['flights:manage']),
+    'POST /flights/future-status/activate': Object.freeze(['flights:manage']),
     'GET /flights/:id/detail': Object.freeze(['records:read']),
     'GET /waitlist': Object.freeze(['records:read']),
     'GET /waitlist/veteran-groups': Object.freeze(['records:read']),

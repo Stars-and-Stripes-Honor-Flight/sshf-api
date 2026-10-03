@@ -310,6 +310,15 @@ describe('Phase 3 route permissions', () => {
                 userFor(['WRITE'])
             );
             expect(deleteVeteran.res.body.requiredPermission).to.equal('records:delete');
+
+            for (const key of ['POST /flights/:id/complete', 'POST /flights/future-status/activate']) {
+                const route = protectedRoutes.find((item) => item.key === key);
+                expect(route, `${key} is mounted`).to.exist;
+                const result = invokeGate(route, userFor(['WRITE']));
+                expect(result.nextCalled, key).to.equal(false);
+                expect(result.res.statusCode, key).to.equal(403);
+                expect(result.res.body.requiredPermission, key).to.equal('flights:manage');
+            }
         });
 
         it('lets FULL do everything except review and medical', () => {

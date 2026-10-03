@@ -205,7 +205,7 @@ READ  ⊂  WRITE  ⊂  FULL          MEDICAL (separate)      REVIEW (separate)
 | `records:write` | WRITE, FULL | `POST /veterans`, `PUT /veterans/:id`, `POST /guardians`, `PUT /guardians/:id`, and every `PATCH /veterans/:id/*` and `PATCH /guardians/:id/*` field endpoint, **including `PATCH /veterans/:id/medical-form` and `PATCH /veterans/:id/medical-review`** |
 | `records:delete` | FULL | `DELETE /veterans/:id`, `DELETE /guardians/:id` |
 | `documents:admin` | FULL | `POST /docs`, `PUT /docs/:id`, `DELETE /docs/:id`. These are the generic document writes that bypass the type-specific routes |
-| `flights:manage` | FULL | `POST /flights`, `PUT /flights/:id`, `POST /flights/:id/assignments` (batch: adds up to 100 waitlist veterans and their guardians) |
+| `flights:manage` | FULL | `POST /flights`, `PUT /flights/:id`, `POST /flights/:id/assignments` (batch: adds up to 100 waitlist veterans and their guardians), `POST /flights/:id/complete`, `POST /flights/future-status/activate` |
 | `applications:review` | REVIEW | `GET /review/applications`, `GET /review/applications/:id`, `PUT /review/applications/:id`, `PATCH /review/applications/:id/status` |
 | `applications:accept` | REVIEW | `POST /review/applications/:id/accept`. This permission is enough on its own: the endpoint's write to the logistics database is limited to the accepted record |
 | `medical:read`, `medical:write` | MEDICAL | Reserved for future sensitive medical information. No endpoints yet |
