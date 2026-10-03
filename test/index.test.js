@@ -23,7 +23,8 @@ describe('Express application', () => {
         expect(routes.length).to.be.greaterThan(0);
         
         const paths = routes.map(r => r.path);
-        expect(paths).to.include('/user/hasgroup');
+        expect(paths).to.not.include('/user/hasgroup');
+        expect(paths).to.include('/user/permissions');
         expect(paths).to.include('/search');
         expect(paths).to.include('/query');
         expect(paths).to.include('/docs');
@@ -126,7 +127,7 @@ describe('Express application', () => {
 
         it('should not exit when group authorization is properly configured', async () => {
             process.env.K_SERVICE = 'test-service';
-            process.env.ALLOWED_GROUP_EMAILS = 'group@example.com';
+            process.env.AUTHZ_ROLE_FULL_GROUPS = 'group@example.com';
             const getGroup = sinon.stub().resolves({ email: 'group@example.com' });
 
             await validateGroupAuthorization({ getGroup, sleep: async () => {} });
@@ -134,12 +135,12 @@ describe('Express application', () => {
             expect(processExitStub.called).to.be.false;
             expect(consoleErrorStub.called).to.be.false;
             expect(getGroup.calledOnce).to.be.true;
-            expect(consoleWarnStub.called).to.be.true;
+            expect(consoleWarnStub.called).to.be.false;
         });
 
         it('should not exit for local development without K_SERVICE', async () => {
             delete process.env.K_SERVICE;
-            delete process.env.ALLOWED_GROUP_EMAILS;
+            delete process.env.AUTHZ_ROLE_FULL_GROUPS;
             const getGroup = sinon.stub().resolves({});
 
             await validateGroupAuthorization({ getGroup });
@@ -150,11 +151,14 @@ describe('Express application', () => {
 
         it('should exit when Cloud Run is detected but no groups are configured', async () => {
             process.env.K_SERVICE = 'test-service';
-            delete process.env.ALLOWED_GROUP_EMAILS;
+            delete process.env.AUTHZ_ROLE_FULL_GROUPS;
+            process.env.ALLOWED_GROUP_EMAILS = 'group@example.com';
 
             await validateGroupAuthorization();
 
             expect(consoleErrorStub.called).to.be.true;
+            expect(consoleErrorStub.firstCall.args.join(' ')).to.match(/AUTHZ_ROLE_FULL_GROUPS/);
+            expect(consoleErrorStub.firstCall.args.join(' ')).to.not.match(/ALLOWED_GROUP_EMAILS/);
             expect(processExitStub.calledOnceWith(1)).to.be.true;
         });
     });
@@ -167,47 +171,45 @@ describe('Express application', () => {
             process.env = { ...originalEnv };
         });
 
-        it('checks ALLOWED_GROUP_EMAILS with members.hasMember for nested membership', async () => {
-            process.env.ALLOWED_GROUP_EMAILS = 'sshf_app_dev_full_access@starsandstripeshonorflight.org';
+        it('checks AUTHZ_ROLE_FULL_GROUPS with members.hasMember and does not call groups.list', async () => {
+            process.env.AUTHZ_ROLE_FULL_GROUPS = 'sshf_app_dev_full_access@starsandstripeshonorflight.org';
+            delete process.env.ALLOWED_GROUP_EMAILS;
             delete process.env.K_SERVICE;
             delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
             delete process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
-            const list = sinon.stub().resolves({
-                data: { groups: [{ id: 'n1', name: 'Nested', email: 'nested@starsandstripeshonorflight.org' }] }
+            const list = sinon.stub().callsFake(() => {
+                throw new Error('groups.list should not be called');
             });
             const hasMember = sinon.stub().resolves({ data: { isMember: true } });
             sinon.stub(console, 'log');
             sinon.stub(console, 'error');
             sinon.stub(console, 'warn');
             sinon.stub(google, 'admin').returns({
-                groups: { list },
+                groups: { list, get: sinon.stub() },
                 members: { hasMember }
             });
             sinon.stub(google.auth, 'GoogleAuth').callsFake(function FakeGoogleAuth() {
-                return { scopes: [] };
+                return { scopes: ['https://www.googleapis.com/auth/admin.directory.group.readonly'] };
             });
 
             const result = await resolveRequestGroupMemberships({
                 email: 'index-nested@starsandstripeshonorflight.org'
             });
 
+            expect(list.called).to.be.false;
             expect(hasMember.calledOnce).to.be.true;
             expect(hasMember.firstCall.args[0]).to.deep.equal({
                 groupKey: 'sshf_app_dev_full_access@starsandstripeshonorflight.org',
                 memberKey: 'index-nested@starsandstripeshonorflight.org'
             });
             expect(result.groups).to.deep.equal([
-                { id: 'n1', name: 'Nested', email: 'nested@starsandstripeshonorflight.org' },
-                {
-                    email: 'sshf_app_dev_full_access@starsandstripeshonorflight.org',
-                    membership: 'nested'
-                }
+                { email: 'sshf_app_dev_full_access@starsandstripeshonorflight.org' }
             ]);
             expect(result.userCacheTtlMs).to.equal(15 * 60 * 1000);
         });
 
-        it('checks every configured role group, not only ALLOWED_GROUP_EMAILS', async () => {
+        it('checks every configured role group with members.hasMember', async () => {
             const domain = 'starsandstripeshonorflight.org';
             const groups = {
                 AUTHZ_ROLE_READ_GROUPS: `sshf_app_dev_read_access@${domain}`,
@@ -222,12 +224,15 @@ describe('Express application', () => {
             delete process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
             delete process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
+            const list = sinon.stub().callsFake(() => {
+                throw new Error('groups.list should not be called');
+            });
             const hasMember = sinon.stub().resolves({ data: { isMember: false } });
             sinon.stub(console, 'log');
             sinon.stub(console, 'error');
             sinon.stub(console, 'warn');
             sinon.stub(google, 'admin').returns({
-                groups: { list: sinon.stub().resolves({ data: { groups: [] } }) },
+                groups: { list },
                 members: { hasMember }
             });
             sinon.stub(google.auth, 'GoogleAuth').callsFake(function FakeGoogleAuth() {
@@ -238,6 +243,7 @@ describe('Express application', () => {
                 email: 'index-roles@starsandstripeshonorflight.org'
             });
 
+            expect(list.called).to.be.false;
             expect(hasMember.callCount).to.equal(5);
             const checked = hasMember.getCalls().map((call) => call.args[0].groupKey).sort();
             expect(checked).to.deep.equal(Object.values(groups).sort());

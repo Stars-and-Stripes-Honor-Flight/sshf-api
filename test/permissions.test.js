@@ -105,41 +105,28 @@ describe('Phase 2 role groups and permissions', () => {
             expect(described.groupsByRole.READ).to.deep.equal([READ, WRITE]);
         });
 
-        it('reads ALLOWED_GROUP_EMAILS as FULL when AUTHZ_ROLE_FULL_GROUPS is unset', () => {
+        it('ignores ALLOWED_GROUP_EMAILS and reads FULL only from AUTHZ_ROLE_FULL_GROUPS', () => {
             const env = roleEnv({ AUTHZ_ROLE_FULL_GROUPS: '  ,  ' });
             delete env.AUTHZ_ROLE_FULL_GROUPS;
             env.ALLOWED_GROUP_EMAILS = ` ${FULL.toUpperCase()} `;
             const described = describeRoleConfig(env);
-            expect(described.aliasUsed).to.equal(true);
-            expect(described.aliasDiffers).to.equal(false);
-            expect(described.groupsByRole.FULL).to.deep.equal([FULL]);
-            expect(getFullAccessGroupEmails(env)).to.deep.equal([FULL]);
-            expect(startupWarnings(env).join('\n')).to.match(/deprecated/i);
-            expect(startupWarnings(env).join('\n')).to.match(/ALLOWED_GROUP_EMAILS/);
+            expect(described).to.not.have.property('aliasUsed');
+            expect(described).to.not.have.property('aliasDiffers');
+            expect(described.groupsByRole.FULL).to.deep.equal([]);
+            expect(getFullAccessGroupEmails(env)).to.deep.equal([]);
+            expect(startupWarnings(env).join('\n')).to.not.match(/ALLOWED_GROUP_EMAILS/);
+            expect(listConfiguredGroupEntries(env).map((entry) => entry.email)).to.not.include(FULL);
         });
 
-        it('lets AUTHZ_ROLE_FULL_GROUPS win and warns when it differs from ALLOWED_GROUP_EMAILS', () => {
-            const env = roleEnv({
-                AUTHZ_ROLE_FULL_GROUPS: FULL,
-                ALLOWED_GROUP_EMAILS: OTHER
-            });
-            const described = describeRoleConfig(env);
-            expect(described.aliasUsed).to.equal(false);
-            expect(described.aliasDiffers).to.equal(true);
-            expect(getFullAccessGroupEmails(env)).to.deep.equal([FULL]);
-            expect(startupWarnings(env).join('\n')).to.match(/AUTHZ_ROLE_FULL_GROUPS/);
-            expect(startupWarnings(env).join('\n')).to.match(/differs/i);
-        });
-
-        it('does not warn when AUTHZ_ROLE_FULL_GROUPS matches ALLOWED_GROUP_EMAILS', () => {
+        it('does not warn when a leftover ALLOWED_GROUP_EMAILS matches AUTHZ_ROLE_FULL_GROUPS', () => {
             const env = roleEnv({
                 AUTHZ_ROLE_FULL_GROUPS: FULL.toUpperCase(),
                 ALLOWED_GROUP_EMAILS: FULL
             });
             const described = describeRoleConfig(env);
-            expect(described.aliasUsed).to.equal(false);
-            expect(described.aliasDiffers).to.equal(false);
+            expect(described.groupsByRole.FULL).to.deep.equal([FULL]);
             expect(startupWarnings(env)).to.deep.equal([]);
+            expect(getFullAccessGroupEmails(env)).to.deep.equal([FULL]);
         });
 
         it('treats an unknown AUTHZ_ROLE_*_GROUPS variable as a Cloud Run startup failure', () => {
@@ -163,13 +150,17 @@ describe('Phase 2 role groups and permissions', () => {
             expect(describeRoleConfig(env).groupsByRole.READ).to.deep.equal([READ]);
         });
 
-        it('requires FULL on Cloud Run after the alias is applied', () => {
+        it('requires AUTHZ_ROLE_FULL_GROUPS on Cloud Run and does not accept the removed alias', () => {
             const env = { K_SERVICE: 'sshf-api', AUTHZ_ROLE_READ_GROUPS: READ };
-            expect(cloudRunAuthorizationProblems(env).join('\n')).to.match(/AUTHZ_ROLE_FULL_GROUPS/);
-            expect(cloudRunAuthorizationProblems({
+            const problems = cloudRunAuthorizationProblems(env).join('\n');
+            expect(problems).to.match(/AUTHZ_ROLE_FULL_GROUPS/);
+            expect(problems).to.not.match(/ALLOWED_GROUP_EMAILS/);
+            const aliasOnly = cloudRunAuthorizationProblems({
                 K_SERVICE: 'sshf-api',
                 ALLOWED_GROUP_EMAILS: FULL
-            })).to.deep.equal([]);
+            }).join('\n');
+            expect(aliasOnly).to.match(/AUTHZ_ROLE_FULL_GROUPS/);
+            expect(aliasOnly).to.not.match(/deprecated alias/i);
         });
 
         it('warns locally for an unknown role or malformed email and does not require FULL', () => {
@@ -197,13 +188,10 @@ describe('Phase 2 role groups and permissions', () => {
             expect(entries.filter((entry) => entry.email === FULL)).to.have.lengthOf(1);
         });
 
-        it('labels aliased FULL groups with ALLOWED_GROUP_EMAILS', () => {
-            const entries = listConfiguredGroupEntries({
+        it('does not treat ALLOWED_GROUP_EMAILS as a configured role group', () => {
+            expect(listConfiguredGroupEntries({
                 ALLOWED_GROUP_EMAILS: FULL
-            });
-            expect(entries).to.deep.equal([
-                { email: FULL, envVar: 'ALLOWED_GROUP_EMAILS' }
-            ]);
+            })).to.deep.equal([]);
         });
     });
 
@@ -289,13 +277,14 @@ describe('Phase 2 role groups and permissions', () => {
             }
         });
 
-        it('keeps the deprecated alias as the FULL gate until the new variable is set', () => {
+        it('does not treat ALLOWED_GROUP_EMAILS as the FULL gate', () => {
             delete process.env.K_SERVICE;
-            delete process.env.AUTHZ_ROLE_FULL_GROUPS;
-            process.env.ALLOWED_GROUP_EMAILS = FULL;
-            process.env.AUTHZ_ROLE_READ_GROUPS = READ;
+            process.env.AUTHZ_ROLE_FULL_GROUPS = FULL;
+            process.env.ALLOWED_GROUP_EMAILS = OTHER;
             expect(runAuthorize([{ email: FULL }]).nextCalled).to.equal(true);
-            expect(runAuthorize([{ email: READ }]).nextCalled).to.equal(false);
+            const other = runAuthorize([{ email: OTHER }]);
+            expect(other.nextCalled).to.equal(false);
+            expect(other.res.statusCode).to.equal(403);
         });
     });
 
@@ -458,7 +447,7 @@ describe('Phase 2 role groups and permissions', () => {
 
         it('exits on Cloud Run after a Directory outage exhausts retries', async () => {
             process.env.K_SERVICE = 'sshf-api';
-            process.env.ALLOWED_GROUP_EMAILS = FULL;
+            process.env.AUTHZ_ROLE_FULL_GROUPS = FULL;
             const sleep = sinon.stub().resolves();
             const getGroup = sinon.stub().rejects(Object.assign(new Error('down'), { status: 503 }));
 
@@ -513,16 +502,18 @@ describe('Phase 2 role groups and permissions', () => {
             expect(getGroup.callCount).to.equal(5);
         });
 
-        it('warns on Cloud Run when the deprecated alias supplies FULL', async () => {
+        it('exits on Cloud Run when only ALLOWED_GROUP_EMAILS is set', async () => {
             process.env.K_SERVICE = 'sshf-api';
             process.env.ALLOWED_GROUP_EMAILS = FULL;
             const getGroup = sinon.stub().resolves({ ok: true });
 
             await validateGroupAuthorization({ getGroup, sleep: async () => {} });
 
-            expect(processExitStub.called).to.be.false;
-            expect(console.warn.called).to.be.true;
-            expect(console.warn.firstCall.args.join(' ')).to.match(/deprecated/i);
+            expect(getGroup.called).to.be.false;
+            expect(processExitStub.calledOnceWith(1)).to.be.true;
+            const logged = console.error.firstCall.args.join(' ');
+            expect(logged).to.match(/AUTHZ_ROLE_FULL_GROUPS/);
+            expect(logged).to.not.match(/ALLOWED_GROUP_EMAILS/);
         });
     });
 });

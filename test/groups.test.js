@@ -1,19 +1,24 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import {
-    GROUP_LIST_PAGE_SIZE,
-    MAX_GROUP_LIST_PAGES,
     hasServiceAccountJwtConfig,
     shouldPreferServiceAccountJwt,
     shouldFallbackToServiceAccountJwt,
-    listGroupsForUser,
-    getGroupMemberships,
+    resolveAuthorizationGroups,
     DirectoryGroupsUnavailableError,
     createDirectoryJwtAuth,
     createDirectoryAdcAuth
 } from '../utils/groups.js';
 import { assertUserInAllowedGroups, GroupNotAllowedError } from '../utils/auth.js';
 import { createAuthenticator } from '../utils/authenticate.js';
+import { createMembershipCache } from '../utils/membership_cache.js';
+
+function resolveFresh(userData, groupEmails, options) {
+    return resolveAuthorizationGroups(userData, groupEmails, {
+        membershipCache: createMembershipCache(),
+        ...options
+    });
+}
 
 describe('Directory group auth strategy', () => {
     const saEnv = {
@@ -71,64 +76,38 @@ describe('Directory group auth strategy', () => {
 const FULL_ACCESS_GROUP = 'sshf_app_dev_full_access@starsandstripeshonorflight.org';
 const OUR_CLIENT_ID = '111111111111-ourapp.apps.googleusercontent.com';
 
-describe('Directory group paging', () => {
+describe('Directory group lookup does not list every group', () => {
     const userData = { email: 'member@starsandstripeshonorflight.org' };
 
-    it('documents a high page cap above a single groups.list page', () => {
-        expect(GROUP_LIST_PAGE_SIZE).to.equal(100);
-        expect(MAX_GROUP_LIST_PAGES).to.be.greaterThan(1);
-        expect(MAX_GROUP_LIST_PAGES * GROUP_LIST_PAGE_SIZE).to.be.at.least(1000);
-    });
-
-    it('honors an allowed group that appears on the second page', async () => {
-        const list = sinon.stub();
-        list.onCall(0).resolves({
-            data: {
-                groups: [{ id: '1', name: 'Other', email: 'other@example.com' }],
-                nextPageToken: 'page-2'
-            }
+    it('checks only the configured role group with members.hasMember', async () => {
+        const list = sinon.stub().callsFake(() => {
+            throw new Error('groups.list should not be called');
         });
-        list.onCall(1).resolves({
-            data: {
-                groups: [{ id: '2', name: 'Full Access', email: FULL_ACCESS_GROUP }]
-            }
+        const hasMember = sinon.stub().resolves({ data: { isMember: true } });
+        sinon.stub(console, 'log');
+        sinon.stub(console, 'error');
+        sinon.stub(console, 'warn');
+
+        const result = await resolveFresh(userData, [FULL_ACCESS_GROUP], {
+            env: {},
+            createAdcAuth: () => ({}),
+            createAdmin: () => ({
+                groups: { list },
+                members: { hasMember }
+            })
         });
 
-        const groups = await listGroupsForUser(userData, {}, {
-            createAdmin: () => ({ groups: { list } })
+        expect(list.called).to.be.false;
+        expect(hasMember.calledOnce).to.be.true;
+        expect(hasMember.firstCall.args[0]).to.deep.equal({
+            groupKey: FULL_ACCESS_GROUP,
+            memberKey: userData.email
         });
-
-        expect(list.callCount).to.equal(2);
-        expect(list.firstCall.args[0]).to.include({
-            userKey: userData.email,
-            domain: 'starsandstripeshonorflight.org',
-            maxResults: GROUP_LIST_PAGE_SIZE
-        });
-        expect(list.firstCall.args[0]).to.not.have.property('pageToken');
-        expect(list.secondCall.args[0].pageToken).to.equal('page-2');
-
-        const roles = groups.map((group) => ({ email: group.email, id: group.id, name: group.name }));
-        expect(roles.map((role) => role.email)).to.include(FULL_ACCESS_GROUP);
-        expect(() => assertUserInAllowedGroups(roles, {
+        expect(result.groups).to.deep.equal([{ email: FULL_ACCESS_GROUP }]);
+        expect(() => assertUserInAllowedGroups(result.groups, {
             allowedGroupEmails: [FULL_ACCESS_GROUP]
         })).to.not.throw();
-    });
-
-    it('stops at the documented page cap when nextPageToken never ends', async () => {
-        const list = sinon.stub().resolves({
-            data: {
-                groups: [{ id: '1', name: 'Other', email: 'other@example.com' }],
-                nextPageToken: 'again'
-            }
-        });
-
-        const groups = await listGroupsForUser(userData, {}, {
-            createAdmin: () => ({ groups: { list } }),
-            maxPages: 2
-        });
-
-        expect(list.callCount).to.equal(2);
-        expect(groups).to.have.length(2);
+        sinon.restore();
     });
 });
 
@@ -189,9 +168,9 @@ describe('Directory group lookup failures', () => {
                 given_name: 'Mem',
                 family_name: 'Ber'
             }),
-            getGroupMemberships: (data) => getGroupMemberships(data, {
+            getGroupMemberships: (data) => resolveFresh(data, [FULL_ACCESS_GROUP], {
                 env,
-                listGroups: async () => {
+                checkMembership: async () => {
                     throw directoryError;
                 },
                 createAdcAuth: () => ({}),
@@ -244,9 +223,9 @@ describe('Directory group lookup failures', () => {
         silenceLogs();
 
         try {
-            await getGroupMemberships(userData, {
+            await resolveFresh(userData, [FULL_ACCESS_GROUP], {
                 env: { K_SERVICE: 'sshf-api' },
-                listGroups: async () => {
+                checkMembership: async () => {
                     throw directoryOutage();
                 },
                 createAdcAuth: () => ({})
@@ -260,12 +239,12 @@ describe('Directory group lookup failures', () => {
 
     it('throws on Cloud Run when ADC and the service-account JWT both fail', async () => {
         silenceLogs();
-        const listGroups = sinon.stub().rejects(directoryOutage());
+        const checkMembership = sinon.stub().rejects(directoryOutage());
 
         try {
-            await getGroupMemberships(userData, {
+            await resolveFresh(userData, [FULL_ACCESS_GROUP], {
                 env: { ...saEnv, K_SERVICE: 'sshf-api' },
-                listGroups,
+                checkMembership,
                 createAdcAuth: () => ({}),
                 createJwtAuth: () => ({})
             });
@@ -274,36 +253,36 @@ describe('Directory group lookup failures', () => {
             expect(error).to.be.instanceOf(DirectoryGroupsUnavailableError);
         }
 
-        expect(listGroups.callCount).to.equal(2);
+        expect(checkMembership.callCount).to.equal(2);
     });
 
     it('returns no roles locally when ADC is unusable and no service-account JWT is configured', async () => {
         silenceLogs();
 
-        const groups = await getGroupMemberships(userData, {
+        const result = await resolveFresh(userData, [FULL_ACCESS_GROUP], {
             env: {},
-            listGroups: async () => {
+            checkMembership: async () => {
                 throw unusableAdcError();
             },
             createAdcAuth: () => ({})
         });
 
-        expect(groups).to.deep.equal([]);
+        expect(result.groups).to.deep.equal([]);
     });
 
     it('returns no roles locally when the JWT and ADC attempts both fail', async () => {
         silenceLogs();
-        const listGroups = sinon.stub().rejects(new Error('Could not load the default credentials'));
+        const checkMembership = sinon.stub().rejects(new Error('Could not load the default credentials'));
 
-        const groups = await getGroupMemberships(userData, {
+        const result = await resolveFresh(userData, [FULL_ACCESS_GROUP], {
             env: saEnv,
-            listGroups,
+            checkMembership,
             createAdcAuth: () => ({}),
             createJwtAuth: () => ({})
         });
 
-        expect(listGroups.callCount).to.equal(2);
-        expect(groups).to.deep.equal([]);
+        expect(checkMembership.callCount).to.equal(2);
+        expect(result.groups).to.deep.equal([]);
     });
 
     it('continues authentication locally so a tunneled CouchDB request is not blocked', async () => {
@@ -330,20 +309,20 @@ describe('Directory group lookup failures', () => {
         expect(() => assertUserInAllowedGroups(req.user.roles, { env: {} })).to.not.throw();
     });
 
-    it('still rejects local data routes when ALLOWED_GROUP_EMAILS is set and Directory is unusable', async () => {
+    it('still rejects local data routes when AUTHZ_ROLE_FULL_GROUPS is set and Directory is unusable', async () => {
         silenceLogs();
 
-        const groups = await getGroupMemberships(userData, {
-            env: { ALLOWED_GROUP_EMAILS: FULL_ACCESS_GROUP },
-            listGroups: async () => {
+        const result = await resolveFresh(userData, [FULL_ACCESS_GROUP], {
+            env: { AUTHZ_ROLE_FULL_GROUPS: FULL_ACCESS_GROUP },
+            checkMembership: async () => {
                 throw unusableAdcError();
             },
             createAdcAuth: () => ({})
         });
 
-        expect(groups).to.deep.equal([]);
-        expect(() => assertUserInAllowedGroups(groups.map((group) => ({ email: group.email })), {
-            env: { ALLOWED_GROUP_EMAILS: FULL_ACCESS_GROUP }
+        expect(result.groups).to.deep.equal([]);
+        expect(() => assertUserInAllowedGroups(result.groups.map((group) => ({ email: group.email })), {
+            env: { AUTHZ_ROLE_FULL_GROUPS: FULL_ACCESS_GROUP }
         })).to.throw(GroupNotAllowedError);
     });
 });
@@ -379,17 +358,22 @@ describe('Directory auth creation functions', () => {
         };
         
         const createJwtAuth = sinon.stub().returns(mockAuth);
-        const listGroups = sinon.stub().resolves([]);
+        const checkMembership = sinon.stub().resolves({ isMember: false });
 
-        await getGroupMemberships(userData, {
+        sinon.stub(console, 'log');
+        sinon.stub(console, 'error');
+        sinon.stub(console, 'warn');
+
+        await resolveFresh(userData, [FULL_ACCESS_GROUP], {
             env: saEnv,
-            listGroups,
+            checkMembership,
             createJwtAuth
         });
 
         expect(createJwtAuth.calledOnce).to.be.true;
-        expect(listGroups.calledOnce).to.be.true;
-        expect(listGroups.firstCall.args[1]).to.equal(mockAuth);
+        expect(checkMembership.calledOnce).to.be.true;
+        expect(checkMembership.firstCall.args[2]).to.equal(mockAuth);
+        sinon.restore();
     });
 
     it('should create ADC auth when JWT is not preferred', async () => {
@@ -401,22 +385,22 @@ describe('Directory auth creation functions', () => {
         };
         
         const createAdcAuth = sinon.stub().returns(mockAuth);
-        const listGroups = sinon.stub().resolves([]);
+        const checkMembership = sinon.stub().resolves({ isMember: false });
 
         sinon.stub(console, 'log');
         sinon.stub(console, 'error');
         sinon.stub(console, 'warn');
 
-        await getGroupMemberships(userData, {
+        await resolveFresh(userData, [FULL_ACCESS_GROUP], {
             env: emptyEnv,
-            listGroups,
+            checkMembership,
             createAdcAuth
         });
 
         expect(createAdcAuth.calledOnce).to.be.true;
-        expect(listGroups.calledOnce).to.be.true;
-        expect(listGroups.firstCall.args[1]).to.equal(mockAuth);
-        
+        expect(checkMembership.calledOnce).to.be.true;
+        expect(checkMembership.firstCall.args[2]).to.equal(mockAuth);
+
         sinon.restore();
     });
 });

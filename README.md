@@ -56,7 +56,6 @@ Required environment variables:
 | `AUTHZ_ROLE_FULL_GROUPS` | Groups for FULL (includes WRITE, not MEDICAL or REVIEW). Required on Cloud Run. Dev: `sshf_app_dev_full_access@…`. Prod: `sshf_app_prd_full_access@…` |
 | `AUTHZ_ROLE_MEDICAL_GROUPS` | Groups for MEDICAL (no logistics permissions). Optional. Dev: `sshf_app_dev_medical_access@…`. Prod: `sshf_app_prd_medical_access@…` |
 | `AUTHZ_ROLE_REVIEW_GROUPS` | Groups for REVIEW (no logistics permissions). Optional. Dev: `sshf_app_dev_review_access@…`. Prod: `sshf_app_prd_review_access@…` |
-| `ALLOWED_GROUP_EMAILS` | Deprecated alias for `AUTHZ_ROLE_FULL_GROUPS`. Used only when that variable is unset. If both are set, `AUTHZ_ROLE_FULL_GROUPS` wins |
 | `REVIEW_DB_NAME` | CouchDB database name for online applications (VeteranApp/GuardianApp); required for `/review/applications` routes |
 | `REVIEW_DB_URL` | Optional. CouchDB URL for the review database; defaults to `DB_URL` |
 | `REVIEW_DB_USER` | Optional. CouchDB username for the review database; defaults to `DB_USER` |
@@ -66,7 +65,7 @@ Required environment variables:
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
 
-> **Note**: In Cloud Run, Application Default Credentials are used automatically. A Directory failure there is `503`. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership. If local Directory credentials are missing or unusable, authentication continues with no roles. Leave `AUTHZ_ROLE_FULL_GROUPS` and `ALLOWED_GROUP_EMAILS` unset for that local path; data routes then proceed to CouchDB.
+> **Note**: In Cloud Run, Application Default Credentials are used automatically. A Directory failure there is `503`. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership. If local Directory credentials are missing or unusable, authentication continues with no roles. Leave `AUTHZ_ROLE_FULL_GROUPS` unset for that local path; data routes then proceed to CouchDB.
 
 ### Installation
 
@@ -168,9 +167,8 @@ The API enforces these checks before a request proceeds:
    set. Production does not require this variable.
 3. **Workspace group membership** — roles are `READ`, `WRITE`, `FULL`,
    `MEDICAL`, and `REVIEW`, mapped from `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS`.
-   On Cloud Run (`K_SERVICE` set), `AUTHZ_ROLE_FULL_GROUPS` is required
-   (`ALLOWED_GROUP_EMAILS` is a deprecated alias when the new variable is
-   unset). An empty FULL list, an unknown `AUTHZ_ROLE_*_GROUPS` name, a
+   On Cloud Run (`K_SERVICE` set), `AUTHZ_ROLE_FULL_GROUPS` is required.
+   An empty FULL list, an unknown `AUTHZ_ROLE_*_GROUPS` name, a
    malformed group email, or a configured group that Directory cannot find
    fails process startup. Each protected route requires one permission from
    `ROUTE_PERMISSIONS` (`records:read`, `exports:read`, `records:write`,
@@ -186,8 +184,8 @@ The API enforces these checks before a request proceeds:
    permission check is skipped so requests still reach CouchDB. Set
    `AUTHZ_DEV_OVERRIDE_ROLES` (for example `FULL,REVIEW`) only on a machine
    without `K_SERVICE` to project those roles without Directory credentials.
-   Cloud Run refuses to start if that variable is set. `GET /user/hasgroup` and `GET /user/permissions` stay
-   auth-only. `/user/permissions` returns the caller's roles and effective
+   Cloud Run refuses to start if that variable is set. `GET /user/permissions` stays
+   auth-only and returns the caller's roles and effective
    permissions with `Cache-Control: no-store`. Local Directory lookup prefers
    `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
    When those are missing or gcloud user ADC cannot call Directory
@@ -207,26 +205,19 @@ not treated as an empty role list, which would otherwise become `403` when
 the group allow-list is set. Off Cloud Run that lookup failure continues
 with no roles.
 
-Direct memberships are listed with `groups.list`, following `nextPageToken`
-up to a documented page cap (2,000 memberships). Each configured role group
-is also checked with Admin SDK `members.hasMember`, which is true for a
-direct member and for a member of a nested group. A configured group already
-present in the direct list is not checked again. A group that is not in the
-role configuration is never added from nested membership. No additional
-OAuth scope or Workspace role is required.
+Each configured role group is checked with Admin SDK `members.hasMember`,
+which is true for a direct member and for a member of a nested group. Groups
+outside `AUTHZ_ROLE_*_GROUPS` are not looked up. The service account keeps
+`admin.directory.group.readonly` because startup still calls `groups.get`.
+No additional OAuth scope or Workspace role is required.
 
 Positive membership is cached for up to 15 minutes. A negative result ("not
 a member") is cached for about 2 minutes. Directory errors are not cached.
 The sign-in cache expires with the earliest of those membership results, so
 a newly granted membership is seen within about 2 minutes. Google can also
 take a few minutes to propagate a group change; sign in again after that.
-`GET /user/hasgroup` is true for nested membership in any configured role
-group (`AUTHZ_ROLE_*_GROUPS`, or `ALLOWED_GROUP_EMAILS` while it still
-aliases FULL) and remains direct-only for any other group. `groupEmail` is
-compared case-insensitively. `GET /user/permissions` is the summary the UI
-will use later. It lists direct role ids (a FULL user is `["FULL"]`) and the
-effective permission union. The deployed UI still probes `hasgroup` for the
-full-access group until sshf-ui #234.
+`GET /user/permissions` is the summary the UI uses. It lists direct role ids
+(a FULL user is `["FULL"]`) and the effective permission union.
 
 ## API Documentation
 

@@ -10,7 +10,6 @@ import { ROUTE_PERMISSIONS, permissionsForRoles } from '../utils/permissions.js'
 const PUBLIC_ROUTES = new Set([
     'GET /openapi.json',
     'POST /review/applications',
-    'GET /user/hasgroup',
     'GET /user/permissions'
 ]);
 
@@ -160,7 +159,7 @@ describe('Phase 3 route permissions', () => {
         });
 
         it('keeps public auth routes on authenticate only', () => {
-            for (const key of ['GET /user/hasgroup', 'GET /user/permissions']) {
+            for (const key of ['GET /user/permissions']) {
                 const route = routes.find((item) => item.key === key);
                 expect(route, key).to.exist;
                 expect(route.stack[0].handle.name).to.equal('authenticate');
@@ -221,7 +220,7 @@ describe('Phase 3 route permissions', () => {
 
         it('fails closed on Cloud Run even when no groups are configured', () => {
             for (const key of Object.keys(process.env)) {
-                if (key.startsWith('AUTHZ_ROLE_') || key === 'ALLOWED_GROUP_EMAILS') {
+                if (key.startsWith('AUTHZ_ROLE_')) {
                     delete process.env[key];
                 }
             }
@@ -241,7 +240,7 @@ describe('Phase 3 route permissions', () => {
         it('leaves the gate open off Cloud Run when no role groups are configured', () => {
             delete process.env.K_SERVICE;
             for (const key of Object.keys(process.env)) {
-                if (key.startsWith('AUTHZ_ROLE_') || key === 'ALLOWED_GROUP_EMAILS') {
+                if (key.startsWith('AUTHZ_ROLE_')) {
                     delete process.env[key];
                 }
             }

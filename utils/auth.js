@@ -3,8 +3,7 @@
  *
  * Phase 3 enforces per-route permissions with requirePermission.
  * authorize remains the FULL-only helper and is no longer the data-route
- * gate. ALLOWED_GROUP_EMAILS is a deprecated alias for
- * AUTHZ_ROLE_FULL_GROUPS when that variable is unset.
+ * gate. AUTHZ_ROLE_FULL_GROUPS is the only FULL source.
  *
  * The API receives an opaque Google OAuth2 access token as a Bearer token.
  * A valid Google token is not sufficient: it must have been issued for THIS
@@ -74,14 +73,6 @@ export function getAllowedEmailDomains(env = process.env) {
 }
 
 /**
- * Raw ALLOWED_GROUP_EMAILS list. Phase 2 reads this only as the deprecated
- * alias for AUTHZ_ROLE_FULL_GROUPS (see getFullAccessGroupEmails).
- */
-export function getAllowedGroupEmails(env = process.env) {
-    return parseList(env.ALLOWED_GROUP_EMAILS).map((email) => email.toLowerCase());
-}
-
-/**
  * Cloud Run sets K_SERVICE to the service name. Local development does not.
  */
 export function isRunningOnCloudRun(env = process.env) {
@@ -89,8 +80,8 @@ export function isRunningOnCloudRun(env = process.env) {
 }
 
 /**
- * Deployed Cloud Run revisions must configure AUTHZ_ROLE_FULL_GROUPS, or
- * the deprecated ALLOWED_GROUP_EMAILS alias. An empty FULL list would
+ * Deployed Cloud Run revisions must configure AUTHZ_ROLE_FULL_GROUPS.
+ * An empty FULL list would
  * otherwise accept any access token minted for the public OAuth client.
  * Unknown role variables and malformed group emails also fail startup.
  * Local development without K_SERVICE may omit the list.

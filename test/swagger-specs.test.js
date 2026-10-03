@@ -70,12 +70,18 @@ describe('OpenAPI spec generation', () => {
         expect(accept.responses).to.include.all.keys('200', '400', '404', '409', '503');
     });
 
-    it('documents nested membership for configured groups on /user/hasgroup', () => {
-        const hasGroup = specs.paths['/user/hasgroup'].get;
-        expect(hasGroup.description).to.match(/nested/i);
-        expect(hasGroup.description).to.match(/ALLOWED_GROUP_EMAILS/);
-        expect(hasGroup.description).to.match(/direct/i);
-        expect(specs.components.securitySchemes.GoogleAuth.description).to.match(/nested/i);
+    it('does not document the removed /user/hasgroup probe', () => {
+        expect(specs.paths['/user/hasgroup']).to.equal(undefined);
+        const description = specs.components.securitySchemes.GoogleAuth.description;
+        expect(description).to.match(/nested/i);
+        expect(description).to.match(/AUTHZ_ROLE_FULL_GROUPS/);
+        expect(description).to.not.match(/hasgroup/i);
+        expect(description).to.not.match(/ALLOWED_GROUP_EMAILS/);
+        const scopes = specs.components.securitySchemes.GoogleAuth.flows.implicit.scopes;
+        expect(Object.keys(scopes)).to.deep.equal(['openid', 'email', 'profile']);
+        expect(scopes).to.not.have.property(
+            'https://www.googleapis.com/auth/admin.directory.group.readonly'
+        );
     });
 
     it('parses @swagger JSDoc YAML into real path items', () => {
@@ -279,7 +285,6 @@ describe('OpenAPI spec generation', () => {
 
         const publicOperations = new Set([
             'POST /review/applications',
-            'GET /user/hasgroup',
             'GET /user/permissions'
         ]);
         for (const [path, methods] of Object.entries(specs.paths)) {

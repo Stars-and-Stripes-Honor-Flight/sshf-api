@@ -9,14 +9,14 @@ const swaggerUiOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID,
       appName: "SSHF API",
       scopeSeparator: " ",
-      scopes: "openid email profile https://www.googleapis.com/auth/admin.directory.group.readonly",
+      scopes: "openid email profile",
       usePkceWithAuthorizationCodeGrant: true
     },
     initOAuth: {
       clientId: process.env.GOOGLE_CLIENT_ID,
       appName: "SSHF API",
       scopeSeparator: " ",
-      scopes: "openid email profile https://www.googleapis.com/auth/admin.directory.group.readonly"
+      scopes: "openid email profile"
     }
   },
   customSiteTitle: "SSHF API Documentation"

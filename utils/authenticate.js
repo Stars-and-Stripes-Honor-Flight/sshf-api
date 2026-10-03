@@ -6,9 +6,9 @@
  * 503 so a transient Admin SDK outage is not cached or turned into an empty
  * role list. Off Cloud Run, getGroupMemberships returns no roles instead.
  *
- * Group lookup may return { groups, userCacheTtlMs } so a negative membership
- * expires the sign-in cache in about 2 minutes. An array is the direct list
- * only and keeps the default cache lifetime.
+ * Group lookup returns the configured role groups the user belongs to
+ * ({ groups, userCacheTtlMs }). A negative membership expires the sign-in
+ * cache in about 2 minutes. An array keeps the default cache lifetime.
  */
 import { assertValidTokenClaims, TokenAudienceError } from './auth.js';
 import { DirectoryGroupsUnavailableError } from './groups.js';

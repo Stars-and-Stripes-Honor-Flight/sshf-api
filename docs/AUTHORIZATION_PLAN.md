@@ -1,9 +1,18 @@
 # Authorization by Group Membership: Design and Phased Plan
 
-Status: **Phases 1–3 implemented** (2026-10-02). Phase 4 (UI migration and
-API cleanup, including removal of `/user/hasgroup`, `groups.list`, and the
-`ALLOWED_GROUP_EMAILS` alias) is not done. Product-owner decisions are
-recorded in Section 9. Section 2 is the pre-change baseline.
+Status: **Phases 1–4 implemented** (2026-10-02). The UI migration (sshf-ui
+#234, PR #235) is in production. This API no longer exposes
+`GET /user/hasgroup`, no longer calls Admin SDK `groups.list`, and no longer
+reads `ALLOWED_GROUP_EMAILS`. `AUTHZ_ROLE_FULL_GROUPS` is the only FULL
+source. A leftover `ALLOWED_GROUP_EMAILS` value is ignored: it does not grant
+FULL, and it is not an unknown `AUTHZ_ROLE_*_GROUPS` name, so Cloud Run still
+starts when `AUTHZ_ROLE_FULL_GROUPS` is set. Remove the old variable from
+Cloud Run after deploy. Startup still confirms configured groups with
+`groups.get`, so `admin.directory.group.readonly` stays. Narrowing that scope
+to `admin.directory.group.member.readonly` is a follow-up (Section 4.2) and
+was not done in Phase 4. Product-owner decisions are recorded in Section 9.
+Section 2 is the pre-change baseline. Phase writeups below record what each
+phase shipped; they are not a second copy of the current contract.
 Tracking issue: [#130 Authorization by Group Membership](https://github.com/Stars-and-Stripes-Honor-Flight/sshf-api/issues/130)
 
 This document is planning only. It does not change runtime behavior. Each
@@ -306,16 +315,19 @@ uses `/user/hasgroup`.
 
 - **No change in Phase 1.** Reuse the runtime service account, its Groups
   Reader admin role, and the existing `admin.directory.group.readonly` scope.
-- **Phase 4 narrowing (evaluate).** After `groups.list` is removed,
-  `hasMember` alone works with `admin.directory.group.member.readonly`. The
-  startup existence check (Section 4.5) also works under that scope if it uses
-  `members.list` with `maxResults: 1`, discarding the result, instead of
-  `groups.get`. Consider replacing Groups Reader with a custom Workspace admin
-  role limited to reading group membership, if the Admin console allows that
-  split.
-- **Remove the end-user Directory scope** from the Swagger implicit flow
-  (`swagger/swagger.js`) and the UI sign-in (sshf-ui `client.js`). End users
-  then stop consenting to read directory groups they do not need.
+- **Phase 4 narrowing (evaluated, not changed).** `groups.list` is gone.
+  `members.hasMember` alone accepts `admin.directory.group.member.readonly`.
+  Startup still calls `groups.get`, which needs
+  `admin.directory.group.readonly` (or `admin.directory.group`). This phase
+  keeps the current scope and the Groups Reader admin role. A follow-up can
+  switch the existence check to `members.list` with `maxResults: 1` and then
+  evaluate the narrower member scope and a custom Workspace admin role.
+  Do not change IAM until that check is rewritten and verified.
+- **End-user Directory scope removed from Swagger.** The implicit flow in
+  `swagger/swagger.js` and Swagger UI init no longer request
+  `admin.directory.group.readonly`. The service account still requests that
+  scope for `members.hasMember` and `groups.get`. The UI sign-in change
+  shipped with sshf-ui #234.
 - Keep using the service account's own admin role rather than domain-wide
   delegation.
 - Never log tokens, private keys, or full Directory error bodies that could
@@ -369,8 +381,8 @@ On Cloud Run (`K_SERVICE` set), the process validates authorization config
 **before** `app.listen`, extending today's `validateGroupAuthorization`:
 
 1. Parse the `AUTHZ_ROLE_*_GROUPS` variables (Section 5). An unknown role
-   name, a malformed email, or an empty `AUTHZ_ROLE_FULL_GROUPS` (after the
-   `ALLOWED_GROUP_EMAILS` alias is applied) exits with code 1.
+   name, a malformed email, or an empty `AUTHZ_ROLE_FULL_GROUPS` exits with
+   code 1. `ALLOWED_GROUP_EMAILS` is not read.
 2. Confirm every configured group exists with `admin.groups.get({ groupKey })`.
    This returns group metadata only, no member list, and works under the
    current scope and Groups Reader role. Run the checks in parallel with a
@@ -418,9 +430,9 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-dev 
   --update-env-vars "^;^AUTHZ_ROLE_READ_GROUPS=sshf_app_dev_read_access@starsandstripeshonorflight.org;AUTHZ_ROLE_WRITE_GROUPS=sshf_app_dev_write_access@starsandstripeshonorflight.org;AUTHZ_ROLE_FULL_GROUPS=sshf_app_dev_full_access@starsandstripeshonorflight.org;AUTHZ_ROLE_MEDICAL_GROUPS=sshf_app_dev_medical_access@starsandstripeshonorflight.org;AUTHZ_ROLE_REVIEW_GROUPS=sshf_app_dev_review_access@starsandstripeshonorflight.org"
 ```
 
-`env.example` (Phase 2) gets the same five variables, commented out with
-the dev values, next to the existing `ALLOWED_GROUP_EMAILS` entry. That entry
-is marked deprecated, as an alias for `AUTHZ_ROLE_FULL_GROUPS`.
+`env.example` lists the same five variables, commented out with the dev
+values. Phase 4 removed the `ALLOWED_GROUP_EMAILS` entry. That name is not a
+supported fallback.
 
 Rules:
 
@@ -430,22 +442,20 @@ Rules:
   it logs a warning.
 - Values are trimmed and lowercased, and each must look like an email.
 - A group may map to more than one role. A role may list more than one group.
-- On Cloud Run, `AUTHZ_ROLE_FULL_GROUPS` must be non-empty (after the alias
-  below is applied), otherwise startup fails. This replaces today's
-  `ALLOWED_GROUP_EMAILS` check. READ, WRITE, MEDICAL, and REVIEW may be
-  unset, but every group that is set must exist (Section 4.5).
-- **Migration from `ALLOWED_GROUP_EMAILS` to FULL.** Today
-  `ALLOWED_GROUP_EMAILS` holds `sshf_app_{dev,prd}_full_access@`, which is
-  exactly the FULL group. The plan migrates it in three steps:
-  1. Phase 2: if `AUTHZ_ROLE_FULL_GROUPS` is unset, `ALLOWED_GROUP_EMAILS`
-     is read as `AUTHZ_ROLE_FULL_GROUPS`. Existing dev and prod services keep
-     working without an env change, and a deprecation warning is logged at
-     startup.
-  2. Admin sets all five `AUTHZ_ROLE_*_GROUPS` on dev, then prod. If both
-     `AUTHZ_ROLE_FULL_GROUPS` and `ALLOWED_GROUP_EMAILS` are set, the new
-     variable wins and a warning is logged when they differ.
-  3. Phase 4: remove the alias, and remove `ALLOWED_GROUP_EMAILS` from both
-     services, README, `env.example`, and `docs/DEPLOYMENT.md`.
+- On Cloud Run, `AUTHZ_ROLE_FULL_GROUPS` must be non-empty, otherwise startup
+  fails. READ, WRITE, MEDICAL, and REVIEW may be unset, but every group that
+  is set must exist (Section 4.5).
+- **Migration from `ALLOWED_GROUP_EMAILS` to FULL.** The old variable held
+  `sshf_app_{dev,prd}_full_access@`, which is the FULL group. The migration:
+  1. Phase 2: if `AUTHZ_ROLE_FULL_GROUPS` was unset, `ALLOWED_GROUP_EMAILS`
+     was read as FULL, with a deprecation warning.
+  2. Admins set all five `AUTHZ_ROLE_*_GROUPS` on dev, then prod. When both
+     were set, `AUTHZ_ROLE_FULL_GROUPS` won.
+  3. Phase 4 (done): the alias is removed from code, README, `env.example`,
+     and `docs/DEPLOYMENT.md`. `ALLOWED_GROUP_EMAILS` is ignored. It does not
+     supply FULL and it does not fail startup by itself. Delete it from both
+     Cloud Run services after `AUTHZ_ROLE_FULL_GROUPS` is on the serving
+     revision (`gcloud run services update --remove-env-vars ALLOWED_GROUP_EMAILS`).
 - Group emails are not secrets, but they are also not sent to the client
   (Section 6).
 - `docs/DEPLOYMENT.md` gets a table of role variables and the `gcloud`
@@ -689,13 +699,17 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 
 ### Phase 4: UI migration and cleanup
 
-- sshf-ui switches to `GET /user/permissions` (Section 6.4). It hides
-  unauthorized actions and maps `403` to friendlier copy.
-- sshf-api then deprecates `/user/hasgroup` (marked deprecated in OpenAPI
-  for one release, then removed), removes `groups.list` and its paging code,
-  evaluates narrowing the Directory scope (Section 4.2), removes the
-  Directory scope from Swagger's implicit flow, and removes the
-  `ALLOWED_GROUP_EMAILS` alias.
+Done. sshf-ui #234 (PR #235) uses `GET /user/permissions`. This API cleanup:
+
+- Removed `GET /user/hasgroup` (route, handler, OpenAPI, tests).
+- Removed `groups.list` and its paging. Membership for the five
+  `AUTHZ_ROLE_*_GROUPS` lists is `members.hasMember` only. Startup still
+  uses `groups.get`.
+- Removed the `ALLOWED_GROUP_EMAILS` alias. `AUTHZ_ROLE_FULL_GROUPS` is the
+  only FULL source. A leftover value is ignored.
+- Removed the end-user Directory scope from Swagger's implicit flow.
+- Left `admin.directory.group.readonly` and the Groups Reader role in place.
+  Scope narrowing is the follow-up in Section 4.2.
 
 ### Later (not scheduled)
 
@@ -733,7 +747,7 @@ access at deploy time, because FULL does not include REVIEW. Adding them to
 | 2d | Nested membership mechanism | Option B: Admin SDK `members.hasMember` for each configured group, with the caching, failure handling, and startup validation in Section 4. No other mechanism is planned |
 | 3 | Negative-cache TTL | About 2 minutes is acceptable |
 | 4 | Error semantics | Standard HTTP: `401` for authentication and `403` for authorization, with clear reason text (Section 3.3). The UI maps these to friendlier copy and hides unauthorized actions. Unifying `{ message }`/`{ error }` is a separate, lower-priority cleanup |
-| 5 | Config naming | `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS`. Group emails are environment-specific values. `ALLOWED_GROUP_EMAILS` becomes a deprecated alias for `AUTHZ_ROLE_FULL_GROUPS` and is removed in Phase 4 |
+| 5 | Config naming | `AUTHZ_ROLE_{READ,WRITE,FULL,MEDICAL,REVIEW}_GROUPS`. Group emails are environment-specific values. Phase 4 removed the `ALLOWED_GROUP_EMAILS` alias. That variable is ignored |
 | 6 | Startup validation | Yes. On Cloud Run, fail fast when a configured group is missing or Google is unreachable at startup (Section 4.5) |
 | 7 | Group ownership | Only domain admins own and administer these groups and the nested grant path. Nesting-based grants are an accepted residual risk, mitigated by admin ownership (Section 8) |
 
