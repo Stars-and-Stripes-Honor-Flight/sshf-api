@@ -3,8 +3,9 @@
 Covers [#125 Utility endpoint for flight completion](https://github.com/Stars-and-Stripes-Honor-Flight/sshf-api/issues/125)
 and [#126 Utility endpoint to move future status to active](https://github.com/Stars-and-Stripes-Honor-Flight/sshf-api/issues/126).
 
-**Status:** approved by Steve on 2026-10-03. The decisions are recorded in
-[Section 9](#9-decisions). This document is the plan. Endpoints, routes,
+**Status:** approved by Steve on 2026-10-03. Decision 6 was reversed later
+the same day. The decisions are recorded in [Section 9](#9-decisions). This
+document is the plan. Endpoints, routes,
 models, tests, and the OpenAPI spec are not changed in this PR. The OpenAPI
 and code blocks below are sketches for the implementation PR.
 
@@ -16,10 +17,11 @@ and code blocks below are sketches for the implementation PR.
 | #126 | `POST /flights/future-status/activate` with JSON body `{ "status": "Future-Spring" }` | Every Veteran and Guardian whose `flight.status` exactly equals the given value becomes `Active`. Any value beginning with `Future-` is accepted. A matched person who is unexpectedly on a flight is still changed, and their id is returned in `assignedToFlight`. | `flights:manage` |
 
 Both endpoints count the matching people before any write and save in
-batches through CouchDB `_bulk_docs`. **Only `flight.status` changes on
-person documents.** No `metadata.updated_at` or `updated_by` change is made,
-and no `flight.history` line is added, because this is a system event, not
-a per-person edit (Section 3.2).
+batches through CouchDB `_bulk_docs`. **Every person whose status changes
+is recorded the same way as an individual user edit.** The existing model
+helpers `updateHistory` and `prepareForSave` append the `flight.history`
+status line and set `metadata.updated_at` and `metadata.updated_by`
+(Section 3.2).
 
 Both return the same JSON result shape. The status is `200` when every save
 succeeded and `207`, with `failed[]` ids, when some attempted saves failed.
@@ -72,9 +74,9 @@ Only `Veteran` and `Guardian` documents carry a `flight` object. The legacy
 | `type` | `"Veteran"` or `"Guardian"` | [models/veteran.js:222-224](../models/veteran.js#L222-L224), [models/guardian.js:8](../models/guardian.js#L8) |
 | `flight.id` | **The flight's `name`**, not its document `_id`. `"None"` when the person is not assigned | Defaults in [models/veteran.js:35](../models/veteran.js#L35) and [models/guardian.js:29](../models/guardian.js#L29). Assignment writes `vetDoc.flight.id = flightName` ([routes/flight-assignments.js:13](../routes/flight-assignments.js#L13), [:35](../routes/flight-assignments.js#L35)). Sample data has `"id": "SSHF-Nov2024"` ([Veteran_Data_Example.json:13](Previous_App/Veteran_Data_Example.json), [Guardian_Data_Example.json:16](Previous_App/Guardian_Data_Example.json)) |
 | `flight.status` | string, default `"Active"` | [models/veteran.js:36](../models/veteran.js#L36), [models/guardian.js:30](../models/guardian.js#L30) |
-| `flight.history` | array of `{ id: "YYYY-MM-DDTHH:MM:SSZ", change: "changed <field> from: <old> to: <new> by: <First Last>" }` | [models/veteran.js:479-487](../models/veteran.js#L479-L487), [routes/flight-assignments.js:18-21](../routes/flight-assignments.js#L18-L21). **Not written by these endpoints** (decision 6) |
+| `flight.history` | array of `{ id: "YYYY-MM-DDTHH:MM:SSZ", change: "changed <field> from: <old> to: <new> by: <First Last>" }` | [models/veteran.js:479-487](../models/veteran.js#L479-L487), [routes/flight-assignments.js:18-21](../routes/flight-assignments.js#L18-L21). **Written by these endpoints** for each changed person (decision 6) |
 | `flight.nofly` | boolean | [models/veteran.js:44](../models/veteran.js#L44), [models/guardian.js:38](../models/guardian.js#L38) |
-| `metadata.updated_at`, `metadata.updated_by` | strings | Updated by every other API write path, for example [routes/flight-assignments.js:23-25](../routes/flight-assignments.js#L23-L25). **Not written by these endpoints** (decision 6) |
+| `metadata.updated_at`, `metadata.updated_by` | strings | Set by `prepareForSave` ([models/veteran.js:359-371](../models/veteran.js#L359-L371), [models/guardian.js:339-351](../models/guardian.js#L339-L351)) and by every API write path. **Written by these endpoints** for each changed person (decision 6) |
 
 ### 1.3 `flight.status` values
 
@@ -146,12 +148,15 @@ only to confirm the conditions, not as a design.
 - The history entry is `"changed status from: <status> to: Active by: ..."` (line 29). It does not update metadata, has no batch limit, and makes one `_bulk_docs` call.
 
 The new endpoints keep the scripts' conditions: who matches, `Active` only
-for #125, no-fly included, exact status for #126, and no person metadata
-change. They differ in four ways:
+for #125, no-fly included, and exact status for #126. Like the scripts,
+they append a `changed status from: ... to: ... by: ...` history line. They
+differ in four ways:
 
 - #125 sets the flight's `completed` flag.
 - #126 requires the `Future-` prefix.
-- **Neither endpoint writes the history line the scripts wrote** (decision 6).
+- **Each changed person is recorded the way an individual user edit is**
+  (decision 6). The history line names the calling user, and
+  `metadata.updated_at` and `updated_by` are set, which the scripts skipped.
 - Per-document failures are reported instead of ignored.
 
 ### 1.6 Drift noticed during investigation (out of scope)
@@ -235,11 +240,11 @@ Invariant: `matched = changed + skipped + failed`. A failed flight save
 appears in `failed[]` with `type: "flight"`. It is not counted in
 `counts.failed`, which counts people only.
 
-The response does not list every saved id. Because no per-person history
-line is written (decision 6), the person documents do not record which run
-changed them. After #126, a person moved to `Active` looks like any other
-`Active` person. The response counts and the server log line (Section 3.3)
-are the record of a run.
+The response does not list every saved id. Each changed person carries the
+record of the run in their own document: a `flight.history` status line and
+`metadata.updated_at`/`updated_by` naming the calling user (decision 6,
+Section 3.2). The response counts and the server log line (Section 3.3)
+summarize the run.
 
 ### 2.4 Status codes
 
@@ -274,47 +279,69 @@ unsaved people failed as `503` (decision 9).
 - Read every page before writing so the counts are final first. Writes then cannot shift page boundaries, which matters for #126 because changed people leave the key range. Page with `limit=500` plus `startkey`/`startkey_docid`. A flight is a few hundred people (the `/flights` example has capacity 448), so one page is the normal case.
 - A non-OK view response before any save is `500` with a stable message. If the database is unreachable (`DatabaseSessionError`), the response is `503`.
 
-### 3.2 Per-person change: status only
+### 3.2 Per-person change: the same as an individual status edit
 
-Each person is changed as a raw document, and **only `flight.status` changes**:
+Every person whose `flight.status` changes is recorded exactly as an
+individual user's status edit is (decision 6).
+
+The repo has no exported per-document save function. An individual status
+edit goes through `PUT /veterans/:id` or `PUT /guardians/:id`
+([routes/veterans.js:253-275](../routes/veterans.js#L253-L275),
+[routes/guardians.js:375-399](../routes/guardians.js#L375-L399)). Those
+routes build the stored and the edited model, then call the two model
+helpers that write history and metadata:
+
+- `updateHistory(current, user)` ([models/veteran.js:419-487](../models/veteran.js#L419-L487), [models/guardian.js:401-472](../models/guardian.js#L401-L472)) appends one `flight.history` entry for each tracked field that changed. For `flight.status` the entry is `{ id: "YYYY-MM-DDTHH:MM:SSZ", change: "changed status from: Active to: Flown by: First Last" }`.
+- `prepareForSave(user)` ([models/veteran.js:359-371](../models/veteran.js#L359-L371), [models/guardian.js:339-351](../models/guardian.js#L339-L351)) sets `metadata.updated_at` and `metadata.updated_by`. It also sets `created_at` and `created_by` when they are empty.
+
+The `PATCH` field handlers (`patchVeteranField`, `patchGuardianField`) are
+bound to one request and one `PUT`, and no `PATCH` route covers status, so
+they cannot be reused for a batch. The bulk endpoints call the same two
+model helpers for each person. **The helpers must not be bypassed**, and
+the history line and metadata values must not be built by hand:
 
 ```js
-doc.flight.status = toStatus;
+const Model = doc.type === 'Veteran' ? Veteran : Guardian;
+const current = Model.fromJSON(structuredClone(doc));
+const updated = Model.fromJSON(structuredClone(doc));
+updated.flight.status = toStatus;
+updated.updateHistory(current, req.user);
+updated.prepareForSave(req.user);
+
+doc.flight.status = updated.flight.status;
+doc.flight.history = updated.flight.history;
+doc.metadata = { ...doc.metadata, ...updated.metadata };
 ```
 
-This is a system event, not a per-person edit (decision 6). **Implementation
-must not follow the API's usual audit-field practice for these writes.**
+- `current` and `updated` come from the same stored document, so `flight.status` is the only tracked difference and exactly one history line is added. Both are built from copies because the constructors keep references to the stored `history` arrays ([models/veteran.js:43](../models/veteran.js#L43), [models/guardian.js:37](../models/guardian.js#L37), [utils/trim_strings.js:1](../utils/trim_strings.js#L1)).
+- `req.user` is the caller, so the history line and `updated_by` name the FULL user who ran the endpoint, as for an individual edit.
+- Each person gets their timestamp from the helpers at the moment they are changed, as an individual edit does. The historical script used one timestamp for the whole run.
+- The runs appear in `GET /recent-activity`, because `admin_recent_changes` keys on `metadata.updated_at` and `admin_recent_flight_changes` keys on the last `flight.history` entry ([models/recent_activity_request.js:6-9](../models/recent_activity_request.js#L6-L9)). A completed flight of a few hundred people fills the recent list. Steve accepted this.
 
-- Do **not** set `metadata.updated_at`, `metadata.updated_by`, or any equivalent per-person audit field.
-- Do **not** append a `flight.history` entry, or any other history entry.
-- Do not change any other field. The document is saved with its stored `_rev` and every other field exactly as read.
-
-This intentionally differs from `routes/flight-assignments.js` and the
-`PATCH` field routes, which set metadata and append history on every write.
-Implementation must not reuse their helpers (`assignVeteranToFlight`,
-`patchVeteranField`, `Veteran.updateHistory`) for these writes. A side
-effect is that these runs do not appear in `GET /recent-activity`, because
-`admin_recent_changes` keys on `metadata.updated_at` and
-`admin_recent_flight_changes` keys on the last `flight.history` entry.
-
-The writes also skip model validation, as a documented exception. Passing
-legacy documents through `Veteran` or `Guardian` would drop fields the
-models do not know, and validation of unrelated legacy fields (phones,
-names) could block a status change. The new values `Flown` and `Active` are
-valid in both model enums.
+**One documented exception to the `PUT` path:** only `flight.status`,
+`flight.history`, and `metadata` are copied from the model onto the stored
+raw document, which is saved with its stored `_rev`. `validate()` is not
+called, and the model's `toJSON()` is not saved. Saving `toJSON()` would
+drop fields the models do not know and trim every string in legacy
+documents. Validating unrelated legacy fields (phones, names) could block a
+status change. The new values `Flown` and `Active` are valid in both model
+enums. If Steve wants the full `PUT` behavior instead, `applyStatusChange`
+would call `validate()` and save `toJSON()`, and people who fail legacy
+validation would be listed in `failed[]` with status `400`.
 
 The flight document for #125 changes `completed` to `true` and is saved
-with its stored `_rev`. Its `metadata.updated_at` and `updated_by` are set,
-which records who completed the flight. Decision 6 covers person documents,
-and the flight change is a single edit to the flight record.
-`Flight.validate()` is not called, because legacy flights may have a string
-`capacity` (Section 1.1).
+with its stored `_rev`. It keeps its normal last-updated fields:
+`Flight.prepareForSave` ([models/flight.js:61-73](../models/flight.js#L61-L73))
+sets `metadata.updated_at` and `updated_by`, as `PUT /flights/:id` does
+([routes/flights.js:373-377](../routes/flights.js#L373-L377)), and they are
+copied onto the stored document in the same way. `Flight.validate()` is not
+called, because legacy flights may have a string `capacity` (Section 1.1).
 
 ### 3.3 Write phase
 
 - `POST {DB_URL}/{DB_NAME}/_bulk_docs` with `{ "docs": [...] }` through `dbFetch`, in batches of **100**. That is the historical batch size and the existing `veteranCount` maximum. `all_or_nothing` is not used, because it was removed in CouchDB 2.x and CouchDB has no multi-document transactions. That is why partial results, and `207`, exist at all.
 - `_bulk_docs` returns `201` with one result per document: `{ id, rev, ok }` or `{ id, error, reason }`. Errors map to `conflict` → `409`, `forbidden` → `403`, `unauthorized` → `401`, anything else → `500`.
-- **Conflict retry, once.** This mirrors `putWithConflictRetry` ([routes/flight-assignments.js:65-82](../routes/flight-assignments.js#L65-L82)). Conflicted documents are re-read with `POST _all_docs?include_docs=true` and `{ keys }`. A document that still qualifies gets the same status-only change and is saved in one more `_bulk_docs` call. A document that no longer qualifies (someone changed its status or flight in the meantime) is `skipped`, not failed. A conflict that remains is a `409` failure.
+- **Conflict retry, once.** This mirrors `putWithConflictRetry` ([routes/flight-assignments.js:65-82](../routes/flight-assignments.js#L65-L82)). Conflicted documents are re-read with `POST _all_docs?include_docs=true` and `{ keys }`. A document that still qualifies gets the Section 3.2 change applied to the re-read document, so it carries one new history line, not two, and is saved in one more `_bulk_docs` call. A document that no longer qualifies (someone changed its status or flight in the meantime) is `skipped`, not failed. A conflict that remains is a `409` failure.
 - **Whole-batch failure.** If a `_bulk_docs` call returns non-2xx, every document in that batch is failed with that status, and the run continues with the next batch. If `dbFetch` throws `DatabaseSessionError` after a save was attempted, the run stops. Every unsaved person is failed with `503`, the flight is not changed, and the response is `207` (decision 9).
 - Each run writes one summary log line on the server: endpoint, flight id (#125) or status (#126), counts, failed ids, and `assignedToFlight` ids. The line contains no document bodies, personal data, cookies, or credentials.
 
@@ -366,7 +393,7 @@ production, and that does not block the plan (decision 12). Read paging
 | Matched person already on a flight | Not applicable | Changed to `Active` and listed in `assignedToFlight`. Status code unaffected (decision 7) |
 | Database unreachable before any save | `503`, nothing written | `503`, nothing written |
 | Database lost after saves began | `207`, unsaved people failed as `503`, flight left not completed | `207`, unsaved people failed as `503` |
-| Two identical requests at once | The slower request's saves conflict. The re-read shows `Flown`, so those people are `skipped`. Its flight save conflicts, and the re-read shows `completed: true`, which counts as success. Each person is written once | Same skip-on-re-read behavior |
+| Two identical requests at once | The slower request's saves conflict. The re-read shows `Flown`, so those people are `skipped`. Its flight save conflicts, and the re-read shows `completed: true`, which counts as success. Each person is written once and gets one history line | Same skip-on-re-read behavior |
 | Someone edits a person mid-run | A conflict, retried once and re-qualified. The other user's edit is kept | Same |
 | A person is assigned to the flight during the run | Not in the read set. They stay `Active` on a completed flight. Rare, and visible on the assignments page | Not applicable |
 
@@ -398,8 +425,9 @@ literal third segments.
   post:
     summary: Mark a flight completed and its active people as Flown
     description: |
-      Matches people by flight name (flight.id). Changes only flight.status.
-      Person metadata and flight.history are not modified.
+      Matches people by flight name (flight.id). Each changed person gets a
+      flight.history status line and updated metadata.updated_at and
+      metadata.updated_by, the same as an individual status edit.
     tags: [Flights]
     security:
       - GoogleAuth: []
@@ -425,9 +453,11 @@ literal third segments.
   post:
     summary: Change every person with a Future-* status to Active
     description: |
-      Accepts any status beginning with "Future-". Changes only flight.status.
-      Person metadata and flight.history are not modified. Matched people who
-      are on a flight are still changed and listed in assignedToFlight.
+      Accepts any status beginning with "Future-". Each changed person gets a
+      flight.history status line and updated metadata.updated_at and
+      metadata.updated_by, the same as an individual status edit. Matched
+      people who are on a flight are still changed and listed in
+      assignedToFlight.
     tags: [Flights]
     security:
       - GoogleAuth: []
@@ -464,7 +494,7 @@ against `ROUTE_PERMISSIONS` by
 | File | Change |
 |---|---|
 | `routes/flight-status.js` (new, kebab-case) | `completeFlight`, `activateFutureStatus` handlers with `@swagger` JSDoc |
-| `models/flight_status_update.js` (new, snake_case) | `FutureStatusRequest` (validation), `applyStatusChange(doc, toStatus)` (sets `flight.status` only), `isOnFlight(doc)` (`flight.id` present and not `"None"`), and `FlightStatusBulkResult` (counts, `failed`, `assignedToFlight`, `statusCode()` returning 200 or 207, `toJSON()`) |
+| `models/flight_status_update.js` (new, snake_case) | `FutureStatusRequest` (validation), `applyStatusChange(doc, toStatus, user)` (sets `flight.status` and writes history and metadata through the model helpers, Section 3.2), `isOnFlight(doc)` (`flight.id` present and not `"None"`), and `FlightStatusBulkResult` (counts, `failed`, `assignedToFlight`, `statusCode()` returning 200 or 207, `toJSON()`) |
 | `utils/bulk_docs.js` (new) | Batched `_bulk_docs` save through `dbFetch`, result normalization, and one conflict re-read and retry with a re-qualify callback. URLs built from `DB_URL`/`DB_NAME` |
 | `utils/permissions.js` | Two `ROUTE_PERMISSIONS` entries. Nothing else |
 | `index.js` | Import and two registrations (Section 6.1) |
@@ -490,7 +520,10 @@ does.
 `test/flight_status_update.test.js` (model):
 
 - `FutureStatusRequest` accepts `Future-Spring`, `Future-Fall`, `Future-PostRestriction`, an unknown `Future-Winter` (decision 2), and a padded `" Future-Spring "` (trimmed). It rejects a missing value, a non-string, `""`, `"Future-"`, `"future-spring"`, `"Active"`, and `"Flown"`.
-- `applyStatusChange` sets `flight.status` and **changes nothing else** (decision 6). The result deep-equals the input apart from `flight.status`. The `flight.history` length, `metadata.updated_at`, and `metadata.updated_by` are unchanged, a missing `metadata` stays missing, and unknown fields are kept.
+- `applyStatusChange` writes history and metadata **the same way as a single-person status edit** (decision 6). With a fixed clock (`sinon.useFakeTimers`) and the same user, its `flight.history` and `metadata` deep-equal what the `PUT /veterans/:id` and `PUT /guardians/:id` steps produce for the same stored document (`fromJSON`, set `flight.status`, `updateHistory(current, user)`, `prepareForSave(user)`). This is covered for a Veteran and a Guardian, for `Active` to `Flown` and for `Future-Spring` to `Active`.
+- Exactly one `flight.history` entry is appended after the existing ones: `{ id: <fixed timestamp>, change: "changed status from: Active to: Flown by: First Last" }`. `call.history` and the pairing history arrays are unchanged.
+- `metadata.updated_at` is the fixed timestamp and `updated_by` is `First Last`. Existing `created_at` and `created_by` are kept. Empty or missing ones are filled, as `prepareForSave` does.
+- Unknown legacy fields are kept and other strings are not trimmed (the Section 3.2 exception).
 - `isOnFlight` is true for `"SSHF-Nov2024"`. It is false for `"None"`, `""`, and a missing `flight.id`.
 - `FlightStatusBulkResult` keeps `matched = changed + skipped + failed`. It returns 200 with no failures and 207 with any failure (including a flight-only failure), and `assignedToFlight` does not affect the status. Its `toJSON` shape matches the schema (`assignedToFlight` only for #126).
 
@@ -509,8 +542,10 @@ does.
   - The view is queried with exact `startkey`/`endkey` and `include_docs`.
   - The returned rows include an `SSHF-Nov2024-B` person and a non-person type, and both are ignored.
   - Only `Active` people are written, **including an `Active` no-fly person** (decision 5). Removed, Deceased, and Flown people count as skipped.
-  - Every saved person body has no new `flight.history` entry and unchanged `metadata` (decision 6).
-  - The flight is saved with `completed: true`, and the response is 200 with correct counts.
+  - Every saved person body has exactly one new `flight.history` entry, `changed status from: Active to: Flown by: <caller>`, and `metadata.updated_at` and `updated_by` set for the caller (decision 6). Other fields are unchanged.
+  - The flight is saved with `completed: true` and its `metadata.updated_at` and `updated_by` set for the caller. The response is 200 with correct counts.
+- #125 matches a single-person edit: for the same stored veteran, the same caller, and a fake clock, the body saved by the endpoint and the body saved by `PUT /veterans/:id` (with only `flight.status` changed) have equal `flight.history` and `metadata`. The same test covers a guardian through `PUT /guardians/:id`.
+- #125 conflict retry: a person whose first save conflicts is re-read and saved with one new history line, not two.
 - #125 with zero people on the flight: the flight is saved as completed and the response is 200 with zero counts (decision 3).
 - #125 partial failure: one person conflicts twice. The response is 207 with that id in `failed`, and **no flight save** is attempted (decision 4).
 - #125 flight save fails after the people succeed: 207 with `type: "flight"` in `failed`.
@@ -519,7 +554,7 @@ does.
 - #125 error before any save: a failed view read is 500, and an unreachable database (`DatabaseSessionError`) is 503. Neither writes anything.
 - #126 validation and matching:
   - A bad status is 400 with no fetch calls.
-  - The happy path uses the exact key range, and saved bodies change only `flight.status`.
+  - The happy path uses the exact key range. Each saved body has one new `changed status from: Future-Spring to: Active by: <caller>` history line and updated `metadata`, the same as a single-person status edit, and no other field changes.
   - Zero matches is 200 with zeros and `assignedToFlight: []`.
   - A people-only filter applies.
 - #126 people already on a flight: a matched person with `flight.id: "SSHF-Nov2024"` is still changed and listed in `assignedToFlight`, and the status stays 200 (decision 7). People with `"None"`, `""`, or a missing `flight.id` are not listed. A listed person whose save fails is in both lists, and the status is 207.
@@ -533,16 +568,20 @@ does.
 Manual check before merge: run against `sshf-db-dev` (or a parity clone)
 with a FULL user and a WRITE user. Use a test flight that has a few Active
 people (one of them no-fly), one Removed person, and one `Future-*` person
-whose `flight.id` is set. Confirm on the saved documents that only
-`flight.status` changed. This is a dev-database check. It does not depend
-on production data.
+whose `flight.id` is set. On the saved documents, confirm the new status,
+one new history line naming the FULL user, and updated
+`metadata.updated_at` and `updated_by`. Compare them with a status change
+made by hand on another test person, and confirm the run shows in recent
+activity. This is a dev-database check. It does not depend on production
+data.
 
 ---
 
 ## 9. Decisions
 
-The first seven decisions are Steve's, approved 2026-10-03. Decisions 8 to
-12 settle the smaller questions Steve delegated.
+The first seven decisions are Steve's, approved 2026-10-03. Decision 6 was
+reversed later that day. Decisions 8 to 12 settle the smaller questions
+Steve delegated.
 
 1. **Decided: match people by flight name**, the value stored in `flight.id`, not the flight document id. The endpoint takes the document id in the path only to read the flight and get its `name`. Flights are never renamed.
    - *Readability tradeoff:* `flight.id` reads like a document id but holds a name, which is easy to misread in code and logs. Implementation names the value `flightName`, as `routes/flight-assignments.js` does.
@@ -551,7 +590,7 @@ The first seven decisions are Steve's, approved 2026-10-03. Decisions 8 to
 3. **Decided: a flight with zero matching people is still marked completed.** The response is `200` with zero counts.
 4. **Decided: the flight is marked completed only after every person update succeeds.** If any person fails, `completed` stays `false` and a retry finishes the job (Section 3.4).
 5. **Decided: no-fly people who are `Active` on the flight also become `Flown`**, the same as the old script.
-6. **Decided: person documents get no audit-field or history changes.** Do not change any person's `metadata.updated_at`, `metadata.updated_by`, or equivalent metadata. Do not append the usual per-person `flight.history` line. This is a system event, not a per-person edit, so implementation must **not** follow the API's usual audit-field practice for these writes (Section 3.2). Only `flight.status` changes.
+6. **Reversed, now decided: each changed person is saved through the model helpers that write history and metadata.** Steve reversed the earlier "no metadata or history change" decision on 2026-10-03. Each person document is saved anyway, so the save must not bypass the helpers that record an edit. For every person whose `flight.status` changes, `updateHistory(current, user)` appends the `changed status from: X to: Y by: First Last` line to `flight.history`, and `prepareForSave(user)` sets `metadata.updated_at` and `metadata.updated_by`, the same as an individual status edit (Section 3.2). The hf-import scripts skipped the metadata, and the API does it correctly instead. The runs filling `GET /recent-activity` is accepted. The flight document keeps its normal `metadata.updated_at` and `updated_by` when `completed` is set.
 7. **Decided: #126 updates everyone with that exact status.** Nobody with a `Future-` status should be on a flight. If a matched person is on one (`flight.id` present and not `"None"`), their status is still changed, and their document id is returned in `assignedToFlight` so the caller can see the anomaly.
 8. **Decided, not blocking: non-boolean `completed`.** No production check is required before implementation. `completed === true` or the string `"true"` returns `409`. Any other value proceeds and is written as boolean `true`.
 9. **Decided: partial failure and outages.** If some documents were attempted and some failed, the response is `207` with the failed ids. That includes a database outage after saves began, where the unsaved people are failed as `503`. If the database is unreachable before any save, the response is `503`.
