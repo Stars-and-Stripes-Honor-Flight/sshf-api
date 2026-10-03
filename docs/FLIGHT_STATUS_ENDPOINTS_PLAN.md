@@ -4,7 +4,8 @@ Covers [#125 Utility endpoint for flight completion](https://github.com/Stars-an
 and [#126 Utility endpoint to move future status to active](https://github.com/Stars-and-Stripes-Honor-Flight/sshf-api/issues/126).
 
 **Status:** approved by Steve on 2026-10-03. Decision 6 was reversed later
-the same day. The decisions are recorded in [Section 9](#9-decisions). This
+the same day, and Steve locked the reads in decision 12 after reviewing the
+lookup. The decisions are recorded in [Section 9](#9-decisions). This
 document is the plan. Endpoints, routes,
 models, tests, and the OpenAPI spec are not changed in this PR. The OpenAPI
 and code blocks below are sketches for the implementation PR.
@@ -16,8 +17,13 @@ and code blocks below are sketches for the implementation PR.
 | #125 | `POST /flights/:id/complete` | Reads the flight document by `_id`. Every Veteran and Guardian whose `flight.id` equals that flight's `name` and whose `flight.status` is `Active` becomes `Flown`, including no-fly people. Then the flight's `completed` changes from `false` to `true`, but only if every person save succeeded. A flight with nobody to change is still completed. | `flights:manage` |
 | #126 | `POST /flights/future-status/activate` with JSON body `{ "status": "Future-Spring" }` | Every Veteran and Guardian whose `flight.status` exactly equals the given value becomes `Active`. Any value beginning with `Future-` is accepted. A matched person who is unexpectedly on a flight is still changed, and their id is returned in `assignedToFlight`. | `flights:manage` |
 
-Both endpoints count the matching people before any write and save in
-batches through CouchDB `_bulk_docs`. **Every person whose status changes
+Each endpoint reads one existing view, the same view and exact key range as
+its historical script. #125 reads `_design/basic/_view/all_by_flight_and_name`
+and #126 reads `_design/basic/_view/all_by_status_and_name` (Section 1.4).
+People with no last name are not in either view and are not changed, which
+is a decided tradeoff (decision 12). Both endpoints count the matching
+people before any write and save in batches through CouchDB `_bulk_docs`.
+**Every person whose status changes
 is recorded the same way as an individual user edit.** The existing model
 helpers `updateHistory` and `prepareForSave` append the `flight.history`
 status line and set `metadata.updated_at` and `metadata.updated_by`
@@ -98,32 +104,57 @@ The legacy UI only allowed a person on a flight when their status was
 so `Future-*` people should be on `flight.id: "None"`. The code does not
 enforce this, so #126 reports any exceptions (decision 7).
 
-### 1.4 CouchDB views the API already uses
+### 1.4 The two views these endpoints read
 
-The API queries `_design/basic` views (the legacy `hf-basic` couchapp
-design document). All three views below are already called by shipped
-routes, so they exist in the deployed database:
+Each endpoint reads exactly one view, the same view and key range as its
+historical script (Section 1.5), and nothing else (decision 12). Both are
+**existing views in the `_design/basic` design document** (the legacy
+`hf-basic` couchapp), and the API already queries both from `GET /search`.
+The endpoints add no new design document, view, index, or Mango `_find`
+selector.
 
-| View | Key (from hf-basic map.js) | Used today by | Fit |
-|---|---|---|---|
-| [`active_by_flight`](https://github.com/shmakes/hf-basic/blob/master/views/active_by_flight/map.js) | `[flight.id, type]`, value `null`. Emitted for any doc with `flight.id`, with no status filter despite the name | `GET /exports/flight`, `GET /exports/callcenterfollowup` ([routes/exports.js:157](../routes/exports.js#L157), [:223](../routes/exports.js#L223)) | **#125.** One row per document. No dependency on name fields |
-| [`all_by_flight_and_name`](https://github.com/shmakes/hf-basic/blob/master/views/all_by_flight_and_name/map.js) | `[flight.id, name.last stripped]`. Requires `name.last` | `GET /search` ([models/search_request.js:44-45](../models/search_request.js#L44-L45)) | Used by the historical #125 script. Fallback for #125 |
-| [`all_by_status_and_name`](https://github.com/shmakes/hf-basic/blob/master/views/all_by_status_and_name/map.js) | `[flight.status, name.last stripped]`. Requires `flight` and `name.last` | `GET /search` ([models/search_request.js:41-42](../models/search_request.js#L41-L42)) | **#126.** Used by the historical #126 script |
+| Endpoint | View | Key (from hf-basic map.js) | Query | Already used by |
+|---|---|---|---|---|
+| #125 | [`all_by_flight_and_name`](https://github.com/shmakes/hf-basic/blob/master/views/all_by_flight_and_name/map.js) | `[flight.id, name.last stripped]` | `startkey=["<flight name>"]`, `endkey=["<flight name>",{}]`, `include_docs=true` | `GET /search` with a flight filter ([models/search_request.js:44-45](../models/search_request.js#L44-L45)), and [`couch_db_flight_completion.py`](https://github.com/shmakes/hf-import/blob/master/couch_db_flight_completion.py) line 16 |
+| #126 | [`all_by_status_and_name`](https://github.com/shmakes/hf-basic/blob/master/views/all_by_status_and_name/map.js) | `[flight.status, name.last stripped]` | `startkey=["<status>"]`, `endkey=["<status>",{}]`, `include_docs=true` | `GET /search` with a status filter ([models/search_request.js:41-42](../models/search_request.js#L41-L42)), and [`couch_db_future_to_active.py`](https://github.com/shmakes/hf-import/blob/master/couch_db_future_to_active.py) line 16 |
 
-`flight_assignment` and `flight_pairings` are a poor fit. They emit one row
-per pairing, so a guardian paired with several veterans appears several
-times.
+Each map function emits one row per document, so a person appears once.
+
+For #125, the view returns everyone on the flight whatever their status.
+The endpoint keeps the documents whose `flight.status` is `Active`,
+including no-fly people, as the script did. For #126, every row already has
+the requested status.
+
+Other views are not used. `active_by_flight` (used by the exports) is not
+used, either as the primary read or as a fallback. `flight_assignment` and
+`flight_pairings` are also excluded. They emit one row per pairing, so a
+guardian paired with several veterans would appear several times.
+
+**Known limit, decided (decision 12): people with no last name are not
+returned.** Both map functions emit only when `name` and `name.last` are
+present. `all_by_status_and_name` also requires `flight`. A Veteran or
+Guardian with no last name is therefore not counted, not changed, and not
+reported. That matches the historical scripts. The endpoints do not make a
+second query to catch them.
+
+The models require a last name on every API create and edit
+([models/veteran.js:177](../models/veteran.js#L177),
+[models/guardian.js:148](../models/guardian.js#L148)), so only legacy
+documents can lack one. The same map functions also read `address`. They
+also read `guardian` on a veteran and `veteran` on a guardian. A legacy
+document missing one of those objects is likewise not indexed. The model
+constructors always create them.
 
 **Exact key ranges are required.** The existing flight routes query with
 `endkey: [name + '\ufff0']`
 ([routes/flight-assignments.js:180](../routes/flight-assignments.js#L180),
 [routes/flight-detail.js:98](../routes/flight-detail.js#L98)). That is a
 prefix match, so a query for `SSHF-Nov2024` would also return people on
-`SSHF-Nov2024-B`. The new endpoints use `startkey: [value]` and
-`endkey: [value, {}]`, which match the first key element exactly, as the
-historical scripts did. They also check `doc.flight.id === flight.name` and
-`doc.flight.status === <expected>` in code. Changing the existing routes is
-out of scope here.
+`SSHF-Nov2024-B`. The new endpoints do **not** use that prefix `endkey`.
+They use `startkey: [value]` and `endkey: [value, {}]`, which match the
+first key element exactly, as the historical scripts did. They also check
+`doc.flight.id === flight.name` and `doc.flight.status === <expected>` in
+code. Changing the existing routes is out of scope here.
 
 ### 1.5 What the historical scripts did
 
@@ -147,8 +178,10 @@ only to confirm the conditions, not as a design.
 - It does not check that the value starts with `Future-`. #126 adds that check.
 - The history entry is `"changed status from: <status> to: Active by: ..."` (line 29). It does not update metadata, has no batch limit, and makes one `_bulk_docs` call.
 
-The new endpoints keep the scripts' conditions: who matches, `Active` only
-for #125, no-fly included, and exact status for #126. Like the scripts,
+The new endpoints keep the scripts' reads and conditions: the same view and
+exact key range for each (Section 1.4), `Active` only for #125, no-fly
+included, and exact status for #126. People with no last name are missed,
+as they were by the scripts. Like the scripts,
 they append a `changed status from: ... to: ... by: ...` history line. They
 differ in four ways:
 
@@ -229,7 +262,7 @@ Both endpoints follow the repo's JSON-only style. Errors are
 |---|---|
 | `fromStatus`, `toStatus` | `Active` to `Flown` for #125. `<Future-*>` to `Active` for #126 |
 | `flight` | #125 only. `completed` is the stored value after the request |
-| `counts.matched` | Determined before any write. #125: Veteran and Guardian documents on the flight, whatever their status ("how many were on the flight"). #126: Veteran and Guardian documents with that status ("how many had that status") |
+| `counts.matched` | Determined before any write from the Section 1.4 view, so people with no last name are not included. #125: Veteran and Guardian documents on the flight, whatever their status ("how many were on the flight"). #126: Veteran and Guardian documents with that status ("how many had that status") |
 | `counts.changed` | People saved with `toStatus` in this request ("how many were changed") |
 | `counts.skipped` | Matched but not changed because the status was not `fromStatus` (for example Removed, Deceased, already Flown), or because a conflict re-read showed the person no longer qualified |
 | `counts.failed` | People who qualified but could not be saved |
@@ -273,10 +306,20 @@ unsaved people failed as `503` (decision 9).
 
 ### 3.1 Read phase (counts before writes)
 
-- #125: `GET {DB_URL}/{DB_NAME}/_design/basic/_view/active_by_flight?startkey=["<name>"]&endkey=["<name>",{}]&include_docs=true` through `dbFetch`.
-- #126: `GET .../_view/all_by_status_and_name?startkey=["<status>"]&endkey=["<status>",{}]&include_docs=true`.
-- Keep only rows where `doc.type` is `Veteran` or `Guardian`, the key field matches exactly (`doc.flight.id === name`, or `doc.flight.status === status`), and the id is not already in the set. The `matched` count is the size of this set. For #126, `assignedToFlight` is collected here.
-- Read every page before writing so the counts are final first. Writes then cannot shift page boundaries, which matters for #126 because changed people leave the key range. Page with `limit=500` plus `startkey`/`startkey_docid`. A flight is a few hundred people (the `/flights` example has capacity 448), so one page is the normal case.
+Each endpoint makes exactly one kind of read, through `dbFetch`, against the
+view in Section 1.4. The values in `startkey` and `endkey` are JSON-encoded,
+then URL-encoded:
+
+- #125: `GET {DB_URL}/{DB_NAME}/_design/basic/_view/all_by_flight_and_name?startkey=["<flight name>"]&endkey=["<flight name>",{}]&include_docs=true`
+- #126: `GET {DB_URL}/{DB_NAME}/_design/basic/_view/all_by_status_and_name?startkey=["<status>"]&endkey=["<status>",{}]&include_docs=true`
+
+No other view, `_find` query, or second lookup is made before the saves.
+In particular, `active_by_flight` is not queried, and nothing looks for
+people with no last name (decision 12). The only later read is the
+`_all_docs` re-read of conflicted documents (Section 3.3).
+
+- Keep only rows where `doc.type` is `Veteran` or `Guardian`, the key field matches exactly (`doc.flight.id === name`, or `doc.flight.status === status`), and the id is not already in the set. The `matched` count is the size of this set. For #125, the people to change are those in the set whose `flight.status` is `Active`, including no-fly people. For #126, `assignedToFlight` is collected here.
+- Read every page before writing so the counts are final first. Writes then cannot shift page boundaries, which matters for #126 because changed people leave the key range. Pages use `limit=500` on the same view and the same `endkey`. The next page starts at the last row's full key with `startkey_docid` and `skip=1`. A flight is a few hundred people (the `/flights` example has capacity 448), so one page is the normal case.
 - A non-OK view response before any save is `500` with a stable message. If the database is unreachable (`DatabaseSessionError`), the response is `503`.
 
 ### 3.2 Per-person change: the same as an individual status edit
@@ -396,6 +439,7 @@ production, and that does not block the plan (decision 12). Read paging
 | Two identical requests at once | The slower request's saves conflict. The re-read shows `Flown`, so those people are `skipped`. Its flight save conflicts, and the re-read shows `completed: true`, which counts as success. Each person is written once and gets one history line | Same skip-on-re-read behavior |
 | Someone edits a person mid-run | A conflict, retried once and re-qualified. The other user's edit is kept | Same |
 | A person is assigned to the flight during the run | Not in the read set. They stay `Active` on a completed flight. Rare, and visible on the assignments page | Not applicable |
+| Person with no `name.last` (legacy data only) | Not returned by `all_by_flight_and_name`, so not counted and left `Active`. No second query (decision 12) | Not returned by `all_by_status_and_name`, so not counted and left at the `Future-*` status. No second query (decision 12) |
 
 ---
 
@@ -539,7 +583,7 @@ does.
 
 - #125 rejects: an invalid id (400), not found (404), not a Flight (400), `completed: true` and `"true"` (409, no further fetch calls), and a name of `""` or `"None"` (400).
 - #125 happy path:
-  - The view is queried with exact `startkey`/`endkey` and `include_docs`.
+  - The only read before the saves is `_design/basic/_view/all_by_flight_and_name` (decision 12). Its decoded parameters are `startkey=["SSHF-Nov2024"]`, `endkey=["SSHF-Nov2024",{}]`, and `include_docs=true`. The test fails if any fetch before the first `_bulk_docs` goes to `active_by_flight`, another `_view`, `_find`, or `_all_docs`, or uses the prefix `endkey` `["SSHF-Nov2024\ufff0"]`.
   - The returned rows include an `SSHF-Nov2024-B` person and a non-person type, and both are ignored.
   - Only `Active` people are written, **including an `Active` no-fly person** (decision 5). Removed, Deceased, and Flown people count as skipped.
   - Every saved person body has exactly one new `flight.history` entry, `changed status from: Active to: Flown by: <caller>`, and `metadata.updated_at` and `updated_by` set for the caller (decision 6). Other fields are unchanged.
@@ -554,7 +598,9 @@ does.
 - #125 error before any save: a failed view read is 500, and an unreachable database (`DatabaseSessionError`) is 503. Neither writes anything.
 - #126 validation and matching:
   - A bad status is 400 with no fetch calls.
-  - The happy path uses the exact key range. Each saved body has one new `changed status from: Future-Spring to: Active by: <caller>` history line and updated `metadata`, the same as a single-person status edit, and no other field changes.
+  - The only read before the saves is `_design/basic/_view/all_by_status_and_name` (decision 12). Its decoded parameters are `startkey=["Future-Spring"]`, `endkey=["Future-Spring",{}]`, and `include_docs=true`. No other view, `_find`, or `_all_docs` read happens before the first `_bulk_docs`.
+  - A result larger than one page is read in pages from the same view with the same `endkey`, and every page is read before the first `_bulk_docs`.
+  - In the happy path, each saved body has one new `changed status from: Future-Spring to: Active by: <caller>` history line and updated `metadata`, the same as a single-person status edit, and no other field changes.
   - Zero matches is 200 with zeros and `assignedToFlight: []`.
   - A people-only filter applies.
 - #126 people already on a flight: a matched person with `flight.id: "SSHF-Nov2024"` is still changed and listed in `assignedToFlight`, and the status stays 200 (decision 7). People with `"None"`, `""`, or a missing `flight.id` are not listed. A listed person whose save fails is in both lists, and the status is 207.
@@ -580,8 +626,9 @@ data.
 ## 9. Decisions
 
 The first seven decisions are Steve's, approved 2026-10-03. Decision 6 was
-reversed later that day. Decisions 8 to 12 settle the smaller questions
-Steve delegated.
+reversed later that day. Decisions 8 to 11 settle the smaller questions
+Steve delegated. Steve set decision 12, the reads, after reviewing the
+lookup.
 
 1. **Decided: match people by flight name**, the value stored in `flight.id`, not the flight document id. The endpoint takes the document id in the path only to read the flight and get its `name`. Flights are never renamed.
    - *Readability tradeoff:* `flight.id` reads like a document id but holds a name, which is easy to misread in code and logs. Implementation names the value `flightName`, as `routes/flight-assignments.js` does.
@@ -596,7 +643,12 @@ Steve delegated.
 9. **Decided: partial failure and outages.** If some documents were attempted and some failed, the response is `207` with the failed ids. That includes a database outage after saves began, where the unsaved people are failed as `503`. If the database is unreachable before any save, the response is `503`.
 10. **Decided: paths** stay `POST /flights/:id/complete` and `POST /flights/future-status/activate`.
 11. **Decided: no preview or dry-run mode.**
-12. **Decided, not blocking: deployed views and volume.** The plan relies on `active_by_flight` and `all_by_status_and_name`, which shipped routes already query. Read paging and write batching cover larger sets. No live production check is required before implementation.
+12. **Decided by Steve: the only reads are the two views the old scripts and the API already use. No new query.**
+    - #125 reads `_design/basic/_view/all_by_flight_and_name` with `startkey=[flight name]`, `endkey=[flight name, {}]`, and `include_docs=true`, as `couch_db_flight_completion.py` did. It then keeps the documents whose `flight.status` is `Active`, including no-fly people. `active_by_flight` is not used, either as the primary read or as a fallback.
+    - #126 reads `_design/basic/_view/all_by_status_and_name` with `startkey=[status]`, `endkey=[status, {}]`, and `include_docs=true`, as `couch_db_future_to_active.py` did.
+    - Both are existing views in `_design/basic` that `GET /search` already queries. They are not new design documents, views, indexes, or Mango selectors. The key ranges are exact, not the prefix `endkey` (`name + '\ufff0'`) that the flight routes use.
+    - *Known limit, a decided tradeoff and not an open question:* both views emit only when `name.last` is present, so a person with no last name is not returned, counted, or changed. That matches the historical scripts. No second query is added to catch them. The models require a last name on every API create and edit, so only legacy documents are affected (Section 1.4).
+    - These views are already deployed, because shipped routes query them. Read paging and write batching cover larger sets. No live production check is required before implementation.
 
 ---
 
