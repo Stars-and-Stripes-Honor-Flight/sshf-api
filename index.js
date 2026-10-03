@@ -59,6 +59,7 @@ import {
 } from './routes/guardians.js';
 import { listFlights, createFlight, retrieveFlight, updateFlight } from './routes/flights.js';
 import { getFlightAssignments, addVeteransToFlight } from './routes/flight-assignments.js';
+import { completeFlight, activateFutureStatus } from './routes/flight-status.js';
 import { getFlightDetail } from './routes/flight-detail.js';
 import { getWaitlist } from './routes/waitlist.js';
 import { getWaitlistVeteranGroups } from './routes/waitlist-veteran-groups.js';
@@ -195,6 +196,8 @@ app.get("/flights", authenticate, requireRoutePermission('GET', '/flights'), dbS
 app.post("/flights", authenticate, requireRoutePermission('POST', '/flights'), dbSession, createFlight);
 app.get("/flights/:id", authenticate, requireRoutePermission('GET', '/flights/:id'), dbSession, retrieveFlight);
 app.put("/flights/:id", authenticate, requireRoutePermission('PUT', '/flights/:id'), dbSession, updateFlight);
+app.post("/flights/:id/complete", authenticate, requireRoutePermission('POST', '/flights/:id/complete'), dbSession, completeFlight);
+app.post("/flights/future-status/activate", authenticate, requireRoutePermission('POST', '/flights/future-status/activate'), dbSession, activateFutureStatus);
 
 // Flight assignment routes
 app.get("/flights/:id/assignments", authenticate, requireRoutePermission('GET', '/flights/:id/assignments'), dbSession, getFlightAssignments);

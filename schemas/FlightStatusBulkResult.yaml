@@ -1,0 +1,68 @@
+type: object
+description: |
+  Result of a flight status bulk update. Returned with 200 when every attempted
+  save succeeded and 207 when one or more did not. counts.failed counts people
+  only. A failed flight save is listed in failed with type flight and does not
+  increment counts.failed. assignedToFlight is present only for
+  POST /flights/future-status/activate.
+properties:
+  fromStatus:
+    type: string
+    description: Status people were changed from
+  toStatus:
+    type: string
+    description: Status people were changed to
+  flight:
+    type: object
+    description: Present for POST /flights/{id}/complete. completed is the stored value after the request.
+    properties:
+      id:
+        type: string
+        description: Flight document id
+      name:
+        type: string
+        description: Flight name stored on person flight.id
+      completed:
+        description: Stored completed value after the request
+  counts:
+    type: object
+    properties:
+      matched:
+        type: integer
+        description: People returned by the view who matched the endpoint filter
+      changed:
+        type: integer
+        description: People saved with toStatus in this request
+      skipped:
+        type: integer
+        description: Matched people who were not changed because they did not qualify
+      failed:
+        type: integer
+        description: People who qualified but could not be saved
+  failed:
+    type: array
+    description: Documents that were not saved, including each document id
+    items:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Document id that failed to save
+        type:
+          type: string
+          enum: [veteran, guardian, flight]
+          description: Whether the failed document is a veteran, a guardian, or the flight
+        status:
+          type: integer
+          description: Status for this document. 409 is a conflict that remained after one revision retry.
+        error:
+          type: string
+          description: Stable error message for this document
+  assignedToFlight:
+    type: array
+    description: |
+      POST /flights/future-status/activate only. Ids of matched people whose
+      flight.id was present and not "None" when they were read. The list is
+      informational and does not change 200 versus 207.
+    items:
+      type: string

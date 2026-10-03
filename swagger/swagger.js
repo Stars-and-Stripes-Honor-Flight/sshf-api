@@ -143,7 +143,9 @@ const definition = {
       'DocDiffChange',
       'DocDiff',
       'GenericDocumentWrite',
-      'UserPermissions'
+      'UserPermissions',
+      'FlightStatusBulkResult',
+      'FutureStatusActivateRequest'
     )
   },
   security: [

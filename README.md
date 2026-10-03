@@ -255,6 +255,17 @@ to `POST <API_URL>/review/applications`. Remove the `cburi`, `cbusr`, and
 `cbpwd` form fields — CouchDB credentials are no longer passed through the
 intake payload.
 
+### Flight status utilities
+
+Both endpoints require `flights:manage`. They change each person's `flight.status`
+through the same history and metadata helpers as an individual veteran or
+guardian edit.
+
+| Method | Path | Description | Status codes |
+| --- | --- | --- | --- |
+| `POST` | `/flights/:id/complete` | Mark a flight completed and change its Active people, including no-fly people, to Flown. `:id` is the flight document id. People are matched by flight name. | 200, 207, 400, 401, 403, 404, 409, 500, 503 |
+| `POST` | `/flights/future-status/activate` | Change every person with a `Future-*` status to Active. JSON body `{ "status": "Future-…" }`. People already on a flight are still changed and listed in `assignedToFlight`. | 200, 207, 400, 401, 403, 500, 503 |
+
 ### Key Flight Detail Endpoints
 
 - `GET /flights/:id/detail`
