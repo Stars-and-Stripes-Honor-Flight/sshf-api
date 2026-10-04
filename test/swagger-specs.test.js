@@ -301,4 +301,38 @@ describe('OpenAPI spec generation', () => {
             }
         }
     });
+
+    it('documents the flight status utility endpoints', () => {
+        const complete = specs.paths['/flights/{id}/complete']?.post;
+        const activate = specs.paths['/flights/future-status/activate']?.post;
+        expect(complete, 'missing POST /flights/{id}/complete').to.be.an('object');
+        expect(activate, 'missing POST /flights/future-status/activate').to.be.an('object');
+
+        expect(complete['x-required-permission']).to.equal('flights:manage');
+        expect(activate['x-required-permission']).to.equal('flights:manage');
+        expect(complete.responses).to.include.all.keys(
+            '200', '207', '400', '401', '403', '404', '409', '500', '503'
+        );
+        expect(activate.responses).to.include.all.keys('200', '207', '400', '401', '403', '500', '503');
+        expect(complete.responses['400'].description).to.include('Invalid document id');
+
+        const result = specs.components?.schemas?.FlightStatusBulkResult;
+        expect(result, 'missing FlightStatusBulkResult schema').to.be.an('object');
+        expect(result.properties.assignedToFlight.type).to.equal('array');
+        expect(result.properties.assignedToFlight.items.type).to.equal('string');
+        expect(result.properties.failed.items.properties).to.include.all.keys('id', 'type', 'status', 'error');
+        expect(result.properties.failed.items.properties.type.enum).to.include.members([
+            'veteran', 'guardian', 'flight'
+        ]);
+
+        const request = specs.components?.schemas?.FutureStatusActivateRequest;
+        expect(request, 'missing FutureStatusActivateRequest schema').to.be.an('object');
+        expect(request.required).to.deep.equal(['status']);
+        expect(request.properties.status.pattern).to.equal('^Future-.+');
+
+        expect(complete.responses['200'].content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/FlightStatusBulkResult');
+        expect(activate.requestBody.content['application/json'].schema.$ref)
+            .to.equal('#/components/schemas/FutureStatusActivateRequest');
+    });
 });

@@ -14,6 +14,7 @@ import { ROUTE_PERMISSIONS, listConfiguredGroupEntries, startupWarnings } from '
 import { createMembershipCache } from './utils/membership_cache.js';
 import { createUserCache } from './utils/user_cache.js';
 import { createAuthenticator } from './utils/authenticate.js';
+import { isDirectRun } from './utils/direct_run.js';
 
 // Import route handlers
 import { getUserPermissions } from './routes/user.js';
@@ -59,6 +60,7 @@ import {
 } from './routes/guardians.js';
 import { listFlights, createFlight, retrieveFlight, updateFlight } from './routes/flights.js';
 import { getFlightAssignments, addVeteransToFlight } from './routes/flight-assignments.js';
+import { completeFlight, activateFutureStatus } from './routes/flight-status.js';
 import { getFlightDetail } from './routes/flight-detail.js';
 import { getWaitlist } from './routes/waitlist.js';
 import { getWaitlistVeteranGroups } from './routes/waitlist-veteran-groups.js';
@@ -195,6 +197,8 @@ app.get("/flights", authenticate, requireRoutePermission('GET', '/flights'), dbS
 app.post("/flights", authenticate, requireRoutePermission('POST', '/flights'), dbSession, createFlight);
 app.get("/flights/:id", authenticate, requireRoutePermission('GET', '/flights/:id'), dbSession, retrieveFlight);
 app.put("/flights/:id", authenticate, requireRoutePermission('PUT', '/flights/:id'), dbSession, updateFlight);
+app.post("/flights/:id/complete", authenticate, requireRoutePermission('POST', '/flights/:id/complete'), dbSession, completeFlight);
+app.post("/flights/future-status/activate", authenticate, requireRoutePermission('POST', '/flights/future-status/activate'), dbSession, activateFutureStatus);
 
 // Flight assignment routes
 app.get("/flights/:id/assignments", authenticate, requireRoutePermission('GET', '/flights/:id/assignments'), dbSession, getFlightAssignments);
@@ -268,9 +272,10 @@ export async function validateGroupAuthorization(options = {}) {
 // Export the app for testing
 export { app };
 
-// Start the Express server only when run directly
+// Start the Express server only when this file is the process entry point.
+// pathToFileURL matches import.meta.url on Windows (file:///C:/...) and Linux.
 /* c8 ignore start */
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectRun(import.meta.url, process.argv[1])) {
     validateGroupAuthorization().then(() => {
         app.listen(port, () => {
             console.log(`Server running at http://localhost:${port}`);

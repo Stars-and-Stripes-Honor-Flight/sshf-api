@@ -40,6 +40,10 @@ function roleEnv(overrides = {}) {
 describe('Phase 2 role groups and permissions', () => {
     const originalEnv = { ...process.env };
 
+    beforeEach(() => {
+        delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
+    });
+
     afterEach(() => {
         sinon.restore();
         for (const key of Object.keys(process.env)) {

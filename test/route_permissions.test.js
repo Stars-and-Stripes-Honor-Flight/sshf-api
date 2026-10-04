@@ -174,9 +174,20 @@ describe('Phase 3 route permissions', () => {
     });
 
     describe('requirePermission', () => {
+        const originalDevOverride = process.env.AUTHZ_DEV_OVERRIDE_ROLES;
+
         beforeEach(() => {
             delete process.env.K_SERVICE;
+            delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
             Object.assign(process.env, ROLE_ENV);
+        });
+
+        afterEach(() => {
+            if (originalDevOverride === undefined) {
+                delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
+            } else {
+                process.env.AUTHZ_DEV_OVERRIDE_ROLES = originalDevOverride;
+            }
         });
 
         it('calls next when every listed permission is held', () => {
@@ -310,6 +321,15 @@ describe('Phase 3 route permissions', () => {
                 userFor(['WRITE'])
             );
             expect(deleteVeteran.res.body.requiredPermission).to.equal('records:delete');
+
+            for (const key of ['POST /flights/:id/complete', 'POST /flights/future-status/activate']) {
+                const route = protectedRoutes.find((item) => item.key === key);
+                expect(route, `${key} is mounted`).to.exist;
+                const result = invokeGate(route, userFor(['WRITE']));
+                expect(result.nextCalled, key).to.equal(false);
+                expect(result.res.statusCode, key).to.equal(403);
+                expect(result.res.body.requiredPermission, key).to.equal('flights:manage');
+            }
         });
 
         it('lets FULL do everything except review and medical', () => {
