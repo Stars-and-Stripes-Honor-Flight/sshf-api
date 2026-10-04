@@ -432,7 +432,11 @@ async function searchUnpaired(searchRequest, req) {
  *       Searches for unpaired veterans based on provided criteria.
  *       Currently only supports searching for unpaired veterans (paired=false).
  *       The search uses the unpaired_veterans_by_last_name view which filters
- *       veterans where guardian.id is empty.
+ *       veterans where guardian.id is empty. That view emits
+ *       [flight.status, name.last.toUpperCase()] and keeps spaces and punctuation.
+ *       The lastname query is uppercased to match that key. It is not passed
+ *       through the /search name-index helper, which strips spaces, apostrophes,
+ *       and periods and leaves case unchanged.
  *     tags: [Veterans]
  *     security:
  *       - GoogleAuth: []
@@ -455,7 +459,10 @@ async function searchUnpaired(searchRequest, req) {
  *         name: lastname
  *         schema:
  *           type: string
- *         description: Last name to search for (partial match, case-insensitive)
+ *         description: |
+ *           Last name prefix. Uppercased to match unpaired_veterans_by_last_name.
+ *           Spaces and punctuation are kept, so "Le Roy" and "le roy" share a key
+ *           and "LeRoy" does not.
  *       - in: query
  *         name: limit
  *         schema:

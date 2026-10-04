@@ -181,6 +181,78 @@ describe('UnpairedVeteranRequest', () => {
             const endKey = params.get('endkey');
             expect(endKey).to.equal('["Active","SMITH\ufff0"]');
         });
+
+        it('should uppercase spaced last names and keep the spaces in startkey and endkey', () => {
+            const cases = [
+                {
+                    label: 'Le Roy',
+                    startkey: '["Active","LE ROY"]',
+                    endkey: '["Active","LE ROY\ufff0"]'
+                },
+                {
+                    label: 'le roy',
+                    startkey: '["Active","LE ROY"]',
+                    endkey: '["Active","LE ROY\ufff0"]'
+                },
+                {
+                    label: 'LE ROY',
+                    startkey: '["Active","LE ROY"]',
+                    endkey: '["Active","LE ROY\ufff0"]'
+                }
+            ];
+
+            cases.forEach(({ label, startkey, endkey }) => {
+                const request = new UnpairedVeteranRequest({
+                    status: 'Active',
+                    lastname: label
+                });
+                const params = new URLSearchParams(request.toQueryParams());
+                expect(params.get('startkey'), label).to.equal(startkey);
+                expect(params.get('endkey'), label).to.equal(endkey);
+                expect(request.lastname, label).to.equal(label);
+            });
+        });
+
+        it('should keep an unspaced last name on a different key from the spaced form', () => {
+            const cases = [
+                { label: 'LeRoy', startkey: '["Active","LEROY"]', endkey: '["Active","LEROY\ufff0"]' },
+                { label: 'leroy', startkey: '["Active","LEROY"]', endkey: '["Active","LEROY\ufff0"]' }
+            ];
+
+            cases.forEach(({ label, startkey, endkey }) => {
+                const request = new UnpairedVeteranRequest({
+                    status: 'Active',
+                    lastname: label
+                });
+                const params = new URLSearchParams(request.toQueryParams());
+                expect(params.get('startkey'), label).to.equal(startkey);
+                expect(params.get('endkey'), label).to.equal(endkey);
+                expect(params.get('startkey'), label).to.not.equal('["Active","LE ROY"]');
+            });
+        });
+
+        it('should uppercase apostrophes, periods, and hyphens without removing them', () => {
+            const obrien = new UnpairedVeteranRequest({
+                status: 'Active',
+                lastname: "O'Brien"
+            });
+            expect(new URLSearchParams(obrien.toQueryParams()).get('startkey')).to.equal('["Active","O\'BRIEN"]');
+            expect(new URLSearchParams(obrien.toQueryParams()).get('endkey')).to.equal('["Active","O\'BRIEN\ufff0"]');
+
+            const stJohn = new UnpairedVeteranRequest({
+                status: 'Flown',
+                lastname: 'St. John'
+            });
+            expect(new URLSearchParams(stJohn.toQueryParams()).get('startkey')).to.equal('["Flown","ST. JOHN"]');
+            expect(new URLSearchParams(stJohn.toQueryParams()).get('endkey')).to.equal('["Flown","ST. JOHN\ufff0"]');
+
+            const hyphenated = new UnpairedVeteranRequest({
+                status: 'Active',
+                lastname: 'Smith-Jones'
+            });
+            expect(new URLSearchParams(hyphenated.toQueryParams()).get('startkey')).to.equal('["Active","SMITH-JONES"]');
+            expect(new URLSearchParams(hyphenated.toQueryParams()).get('endkey')).to.equal('["Active","SMITH-JONES\ufff0"]');
+        });
     });
 
     describe('toJSON', () => {
@@ -220,6 +292,15 @@ describe('UnpairedVeteranRequest', () => {
                 limit: 25,
                 viewName: null
             });
+        });
+
+        it('should keep the typed lastname when only the index key is uppercased', () => {
+            const request = new UnpairedVeteranRequest({
+                lastname: 'Le Roy',
+                status: 'Active'
+            });
+
+            expect(request.toJSON().lastname).to.equal('Le Roy');
         });
 
         it('should return correct JSON representation with defaults', () => {
