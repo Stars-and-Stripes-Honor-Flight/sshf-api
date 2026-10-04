@@ -357,6 +357,77 @@ describe('Veterans Search Route', () => {
             expect(response[0]).to.have.property('prefs');
         });
 
+        it('should query the unpaired view with an uppercased spaced lastname', async () => {
+            const lastnames = ['Le Roy', 'le roy', 'LE ROY'];
+
+            for (const lastname of lastnames) {
+                req.query.lastname = lastname;
+                global.fetch.resolves({
+                    ok: true,
+                    json: async () => ({
+                        total_rows: 1,
+                        offset: 0,
+                        rows: [{
+                            id: 'leroy-1',
+                            key: ['Active', 'LE ROY'],
+                            value: {
+                                name: 'Jean Le Roy',
+                                city: 'Springfield, IL',
+                                flight: 'F23',
+                                prefs: ''
+                            }
+                        }]
+                    })
+                });
+
+                await searchUnpairedVeterans(req, res);
+
+                expect(global.fetch.calledOnce, lastname).to.be.true;
+                const fetchUrl = global.fetch.firstCall.args[0];
+                const params = new URLSearchParams(fetchUrl.split('?')[1]);
+                expect(fetchUrl, lastname).to.include('/_design/basic/_view/unpaired_veterans_by_last_name?');
+                expect(params.get('startkey'), lastname).to.equal('["Active","LE ROY"]');
+                expect(params.get('endkey'), lastname).to.equal('["Active","LE ROY\ufff0"]');
+                expect(res.json.calledOnce, lastname).to.be.true;
+                expect(res.json.firstCall.args[0][0].name, lastname).to.equal('Jean Le Roy');
+
+                sinon.restore();
+                res.json = sinon.spy();
+                res.status = sinon.stub().returnsThis();
+                global.fetch = sinon.stub();
+            }
+        });
+
+        it('should query an unspaced lastname without collapsing it onto the spaced key', async () => {
+            req.query.lastname = 'LeRoy';
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({
+                    total_rows: 1,
+                    offset: 0,
+                    rows: [{
+                        id: 'leroy-2',
+                        key: ['Active', 'LEROY'],
+                        value: {
+                            name: 'Jean Leroy',
+                            city: 'Springfield, IL',
+                            flight: 'F23',
+                            prefs: ''
+                        }
+                    }]
+                })
+            });
+
+            await searchUnpairedVeterans(req, res);
+
+            const fetchUrl = global.fetch.firstCall.args[0];
+            const params = new URLSearchParams(fetchUrl.split('?')[1]);
+            expect(fetchUrl).to.include('/_design/basic/_view/unpaired_veterans_by_last_name?');
+            expect(params.get('startkey')).to.equal('["Active","LEROY"]');
+            expect(params.get('endkey')).to.equal('["Active","LEROY\ufff0"]');
+            expect(res.json.firstCall.args[0][0].id).to.equal('leroy-2');
+        });
+
         it('should handle lastname with mixed case and convert to uppercase in query', async () => {
             req.query.lastname = 'sMiTh';
             const mockDbResult = {
