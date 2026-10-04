@@ -14,6 +14,7 @@ import { ROUTE_PERMISSIONS, listConfiguredGroupEntries, startupWarnings } from '
 import { createMembershipCache } from './utils/membership_cache.js';
 import { createUserCache } from './utils/user_cache.js';
 import { createAuthenticator } from './utils/authenticate.js';
+import { isDirectRun } from './utils/direct_run.js';
 
 // Import route handlers
 import { getUserPermissions } from './routes/user.js';
@@ -271,9 +272,10 @@ export async function validateGroupAuthorization(options = {}) {
 // Export the app for testing
 export { app };
 
-// Start the Express server only when run directly
+// Start the Express server only when this file is the process entry point.
+// pathToFileURL matches import.meta.url on Windows (file:///C:/...) and Linux.
 /* c8 ignore start */
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isDirectRun(import.meta.url, process.argv[1])) {
     validateGroupAuthorization().then(() => {
         app.listen(port, () => {
             console.log(`Server running at http://localhost:${port}`);
