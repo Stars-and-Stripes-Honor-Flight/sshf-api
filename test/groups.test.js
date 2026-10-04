@@ -115,6 +115,7 @@ describe('Directory group lookup failures', () => {
     const originalClientId = process.env.GOOGLE_CLIENT_ID;
     const originalAllowedClientIds = process.env.ALLOWED_CLIENT_IDS;
     const originalAllowedDomains = process.env.ALLOWED_EMAIL_DOMAINS;
+    const originalDevOverride = process.env.AUTHZ_DEV_OVERRIDE_ROLES;
     const userData = { email: 'member@starsandstripeshonorflight.org' };
     const saEnv = {
         GOOGLE_SERVICE_ACCOUNT_EMAIL: 'sa@example.iam.gserviceaccount.com',
@@ -186,10 +187,15 @@ describe('Directory group lookup failures', () => {
         return { authenticate, cacheSet };
     }
 
+    beforeEach(() => {
+        delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
+    });
+
     afterEach(() => {
         restore('GOOGLE_CLIENT_ID', originalClientId);
         restore('ALLOWED_CLIENT_IDS', originalAllowedClientIds);
         restore('ALLOWED_EMAIL_DOMAINS', originalAllowedDomains);
+        restore('AUTHZ_DEV_OVERRIDE_ROLES', originalDevOverride);
         sinon.restore();
     });
 

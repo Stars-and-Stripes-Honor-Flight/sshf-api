@@ -111,6 +111,7 @@ describe('Express application', () => {
             processExitStub = sinon.stub(process, 'exit');
             consoleErrorStub = sinon.stub(console, 'error');
             consoleWarnStub = sinon.stub(console, 'warn');
+            delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
             for (const key of Object.keys(process.env)) {
                 if (key.startsWith('AUTHZ_ROLE_')) {
                     delete process.env[key];
@@ -172,6 +173,12 @@ describe('Express application', () => {
         });
 
         it('checks AUTHZ_ROLE_FULL_GROUPS with members.hasMember and does not call groups.list', async () => {
+            delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
+            for (const key of Object.keys(process.env)) {
+                if (key.startsWith('AUTHZ_ROLE_')) {
+                    delete process.env[key];
+                }
+            }
             process.env.AUTHZ_ROLE_FULL_GROUPS = 'sshf_app_dev_full_access@starsandstripeshonorflight.org';
             delete process.env.ALLOWED_GROUP_EMAILS;
             delete process.env.K_SERVICE;

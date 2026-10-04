@@ -362,8 +362,10 @@ describe('resolveAuthorizationGroups', () => {
         const originalClientId = process.env.GOOGLE_CLIENT_ID;
         const originalAllowedClientIds = process.env.ALLOWED_CLIENT_IDS;
         const originalFullGroups = process.env.AUTHZ_ROLE_FULL_GROUPS;
+        const originalDevOverride = process.env.AUTHZ_DEV_OVERRIDE_ROLES;
         process.env.GOOGLE_CLIENT_ID = OUR_CLIENT_ID;
         delete process.env.ALLOWED_CLIENT_IDS;
+        delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
         process.env.AUTHZ_ROLE_FULL_GROUPS = FULL_ACCESS_GROUP;
 
         const checkMembership = sinon.stub().resolves({ isMember: true });
@@ -406,6 +408,7 @@ describe('resolveAuthorizationGroups', () => {
             restoreEnv('GOOGLE_CLIENT_ID', originalClientId);
             restoreEnv('ALLOWED_CLIENT_IDS', originalAllowedClientIds);
             restoreEnv('AUTHZ_ROLE_FULL_GROUPS', originalFullGroups);
+            restoreEnv('AUTHZ_DEV_OVERRIDE_ROLES', originalDevOverride);
         }
     });
 

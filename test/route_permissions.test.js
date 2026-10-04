@@ -174,9 +174,20 @@ describe('Phase 3 route permissions', () => {
     });
 
     describe('requirePermission', () => {
+        const originalDevOverride = process.env.AUTHZ_DEV_OVERRIDE_ROLES;
+
         beforeEach(() => {
             delete process.env.K_SERVICE;
+            delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
             Object.assign(process.env, ROLE_ENV);
+        });
+
+        afterEach(() => {
+            if (originalDevOverride === undefined) {
+                delete process.env.AUTHZ_DEV_OVERRIDE_ROLES;
+            } else {
+                process.env.AUTHZ_DEV_OVERRIDE_ROLES = originalDevOverride;
+            }
         });
 
         it('calls next when every listed permission is held', () => {
