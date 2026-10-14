@@ -49,6 +49,19 @@ describe('OpenAPI spec generation', () => {
             ['New', 'Hold', 'Accepted', 'Rejected', 'Trash']
         );
 
+        const vetTypes = [
+            'WWII',
+            'Korea',
+            'Vietnam',
+            'Cold War',
+            'Gulf War',
+            'Afghanistan',
+            'Iraq',
+            'Other'
+        ];
+        expect(schemas.Veteran.properties.vet_type.enum).to.deep.equal(vetTypes);
+        expect(schemas.ReviewApplication.properties.vet_type.enum).to.deep.equal(vetTypes);
+
         const intakeScheme = specs.components?.securitySchemes?.IntakeIdToken;
         expect(intakeScheme).to.be.an('object');
         expect(intakeScheme.type).to.equal('http');

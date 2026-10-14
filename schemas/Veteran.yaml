@@ -283,7 +283,7 @@ properties:
   vet_type:
     type: string
     default: 'WWII'
-    enum: ['WWII', 'Korea', 'Vietnam', 'Afghanistan', 'Iraq', 'Other']
+    enum: ['WWII', 'Korea', 'Vietnam', 'Cold War', 'Gulf War', 'Afghanistan', 'Iraq', 'Other']
     description: 'Type of veteran/war conflict served'
   shirt:
     type: object

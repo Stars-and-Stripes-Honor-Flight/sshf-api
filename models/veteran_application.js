@@ -1,7 +1,6 @@
 import { ReviewApplication, cloneDocument, fixPhone } from './review_application.js';
-import { Veteran } from './veteran.js';
+import { Veteran, VET_TYPES } from './veteran.js';
 
-const VET_TYPES = ['WWII', 'Korea', 'Vietnam', 'Afghanistan', 'Iraq', 'Other'];
 const SERVICE_BRANCHES = ['', 'Unknown', 'Army', 'Air Force', 'Navy', 'Marines', 'Coast Guard'];
 
 function yesNo(value) {
