@@ -1,6 +1,24 @@
 import { expect } from 'chai';
 import { Veteran } from '../models/veteran.js';
 
+const VET_TYPES = [
+    'WWII',
+    'Korea',
+    'Vietnam',
+    'Cold War',
+    'Gulf War',
+    'Afghanistan',
+    'Iraq',
+    'Other'
+];
+
+describe('Veteran conflict list', () => {
+    it('exports one shared list in legacy order', async () => {
+        const veteranModule = await import('../models/veteran.js');
+        expect(veteranModule.VET_TYPES).to.deep.equal(VET_TYPES);
+    });
+});
+
 describe('Veteran Model', () => {
     let baseSampleData, sampleVeteranData;
 
@@ -966,6 +984,23 @@ describe('Veteran Model', () => {
             const veteran = new Veteran(sampleVeteranData);
             veteran.vet_type = 'Modern'; // Invalid type
             expect(() => veteran.validate()).to.throw('Invalid veteran type');
+        });
+
+        it('should accept Cold War and Gulf War veteran types', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            for (const vetType of ['Cold War', 'Gulf War']) {
+                veteran.vet_type = vetType;
+                expect(veteran.validate(), vetType).to.equal(true);
+                expect(veteran.vet_type).to.equal(vetType);
+            }
+        });
+
+        it('should reject conflict values that are not the exact vet_type strings', () => {
+            const veteran = new Veteran(sampleVeteranData);
+            for (const vetType of ['ColdWar', 'GulfWar', 'cold war', 'gulf war']) {
+                veteran.vet_type = vetType;
+                expect(() => veteran.validate(), vetType).to.throw('Invalid veteran type');
+            }
         });
 
         it('should validate accommodation fields', () => {

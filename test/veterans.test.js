@@ -151,6 +151,35 @@ describe('Veterans Route Handlers', () => {
             expect(res.status.calledWith(503)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Database session could not be established');
         });
+
+        for (const vetType of ['Cold War', 'Gulf War']) {
+            it(`should create a veteran with vet_type ${vetType}`, async () => {
+                req.body.vet_type = vetType;
+                let savedBody = null;
+                global.fetch.callsFake(async (_url, options) => {
+                    if (options?.method === 'POST') {
+                        savedBody = JSON.parse(options.body);
+                    }
+                    return { ok: true, json: async () => ({ id: 'new-id', rev: '1-abc' }) };
+                });
+
+                await createVeteran(req, res);
+
+                expect(res.status.calledWith(201)).to.be.true;
+                expect(savedBody.vet_type).to.equal(vetType);
+                expect(res.json.firstCall.args[0].vet_type).to.equal(vetType);
+            });
+        }
+
+        it('should reject an unknown vet_type on create', async () => {
+            req.body.vet_type = 'Modern';
+
+            await createVeteran(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Invalid veteran type');
+            expect(global.fetch.called).to.be.false;
+        });
     });
 
     describe('retrieveVeteran', () => {
@@ -269,6 +298,33 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(400)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.include('Validation failed');
+        });
+
+        for (const vetType of ['Cold War', 'Gulf War']) {
+            it(`should update vet_type to ${vetType}`, async () => {
+                req.body.vet_type = vetType;
+                let savedDoc = null;
+                global.fetch.onSecondCall().callsFake(async (_url, options) => {
+                    savedDoc = JSON.parse(options.body);
+                    return { ok: true, json: async () => ({ id: 'test-id', rev: '2-def' }) };
+                });
+
+                await updateVeteran(req, res);
+
+                expect(savedDoc.vet_type).to.equal(vetType);
+                expect(res.json.firstCall.args[0].vet_type).to.equal(vetType);
+                expect(res.status.calledWith(400)).to.be.false;
+            });
+        }
+
+        it('should reject an unknown vet_type on update', async () => {
+            req.body.vet_type = 'Modern';
+
+            await updateVeteran(req, res);
+
+            expect(res.status.calledWith(400)).to.be.true;
+            expect(res.json.firstCall.args[0].error).to.include('Invalid veteran type');
+            expect(global.fetch.calledOnce).to.be.true;
         });
 
         it('should handle not found errors', async () => {

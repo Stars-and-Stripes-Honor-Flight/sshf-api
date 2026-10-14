@@ -136,6 +136,25 @@ describe('VeteranApplication Model', () => {
             expect(() => app.validate()).to.throw(/Validation failed/);
         });
 
+        for (const conflict of ['Cold War', 'Gulf War']) {
+            it(`should accept vet_type ${conflict}`, () => {
+                const app = VeteranApplication.fromCouchDoc(
+                    buildRawVeteranAppFixture({ Conflict: conflict })
+                );
+                expect(app.vet_type).to.equal(conflict);
+                expect(app.validate()).to.equal(true);
+            });
+        }
+
+        it('should reject conflict values that omit the required space', () => {
+            for (const conflict of ['ColdWar', 'GulfWar']) {
+                const app = VeteranApplication.fromCouchDoc(
+                    buildRawVeteranAppFixture({ Conflict: conflict })
+                );
+                expect(() => app.validate(), conflict).to.throw(/Invalid veteran type/);
+            }
+        });
+
         it('should throw for invalid service branch', () => {
             const app = VeteranApplication.fromCouchDoc(
                 buildRawVeteranAppFixture({ 'Branch-of-Service': 'Space Force' })
@@ -214,6 +233,21 @@ describe('VeteranApplication Model', () => {
             expect(veteran.call.history).to.be.an('array').that.is.empty;
             expect(veteran.guardian.history).to.be.an('array').that.is.empty;
         });
+
+        for (const conflict of ['Cold War', 'Gulf War']) {
+            it(`should map vet_type ${conflict} onto the accepted veteran`, () => {
+                const app = VeteranApplication.fromCouchDoc(
+                    buildRawVeteranAppFixture({ Conflict: conflict })
+                );
+                const veteran = app.toVeteran(null, acceptUser);
+
+                expect(veteran).to.be.instanceof(Veteran);
+                expect(veteran.vet_type).to.equal(conflict);
+                expect(app.toCouchDoc().Conflict).to.equal(conflict);
+                veteran.prepareForSave(acceptUser);
+                expect(veteran.validate()).to.equal(true);
+            });
+        }
 
         it('should map Unknown branch to empty string', () => {
             const app = VeteranApplication.fromCouchDoc(

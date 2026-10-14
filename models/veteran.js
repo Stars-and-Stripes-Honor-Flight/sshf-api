@@ -1,5 +1,20 @@
 import { trimStringValues } from '../utils/trim_strings.js';
 
+/**
+ * Conflict eras stored on vet_type. Order matches the legacy app:
+ * WWII, Korea, Vietnam, Cold War, Gulf War, Afghanistan, Iraq, Other.
+ */
+export const VET_TYPES = [
+    'WWII',
+    'Korea',
+    'Vietnam',
+    'Cold War',
+    'Gulf War',
+    'Afghanistan',
+    'Iraq',
+    'Other'
+];
+
 export class Veteran {
     constructor(data = {}) {
         data = trimStringValues(data);
@@ -314,7 +329,7 @@ export class Veteran {
         }
 
         // Veteran type validation
-        if (this.vet_type && !['WWII', 'Korea', 'Vietnam', 'Afghanistan', 'Iraq', 'Other'].includes(this.vet_type)) {
+        if (this.vet_type && !VET_TYPES.includes(this.vet_type)) {
             errors.push('Invalid veteran type');
         }
 
