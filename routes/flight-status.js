@@ -7,6 +7,7 @@ import {
 } from '../models/flight_status_update.js';
 import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
+import { isFlightCompleted } from '../utils/flight_guard.js';
 import { saveBulkDocs } from '../utils/bulk_docs.js';
 
 const VIEW_PAGE_SIZE = 500;
@@ -189,7 +190,7 @@ export async function completeFlight(req, res) {
         if (flightDoc.type !== 'Flight') {
             return res.status(400).json({ error: 'Document is not a flight record' });
         }
-        if (flightDoc.completed === true || flightDoc.completed === 'true') {
+        if (isFlightCompleted(flightDoc)) {
             return res.status(409).json({ error: 'Flight is already completed' });
         }
 
@@ -230,7 +231,7 @@ export async function completeFlight(req, res) {
             markFlightCompleted(flightDoc, req.user);
             const flightOutcome = await saveBulkDocs(req, [flightDoc], {
                 prepareRetry(fresh) {
-                    if (fresh?.completed === true || fresh?.completed === 'true') {
+                    if (isFlightCompleted(fresh)) {
                         return { action: 'ok' };
                     }
                     if (fresh?.type !== 'Flight') {
