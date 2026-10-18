@@ -3,6 +3,7 @@ import { Veteran } from '../models/veteran.js';
 import { Guardian } from '../models/guardian.js';
 import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
 import { buildCouchDocumentUrl, buildCouchDocumentUrlOrRespond } from '../utils/document_id.js';
+import { isFlightCompleted } from '../utils/flight_guard.js';
 
 const dbUrl = process.env.DB_URL;
 const dbName = process.env.DB_NAME;
@@ -277,14 +278,20 @@ export async function getFlightAssignments(req, res) {
  *         description: Forbidden - missing required permission
  *       409:
  *         description: |
- *           One or more veteran or guardian documents conflicted. The handler
- *           re-reads the current revision and retries that write once. This
- *           status is returned when a conflict remains after that retry. The
- *           body lists the ids that were saved and the ids that failed.
+ *           The flight is completed, so people cannot be added. The body is
+ *           { error: 'Flight is completed; people cannot be added' }. The
+ *           waitlist is not read and no documents are written.
+ *
+ *           Otherwise, one or more veteran or guardian documents conflicted.
+ *           The handler re-reads the current revision and retries that write
+ *           once. This status is returned when a conflict remains after that
+ *           retry. The body lists the ids that were saved and the ids that failed.
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AddVeteransResult'
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/AddVeteransResult'
+ *                 - $ref: '#/components/schemas/Error'
  *       500:
  *         description: |
  *           Server error while preparing the assignment, or one or more veteran
@@ -334,6 +341,10 @@ export async function addVeteransToFlight(req, res) {
         // Verify this is a flight document
         if (flightData.type !== 'Flight') {
             return res.status(400).json({ error: 'Document is not a flight record' });
+        }
+
+        if (isFlightCompleted(flightData)) {
+            return res.status(409).json({ error: 'Flight is completed; people cannot be added' });
         }
 
         const flightName = flightData.name;

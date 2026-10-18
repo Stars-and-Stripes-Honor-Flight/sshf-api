@@ -241,8 +241,12 @@ describe('OpenAPI spec generation', () => {
         const conflict = post.responses['409'];
         expect(conflict.description).to.match(/conflict/i);
         expect(conflict.description).to.match(/retry/i);
-        expect(conflict.content['application/json'].schema.$ref)
-            .to.equal('#/components/schemas/AddVeteransResult');
+        expect(conflict.description).to.include('Flight is completed; people cannot be added');
+        expect(conflict.content['application/json'].schema.oneOf.map((entry) => entry.$ref))
+            .to.deep.equal([
+                '#/components/schemas/AddVeteransResult',
+                '#/components/schemas/Error'
+            ]);
 
         const partial = post.responses['500'];
         expect(partial.description).to.match(/saved/i);

@@ -245,6 +245,76 @@ describe('Flight Assignments Route Handlers', () => {
             flight_date: '2024-11-05'
         };
 
+        const waitlistVeteran = {
+            rows: [{
+                id: 'vet-1',
+                value: '',
+                doc: {
+                    _id: 'vet-1',
+                    _rev: '1-xyz',
+                    type: 'Veteran',
+                    flight: { id: 'None', history: [] },
+                    guardian: { id: '' },
+                    metadata: {}
+                }
+            }]
+        };
+
+        it('returns 409 for a completed flight and does not read the waitlist or write documents', async () => {
+            for (const completed of [true, 'true']) {
+                res = {
+                    status: sinon.stub().returnsThis(),
+                    json: sinon.spy()
+                };
+                global.fetch.resetHistory();
+                global.fetch.resolves({
+                    ok: true,
+                    json: async () => ({ ...mockFlightDoc, completed })
+                });
+
+                await addVeteransToFlight(req, res);
+
+                expect(res.status.calledWith(409), String(completed)).to.equal(true);
+                expect(res.json.firstCall.args[0], String(completed)).to.deep.equal({
+                    error: 'Flight is completed; people cannot be added'
+                });
+                expect(global.fetch.callCount, String(completed)).to.equal(1);
+
+                const [url, options] = global.fetch.firstCall.args;
+                expect(String(url), String(completed)).to.include('flight-123');
+                expect(String(url), String(completed)).to.not.include('waitlist');
+                expect(String(url), String(completed)).to.not.include('_view');
+                expect(options?.method, String(completed)).to.equal(undefined);
+            }
+        });
+
+        it('should still assign veterans when the flight is not completed', async () => {
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => ({ ...mockFlightDoc, completed: false })
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => waitlistVeteran
+            });
+
+            let savedDoc;
+            global.fetch.onCall(2).callsFake(async (_url, options) => {
+                savedDoc = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ ok: true, id: 'vet-1', rev: '2-abc' }) };
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.called).to.equal(false);
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(1);
+            expect(response.errors).to.deep.equal([]);
+            expect(savedDoc.flight.id).to.equal('SSHF-Nov2024');
+            expect(String(global.fetch.getCall(1).args[0])).to.include('waitlist_veterans_active');
+            expect(global.fetch.getCall(2).args[1].method).to.equal('PUT');
+        });
+
         it('should add veterans to flight successfully', async () => {
             // Mock flight document fetch
             global.fetch.onCall(0).resolves({
