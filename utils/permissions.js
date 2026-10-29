@@ -51,6 +51,7 @@ export const ROUTE_PERMISSIONS = Object.freeze({
     'PATCH /veterans/:id/bus': Object.freeze(['records:write']),
     'PATCH /veterans/:id/mail-call-received': Object.freeze(['records:write']),
     'PATCH /veterans/:id/mail-call-adopt': Object.freeze(['records:write']),
+    'PATCH /veterans/:id/mail-call-notes': Object.freeze(['records:write']),
     'PATCH /veterans/:id/medical-form': Object.freeze(['records:write']),
     'PATCH /veterans/:id/medical-review': Object.freeze(['records:write']),
     'PATCH /veterans/:id/vaccinated': Object.freeze(['records:write']),

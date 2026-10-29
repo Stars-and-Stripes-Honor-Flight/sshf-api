@@ -379,4 +379,23 @@ describe('Phase 3 route permissions', () => {
             expect(result.res.body).to.deep.equal({ message: 'Forbidden: Account not permitted' });
         });
     });
+
+    describe('PATCH /veterans/:id/mail-call-notes', () => {
+        it('requires records:write for PATCH /veterans/:id/mail-call-notes', () => {
+            expect(ROUTE_PERMISSIONS['PATCH /veterans/:id/mail-call-notes'])
+                .to.deep.equal(['records:write']);
+        });
+
+        it('mounts PATCH /veterans/:id/mail-call-notes with the same middleware order as mail-call-received', () => {
+            const routes = listRoutes();
+            const sibling = routes.find((item) => item.key === 'PATCH /veterans/:id/mail-call-received');
+            const route = routes.find((item) => item.key === 'PATCH /veterans/:id/mail-call-notes');
+            expect(route, 'PATCH /veterans/:id/mail-call-notes is mounted').to.exist;
+            const siblingNames = sibling.stack.map((layer) => layer.handle.name);
+            const names = route.stack.map((layer) => layer.handle.name);
+            expect(names.slice(0, 3)).to.deep.equal(siblingNames.slice(0, 3));
+            expect(names[3]).to.equal('updateVeteranMailCallNotes');
+            expect(route.stack[1].handle.requiredPermissions).to.deep.equal(['records:write']);
+        });
+    });
 });

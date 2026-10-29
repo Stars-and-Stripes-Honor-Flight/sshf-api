@@ -352,4 +352,18 @@ describe('OpenAPI spec generation', () => {
         expect(activate.requestBody.content['application/json'].schema.$ref)
             .to.equal('#/components/schemas/FutureStatusActivateRequest');
     });
+
+    it('documents PATCH /veterans/{id}/mail-call-notes like apparel notes', () => {
+        const apparel = specs.paths['/veterans/{id}/apparel-notes']?.patch;
+        const notes = specs.paths['/veterans/{id}/mail-call-notes']?.patch;
+        expect(apparel, 'missing PATCH /veterans/{id}/apparel-notes').to.be.an('object');
+        expect(notes, 'missing PATCH /veterans/{id}/mail-call-notes').to.be.an('object');
+        expect(notes.tags).to.deep.equal(apparel.tags);
+        expect(notes.security).to.deep.equal(apparel.security);
+        expect(notes['x-required-permission']).to.equal(apparel['x-required-permission']);
+        expect(notes['x-required-permission']).to.equal('records:write');
+        expect(notes.parameters).to.deep.equal(apparel.parameters);
+        expect(notes.requestBody).to.deep.equal(apparel.requestBody);
+        expect(notes.responses).to.deep.equal(apparel.responses);
+    });
 });
