@@ -1513,13 +1513,13 @@ describe('Veterans Route Handlers', () => {
             });
 
             it('should accept a long mail call notes string', async () => {
-                const longNote = 'x'.repeat(256);
+                const longNote = 'x'.repeat(4000);
                 const original = mailCallDoc();
                 const savedDoc = await captureSaved(original, longNote);
 
                 expect(savedDoc, 'document was not saved').to.exist;
                 expect(savedDoc.mail_call.notes).to.equal(longNote);
-                expect(savedDoc.mail_call.notes).to.have.lengthOf(256);
+                expect(savedDoc.mail_call.notes).to.have.lengthOf(4000);
                 expectUntouchedSections(savedDoc, original);
                 expect(res.json.firstCall.args[0].mail_call_notes).to.equal(longNote);
             });

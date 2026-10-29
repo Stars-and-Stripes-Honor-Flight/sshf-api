@@ -1,15 +1,7 @@
-import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 import { expect } from 'chai';
 import { app } from '../index.js';
 import { requirePermission } from '../utils/auth.js';
 import { ROUTE_PERMISSIONS, permissionsForRoles } from '../utils/permissions.js';
-
-const indexSource = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), '..', 'index.js'),
-    'utf8'
-);
 
 /**
  * Routes that are not gated by requirePermission. /api-docs is an app.use
@@ -392,11 +384,6 @@ describe('Phase 3 route permissions', () => {
         it('requires records:write for PATCH /veterans/:id/mail-call-notes', () => {
             expect(ROUTE_PERMISSIONS['PATCH /veterans/:id/mail-call-notes'])
                 .to.deep.equal(['records:write']);
-        });
-
-        it('registers PATCH /veterans/:id/mail-call-notes in index.js with requireRoutePermission and dbSession', () => {
-            const registration = 'app.patch("/veterans/:id/mail-call-notes", authenticate, requireRoutePermission(\'PATCH\', \'/veterans/:id/mail-call-notes\'), dbSession, updateVeteranMailCallNotes)';
-            expect(indexSource).to.include(registration);
         });
 
         it('mounts PATCH /veterans/:id/mail-call-notes with the same middleware order as mail-call-received', () => {
