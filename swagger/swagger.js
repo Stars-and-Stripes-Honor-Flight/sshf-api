@@ -65,7 +65,7 @@ const definition = {
   openapi: '3.0.0',
   info: {
     title: 'SSHF API',
-    version: '1.1.2',
+    version: '1.1.3',
     description: 'API for managing veterans documents with Google authentication',
   },
   servers: getServers(),
