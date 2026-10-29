@@ -1,7 +1,15 @@
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { expect } from 'chai';
 import { app } from '../index.js';
 import { requirePermission } from '../utils/auth.js';
 import { ROUTE_PERMISSIONS, permissionsForRoles } from '../utils/permissions.js';
+
+const indexSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'index.js'),
+    'utf8'
+);
 
 /**
  * Routes that are not gated by requirePermission. /api-docs is an app.use
@@ -377,6 +385,30 @@ describe('Phase 3 route permissions', () => {
             expect(result.nextCalled).to.equal(false);
             expect(result.res.statusCode).to.equal(403);
             expect(result.res.body).to.deep.equal({ message: 'Forbidden: Account not permitted' });
+        });
+    });
+
+    describe('PATCH /veterans/:id/mail-call-notes', () => {
+        it('requires records:write for PATCH /veterans/:id/mail-call-notes', () => {
+            expect(ROUTE_PERMISSIONS['PATCH /veterans/:id/mail-call-notes'])
+                .to.deep.equal(['records:write']);
+        });
+
+        it('registers PATCH /veterans/:id/mail-call-notes in index.js with requireRoutePermission and dbSession', () => {
+            const registration = 'app.patch("/veterans/:id/mail-call-notes", authenticate, requireRoutePermission(\'PATCH\', \'/veterans/:id/mail-call-notes\'), dbSession, updateVeteranMailCallNotes)';
+            expect(indexSource).to.include(registration);
+        });
+
+        it('mounts PATCH /veterans/:id/mail-call-notes with the same middleware order as mail-call-received', () => {
+            const routes = listRoutes();
+            const sibling = routes.find((item) => item.key === 'PATCH /veterans/:id/mail-call-received');
+            const route = routes.find((item) => item.key === 'PATCH /veterans/:id/mail-call-notes');
+            expect(route, 'PATCH /veterans/:id/mail-call-notes is mounted').to.exist;
+            const siblingNames = sibling.stack.map((layer) => layer.handle.name);
+            const names = route.stack.map((layer) => layer.handle.name);
+            expect(names.slice(0, 3)).to.deep.equal(siblingNames.slice(0, 3));
+            expect(names[3]).to.equal('updateVeteranMailCallNotes');
+            expect(route.stack[1].handle.requiredPermissions).to.deep.equal(['records:write']);
         });
     });
 });

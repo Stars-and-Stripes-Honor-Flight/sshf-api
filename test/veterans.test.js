@@ -17,6 +17,7 @@ import {
     updateVeteranApparelJacketSize,
     updateVeteranApparelNotes
 } from '../routes/veterans.js';
+import * as veteranRoutes from '../routes/veterans.js';
 import { DatabaseSessionError } from '../utils/db.js';
 
 describe('Veterans Route Handlers', () => {
@@ -1114,6 +1115,12 @@ describe('Veterans Route Handlers', () => {
             metadata: {}
         };
 
+        async function invokeMailCallNotes(request, response) {
+            const handler = veteranRoutes.updateVeteranMailCallNotes;
+            expect(handler, 'updateVeteranMailCallNotes is not exported').to.be.a('function');
+            await handler(request, response);
+        }
+
         const cases = [
             {
                 name: 'mail-call-received',
@@ -1131,6 +1138,17 @@ describe('Veterans Route Handlers', () => {
                 invalid: 'bad',
                 expectedField: 'mail_call_adopt',
                 docGetter: (doc) => doc.mail_call.adopt,
+                historyPath: 'call.history'
+            },
+            {
+                name: 'mail-call-notes',
+                handler: async (request, response) => {
+                    await invokeMailCallNotes(request, response);
+                },
+                valid: 'new mail call note',
+                invalid: 42,
+                expectedField: 'mail_call_notes',
+                docGetter: (doc) => doc.mail_call.notes,
                 historyPath: 'call.history'
             },
             {
@@ -1381,6 +1399,214 @@ describe('Veterans Route Handlers', () => {
 
             expect(res.status.calledWith(500)).to.be.true;
             expect(res.json.firstCall.args[0].error).to.equal('Failed to update veteran medical form');
+        });
+
+        describe('mail-call-notes', () => {
+            function mailCallDoc() {
+                return {
+                    _id: 'vet-mail-notes-1',
+                    _rev: '1-abc',
+                    type: 'Veteran',
+                    name: { first: 'Ada', last: 'Lovelace' },
+                    mail_call: {
+                        received: true,
+                        adopt: false,
+                        notes: 'old note',
+                        name: 'Pat Example',
+                        relation: 'child',
+                        address: { phone: '217-555-0100', email: 'pat@example.com' }
+                    },
+                    medical: { form: false, review: 'old review' },
+                    flight: {
+                        vaccinated: false,
+                        history: [{ id: 'flight-prior', change: 'flight earlier' }]
+                    },
+                    homecoming: { destination: 'OldTown' },
+                    apparel: { shirt_size: 'M', jacket_size: 'L', notes: 'old apparel' },
+                    call: { history: [{ id: 'prior', change: 'earlier change' }] },
+                    metadata: { created_at: '2020-01-01T00:00:00Z', created_by: 'Creator' }
+                };
+            }
+
+            async function captureSaved(doc, value) {
+                req.body = { value };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => JSON.parse(JSON.stringify(doc))
+                });
+                let savedDoc = null;
+                global.fetch.onSecondCall().callsFake(async (url, options) => {
+                    savedDoc = JSON.parse(options.body);
+                    return { ok: true, json: async () => ({ id: doc._id, rev: '2-new' }) };
+                });
+                await invokeMailCallNotes(req, res);
+                return savedDoc;
+            }
+
+            function expectUntouchedSections(savedDoc, original) {
+                expect(savedDoc.mail_call.received).to.equal(original.mail_call.received);
+                expect(savedDoc.mail_call.adopt).to.equal(original.mail_call.adopt);
+                expect(savedDoc.mail_call.name).to.equal(original.mail_call.name);
+                expect(savedDoc.mail_call.relation).to.equal(original.mail_call.relation);
+                expect(savedDoc.mail_call.address).to.deep.equal(original.mail_call.address);
+                expect(savedDoc.name).to.deep.equal(original.name);
+                expect(savedDoc.medical).to.deep.equal(original.medical);
+                expect(savedDoc.flight).to.deep.equal(original.flight);
+                expect(savedDoc.homecoming).to.deep.equal(original.homecoming);
+                expect(savedDoc.apparel).to.deep.equal(original.apparel);
+                expect(savedDoc.metadata.created_at).to.equal(original.metadata.created_at);
+                expect(savedDoc.metadata.created_by).to.equal(original.metadata.created_by);
+                expect(savedDoc.call.history[0]).to.deep.equal(original.call.history[0]);
+                expect(savedDoc._id).to.equal(original._id);
+                expect(savedDoc._rev).to.equal(original._rev);
+                expect(savedDoc.type).to.equal(original.type);
+            }
+
+            it('should update only mail_call.notes and leave other mail_call fields untouched', async () => {
+                const original = mailCallDoc();
+                const savedDoc = await captureSaved(original, 'new mail call note');
+
+                expect(savedDoc, 'document was not saved').to.exist;
+                expect(savedDoc.mail_call.notes).to.equal('new mail call note');
+                expectUntouchedSections(savedDoc, original);
+                const response = res.json.firstCall.args[0];
+                expect(response.ok).to.equal(true);
+                expect(response.mail_call_notes).to.equal('new mail call note');
+            });
+
+            it('should clear mail call notes when the value is an empty string', async () => {
+                const original = mailCallDoc();
+                const savedDoc = await captureSaved(original, '');
+
+                expect(savedDoc, 'document was not saved').to.exist;
+                expect(savedDoc.mail_call.notes).to.equal('');
+                expectUntouchedSections(savedDoc, original);
+                expect(savedDoc.call.history).to.have.lengthOf(2);
+                expect(savedDoc.call.history[1].change).to.equal(
+                    'changed mail call notes from: old note to:  by: Admin User'
+                );
+                expect(res.json.firstCall.args[0].mail_call_notes).to.equal('');
+            });
+
+            it('should clear mail call notes when the value is whitespace only', async () => {
+                const original = mailCallDoc();
+                const savedDoc = await captureSaved(original, ' \t\n ');
+
+                expect(savedDoc, 'document was not saved').to.exist;
+                expect(savedDoc.mail_call.notes).to.equal('');
+                expectUntouchedSections(savedDoc, original);
+                expect(savedDoc.call.history).to.have.lengthOf(2);
+                expect(savedDoc.call.history[1].change).to.equal(
+                    'changed mail call notes from: old note to:  by: Admin User'
+                );
+                expect(res.json.firstCall.args[0].mail_call_notes).to.equal('');
+            });
+
+            it('should trim surrounding whitespace from mail call notes', async () => {
+                const original = mailCallDoc();
+                const savedDoc = await captureSaved(original, '  new mail call note  ');
+
+                expect(savedDoc, 'document was not saved').to.exist;
+                expect(savedDoc.mail_call.notes).to.equal('new mail call note');
+                expectUntouchedSections(savedDoc, original);
+                expect(res.json.firstCall.args[0].mail_call_notes).to.equal('new mail call note');
+            });
+
+            it('should accept a long mail call notes string', async () => {
+                const longNote = 'x'.repeat(256);
+                const original = mailCallDoc();
+                const savedDoc = await captureSaved(original, longNote);
+
+                expect(savedDoc, 'document was not saved').to.exist;
+                expect(savedDoc.mail_call.notes).to.equal(longNote);
+                expect(savedDoc.mail_call.notes).to.have.lengthOf(256);
+                expectUntouchedSections(savedDoc, original);
+                expect(res.json.firstCall.args[0].mail_call_notes).to.equal(longNote);
+            });
+
+            it('should append a call.history entry labeled mail call notes', async () => {
+                const original = mailCallDoc();
+                const savedDoc = await captureSaved(original, 'new mail call note');
+
+                expect(savedDoc, 'document was not saved').to.exist;
+                expect(savedDoc.call.history).to.have.lengthOf(original.call.history.length + 1);
+                expect(savedDoc.call.history[0]).to.deep.equal(original.call.history[0]);
+                expect(savedDoc.call.history[1].change).to.equal(
+                    'changed mail call notes from: old note to: new mail call note by: Admin User'
+                );
+                expect(savedDoc.flight.history).to.deep.equal(original.flight.history);
+            });
+
+            it('should set only mail_call.notes when the veteran has no mail_call section', async () => {
+                const original = mailCallDoc();
+                delete original.mail_call;
+                const savedDoc = await captureSaved(original, 'first note');
+
+                expect(savedDoc, 'document was not saved').to.exist;
+                expect(savedDoc.mail_call).to.deep.equal({ notes: 'first note' });
+                expect(savedDoc.name).to.deep.equal(original.name);
+                expect(savedDoc.medical).to.deep.equal(original.medical);
+                expect(savedDoc.flight).to.deep.equal(original.flight);
+                expect(savedDoc.homecoming).to.deep.equal(original.homecoming);
+                expect(savedDoc.apparel).to.deep.equal(original.apparel);
+                expect(savedDoc.metadata.created_at).to.equal(original.metadata.created_at);
+                expect(savedDoc.metadata.created_by).to.equal(original.metadata.created_by);
+                expect(savedDoc._id).to.equal(original._id);
+                expect(savedDoc._rev).to.equal(original._rev);
+                expect(savedDoc.type).to.equal(original.type);
+                expect(savedDoc.call.history[0]).to.deep.equal({ id: 'prior', change: 'earlier change' });
+                expect(savedDoc.call.history).to.have.lengthOf(2);
+                expect(savedDoc.call.history[1].change).to.include('mail call notes');
+                expect(res.json.firstCall.args[0].mail_call_notes).to.equal('first note');
+            });
+
+            const rejectedValues = [
+                { label: 'a number', value: 0, error: 'value must be a string' },
+                { label: 'a boolean', value: true, error: 'value must be a string' },
+                { label: 'boolean false', value: false, error: 'value must be a string' },
+                { label: 'null', value: null, error: 'value is required' },
+                { label: 'an object', value: { note: 'x' }, error: 'value must be a string' },
+                { label: 'an array', value: ['note'], error: 'value must be a string' }
+            ];
+
+            for (const rejected of rejectedValues) {
+                it(`should return 400 when mail call notes value is ${rejected.label}`, async () => {
+                    req.body = { value: rejected.value };
+                    await invokeMailCallNotes(req, res);
+
+                    expect(res.status.calledWith(400)).to.be.true;
+                    expect(res.json.firstCall.args[0].error).to.equal(rejected.error);
+                    expect(global.fetch.called).to.be.false;
+                });
+            }
+
+            it('should return 400 for an invalid mail call notes document id before reading CouchDB', async () => {
+                req.params.id = 'foo/bar';
+                req.body = { value: 'a note' };
+
+                await invokeMailCallNotes(req, res);
+
+                expect(res.status.calledWith(400)).to.be.true;
+                expect(res.json.firstCall.args[0].error).to.equal('Invalid document id');
+                expect(global.fetch.called).to.be.false;
+            });
+
+            it('should return the configured save error when mail call notes save fails without a reason', async () => {
+                req.body = { value: 'new mail call note' };
+                global.fetch.onFirstCall().resolves({
+                    ok: true,
+                    json: async () => JSON.parse(JSON.stringify(mailCallDoc()))
+                });
+                global.fetch.onSecondCall().resolves({
+                    ok: false,
+                    json: async () => ({})
+                });
+
+                await invokeMailCallNotes(req, res);
+
+                expect(res.status.calledWith(500)).to.be.true;
+                expect(res.json.firstCall.args[0].error).to.equal('Failed to update veteran mail call notes');
+            });
         });
     });
 }); 
