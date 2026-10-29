@@ -31,6 +31,7 @@ import {
     updateVeteranBus,
     updateVeteranMailCallReceived,
     updateVeteranMailCallAdopt,
+    updateVeteranMailCallNotes,
     updateVeteranMedicalForm,
     updateVeteranMedicalReview,
     updateVeteranVaccinated,
@@ -164,6 +165,7 @@ app.patch("/veterans/:id/seat", authenticate, requireRoutePermission('PATCH', '/
 app.patch("/veterans/:id/bus", authenticate, requireRoutePermission('PATCH', '/veterans/:id/bus'), dbSession, updateVeteranBus);
 app.patch("/veterans/:id/mail-call-received", authenticate, requireRoutePermission('PATCH', '/veterans/:id/mail-call-received'), dbSession, updateVeteranMailCallReceived);
 app.patch("/veterans/:id/mail-call-adopt", authenticate, requireRoutePermission('PATCH', '/veterans/:id/mail-call-adopt'), dbSession, updateVeteranMailCallAdopt);
+app.patch("/veterans/:id/mail-call-notes", authenticate, requireRoutePermission('PATCH', '/veterans/:id/mail-call-notes'), dbSession, updateVeteranMailCallNotes);
 app.patch("/veterans/:id/medical-form", authenticate, requireRoutePermission('PATCH', '/veterans/:id/medical-form'), dbSession, updateVeteranMedicalForm);
 app.patch("/veterans/:id/medical-review", authenticate, requireRoutePermission('PATCH', '/veterans/:id/medical-review'), dbSession, updateVeteranMedicalReview);
 app.patch("/veterans/:id/vaccinated", authenticate, requireRoutePermission('PATCH', '/veterans/:id/vaccinated'), dbSession, updateVeteranVaccinated);

@@ -1083,6 +1083,60 @@ export async function updateVeteranMailCallAdopt(req, res) {
 
 /**
  * @swagger
+ * /veterans/{id}/mail-call-notes:
+ *   patch:
+ *     summary: Update veteran mail call notes
+ *     description: Patches one field on the record. Requires records:write.
+ *     tags: [Veterans]
+ *     security:
+ *       - GoogleAuth: []
+ *     x-required-permission: records:write
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record id
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [value]
+ *             properties:
+ *               value:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Field updated
+ *       400:
+ *         description: Invalid id or value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - missing required permission
+ *       404:
+ *         description: Veteran not found
+ *       503:
+ *         description: Database session error
+ */
+export async function updateVeteranMailCallNotes(req, res) {
+    return patchVeteranField(req, res, {
+        docPath: 'mail_call.notes',
+        responseField: 'mail_call_notes',
+        historyPath: 'call.history',
+        historyLabel: 'mail call notes',
+        validate: (value) => typeof value === 'string',
+        validationMessage: 'value must be a string',
+        saveError: 'Failed to update veteran mail call notes',
+        errorLabel: 'mail call notes'
+    });
+}
+
+/**
+ * @swagger
  * /veterans/{id}/medical-form:
  *   patch:
  *     summary: Update the veteran medical-form-received indicator
