@@ -103,6 +103,7 @@ jobs:
           project_id: '${{ env.PROJECT_ID }}'
           service: '${{ env.SERVICE_NAME }}'
           region: '${{ env.REGION }}'
+          flags: '--max-instances=5'
           image: '${{ env.PROD_IMAGE_REPO }}@${{ steps.digest.outputs.digest }}'
           no_traffic: true
           tag: '${{ steps.version.outputs.revision_tag }}'

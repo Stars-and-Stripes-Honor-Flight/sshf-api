@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { rateLimit } from 'express-rate-limit';
 import cors from 'cors';
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
@@ -14,6 +15,12 @@ import { ROUTE_PERMISSIONS, listConfiguredGroupEntries, startupWarnings } from '
 import { createMembershipCache } from './utils/membership_cache.js';
 import { createUserCache } from './utils/user_cache.js';
 import { createAuthenticator } from './utils/authenticate.js';
+import {
+    baseLimiterOptions,
+    readRateLimitConfig,
+    userRateLimitKey,
+    withUserRateLimit
+} from './utils/rate_limit.js';
 import { isDirectRun } from './utils/direct_run.js';
 
 // Import route handlers
@@ -79,8 +86,28 @@ import {
 const app = express();
 const port = 8080;
 
+app.set('trust proxy', 1);
+
 // Enable CORS for all routes with specific options
 app.use(cors(buildCorsOptions()));
+
+const rl = readRateLimitConfig();
+if (!rl.disabled) {
+    app.use(rateLimit({
+        ...baseLimiterOptions(rl, 'auth-failure'),
+        windowMs: rl.authFailure.windowMs,
+        limit: rl.authFailure.max,
+        skipSuccessfulRequests: true,
+        requestWasSuccessful: (_req, res) => res.statusCode !== 401
+    }));
+    if (rl.flood) {
+        app.use(rateLimit({
+            ...baseLimiterOptions(rl, 'ip-flood'),
+            windowMs: rl.flood.windowMs,
+            limit: rl.flood.max
+        }));
+    }
+}
 
 // Successful authentications are cached for up to 15 minutes (see utils/user_cache.js).
 // A negative group membership shortens that entry to about 2 minutes. Keys are
@@ -127,12 +154,23 @@ export async function getUserInfo(token) {
 // Configured role groups are checked with members.hasMember so nested members
 // are resolved. Protected routes then require the permission in
 // ROUTE_PERMISSIONS. GET /user/permissions stays auth-only.
-const authenticate = createAuthenticator({
+const verifyGoogleUser = createAuthenticator({
     getTokenInfo: (token) => tokenInfoClient.getTokenInfo(token),
     getUserInfo,
     getGroupMemberships: resolveRequestGroupMemberships,
     cache: userCache
 });
+
+let authenticate = verifyGoogleUser;
+if (!rl.disabled) {
+    const userLimiter = rateLimit({
+        ...baseLimiterOptions(rl, 'user'),
+        windowMs: rl.user.windowMs,
+        limit: rl.user.max,
+        keyGenerator: (req) => userRateLimitKey(req)
+    });
+    authenticate = withUserRateLimit(verifyGoogleUser, userLimiter);
+}
 
 function requireRoutePermission(method, path) {
     const permissions = ROUTE_PERMISSIONS[`${method} ${path}`];

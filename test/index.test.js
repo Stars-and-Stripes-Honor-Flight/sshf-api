@@ -3,6 +3,16 @@ import sinon from 'sinon';
 import { app, validateGroupAuthorization, getUserInfo, resolveRequestGroupMemberships } from '../index.js';
 import { google } from 'googleapis';
 
+function isRateLimitLayer(layer) {
+    const handle = layer.handle;
+    return Boolean(
+        handle
+        && !layer.route
+        && typeof handle.resetKey === 'function'
+        && typeof handle.getKey === 'function'
+    );
+}
+
 describe('Express application', () => {
     it('should export Express app', () => {
         expect(app).to.be.a('function');
@@ -257,6 +267,30 @@ describe('Express application', () => {
             expect(result.groups).to.deep.equal([]);
             expect(result.userCacheTtlMs).to.be.at.least(2 * 60 * 1000);
             expect(result.userCacheTtlMs).to.be.below(15 * 60 * 1000);
+        });
+    });
+
+    describe('app-wide rate limit', () => {
+        it('sets trust proxy to 1', () => {
+            expect(app.get('trust proxy')).to.equal(1);
+        });
+
+        it('mounts rate limiters after cors and before the first route', () => {
+            const stack = app._router.stack;
+            const corsIndex = stack.findIndex((layer) => layer.name === 'corsMiddleware');
+            const limiterIndexes = stack
+                .map((layer, index) => ({ layer, index }))
+                .filter(({ layer }) => isRateLimitLayer(layer))
+                .map(({ index }) => index);
+            const firstRouteIndex = stack.findIndex((layer) => layer.route);
+
+            expect(corsIndex, 'cors middleware').to.be.at.least(0);
+            expect(firstRouteIndex, 'first route').to.be.above(corsIndex);
+            expect(limiterIndexes, 'rate limiters mounted after cors').to.not.be.empty;
+            for (const index of limiterIndexes) {
+                expect(index).to.be.above(corsIndex);
+                expect(index).to.be.below(firstRouteIndex);
+            }
         });
     });
 });
