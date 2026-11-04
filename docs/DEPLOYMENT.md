@@ -300,6 +300,45 @@ gcloud run services update sshf-api --region us-central1 --project sshf-api-dev 
   to `*_review_access` restores it within the cache TTL (about 2 minutes
   for a new grant).
 
+### Scaling and rate limits
+
+- **Max instances** cap autoscaling cost and limit how many in-memory rate-limit
+  counters can stack. Dev deploys set `--max-instances=2` in
+  `.github/workflows/cloudrun-source.yml`. Production no-traffic deploys set
+  `--max-instances=5` in `.github/workflows/cloudrun-promote-prd.yml` (via the
+  deploy action `flags` input). Container concurrency is unchanged (Cloud Run
+  default 80 unless the service was configured otherwise).
+
+  Confirm live values before changing them:
+
+```bash
+gcloud run services describe sshf-api --region us-central1 --project sshf-api-dev \
+  --format='value(spec.template.metadata.annotations."autoscaling.knative.dev/maxScale",spec.template.spec.containerConcurrency)'
+# repeat with --project sshf-api-prd
+```
+
+- **Rate limit env vars** (plain env on the service; defaults shown):
+
+  | Env var | Default | Meaning |
+  |---|---|---|
+  | `RATE_LIMIT_AUTH_FAILURE_MAX` | `50` | `401` responses per client IP per window before `429` |
+  | `RATE_LIMIT_AUTH_FAILURE_WINDOW_MS` | `900000` | Pre-auth IP limiter window (15 minutes) |
+  | `RATE_LIMIT_IP_FLOOD_MAX` | `2000` | All requests per IP per window; set to `off` to disable the flood ceiling |
+  | `RATE_LIMIT_IP_FLOOD_WINDOW_MS` | `60000` | Flood limiter window (1 minute) |
+  | `RATE_LIMIT_USER_MAX` | `300` | Requests per signed-in user per window after authentication |
+  | `RATE_LIMIT_USER_WINDOW_MS` | `60000` | Per-user limiter window (1 minute) |
+
+  Limits are **per Cloud Run instance** (in-memory store). Worst-case effective
+  limits scale with max instances. `RATE_LIMIT_DISABLED=true` skips all limiters
+  only on local runs (no `K_SERVICE`); it is ignored on Cloud Run.
+
+- **Verify client IP behind Cloud Run** (optional, dev): temporarily set
+  `RATE_LIMIT_AUTH_FAILURE_MAX=3`, send four requests with `Authorization: Bearer
+  bogus` (some with a spoofed leading `X-Forwarded-For`), confirm the fourth
+  returns `429` and the rate-limit log line shows your real IP (matching
+  `httpRequest.remoteIp` in Cloud Run logs), not the spoofed address. Remove
+  the override afterward. Details: [RATE_LIMITING_PLAN.md](RATE_LIMITING_PLAN.md).
+
 ## Infrastructure reference (administrators)
 
 One-time setup that the pipeline depends on. If any of this is removed, the
@@ -341,3 +380,4 @@ promotion workflow breaks:
 | Nested member is denied, or a removed member still has access | Every configured role group is checked with `members.hasMember` (direct and nested). A misspelled or deleted group is treated as not a member and logged against its `AUTHZ_ROLE_*_GROUPS` variable. Startup on Cloud Run fails if the group is already missing. Negative results refresh in about 2 minutes; granted membership can linger up to 15 minutes. Allow a few minutes for Google to propagate, then sign in again. A Directory outage is still `503` on Cloud Run. |
 | New secret value not taking effect | Revisions pin secret versions at deploy time. Force a new revision (see Configuration and secrets). |
 | CORS errors from the UI | The UI origin is missing from the service's `ALLOWED_ORIGINS` env var. |
+| Unexpected `429 Too Many Requests` | A client exceeded a per-IP or per-user limit (defaults in **Scaling and rate limits** above). Check Cloud Run logs for `Rate limit … exceeded for key …` (never tokens). Raise limits via env if needed, or wait for the window to reset. On shared Wi-Fi, only failed auth (`401`) counts toward the pre-auth limiter. |

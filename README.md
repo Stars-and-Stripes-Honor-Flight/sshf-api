@@ -64,6 +64,13 @@ Required environment variables:
 | `REVIEW_INTAKE_AUDIENCE` | Optional. Expected Google ID-token audience for intake auth; defaults to `API_URL` |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Service account email (local dev) |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Service account private key (local dev) |
+| `RATE_LIMIT_AUTH_FAILURE_MAX` | Max `401` responses per client IP per window before `429` (default `50`) |
+| `RATE_LIMIT_AUTH_FAILURE_WINDOW_MS` | Window for the pre-auth IP limiter in ms (default `900000`, 15 minutes) |
+| `RATE_LIMIT_IP_FLOOD_MAX` | Max requests per IP per window for the optional flood ceiling (default `2000`; set to `off` to disable) |
+| `RATE_LIMIT_IP_FLOOD_WINDOW_MS` | Flood limiter window in ms (default `60000`) |
+| `RATE_LIMIT_USER_MAX` | Max requests per signed-in user email per window after authentication (default `300`) |
+| `RATE_LIMIT_USER_WINDOW_MS` | Per-user limiter window in ms (default `60000`) |
+| `RATE_LIMIT_DISABLED` | Local only: when exactly `true` and not on Cloud Run, disables all limiters for development |
 
 > **Note**: In Cloud Run, Application Default Credentials are used automatically. A Directory failure there is `503`. Locally, the API prefers `GOOGLE_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` so a developer's `gcloud` user ADC (which often fails Directory API with expired reauth) does not hide Workspace group membership. If local Directory credentials are missing or unusable, authentication continues with no roles. Leave `AUTHZ_ROLE_FULL_GROUPS` unset for that local path; data routes then proceed to CouchDB.
 
