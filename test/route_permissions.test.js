@@ -108,6 +108,16 @@ function isRecordWrite(route) {
     return records && ['POST', 'PUT', 'PATCH'].includes(route.method);
 }
 
+function isRateLimitLayer(layer) {
+    const handle = layer.handle;
+    return Boolean(
+        handle
+        && !layer.route
+        && typeof handle.resetKey === 'function'
+        && typeof handle.getKey === 'function'
+    );
+}
+
 describe('Phase 3 route permissions', () => {
     const originalEnv = { ...process.env };
 
@@ -170,6 +180,41 @@ describe('Phase 3 route permissions', () => {
             const intake = routes.find((item) => item.key === 'POST /review/applications');
             expect(intake.stack[0].handle.name).to.equal('authenticateIntake');
             expect(intake.stack.some((layer) => layer.handle.name === 'authorize')).to.equal(false);
+        });
+
+        describe('app-wide rate limit', () => {
+            it('keeps authenticate first and mounts the global limiter ahead of every route', () => {
+                const mounted = [];
+                app._router.stack.forEach((layer, index) => {
+                    if (!layer.route) {
+                        return;
+                    }
+                    const methods = Object.keys(layer.route.methods).filter((method) => layer.route.methods[method]);
+                    for (const method of methods) {
+                        mounted.push({
+                            key: `${method.toUpperCase()} ${layer.route.path}`,
+                            index,
+                            name: layer.route.stack[0].handle.name
+                        });
+                    }
+                });
+                const dataRoutes = mounted.filter((route) => route.key !== 'GET /openapi.json');
+                expect(dataRoutes).to.have.length(64);
+                for (const route of dataRoutes) {
+                    expect(['authenticate', 'authenticateIntake'], route.key).to.include(route.name);
+                }
+
+                const limiterIndexes = app._router.stack
+                    .map((layer, index) => ({ layer, index }))
+                    .filter(({ layer }) => isRateLimitLayer(layer))
+                    .map(({ index }) => index);
+                expect(limiterIndexes, 'global rate limiter is mounted ahead of the routes').to.not.be.empty;
+                for (const route of dataRoutes) {
+                    for (const limiterIndex of limiterIndexes) {
+                        expect(limiterIndex, route.key).to.be.below(route.index);
+                    }
+                }
+            });
         });
     });
 
