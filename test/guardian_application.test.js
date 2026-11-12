@@ -164,6 +164,36 @@ describe('GuardianApplication Model', () => {
             expect(existingDoc).to.deep.equal(existingSnapshot);
         });
 
+        it('keeps crew when re-accepting an existing guardian', () => {
+            const app = GuardianApplication.fromCouchDoc(buildRawGuardianAppFixture());
+            const existingDoc = {
+                _id: 'a1b2c3',
+                _rev: '5-abc',
+                type: 'Guardian',
+                crew: { crew_position: 'Medical Team', comms_username: 'Medic1' },
+                flight: { id: 'SSHF-Nov2024', status: 'Active' },
+                metadata: {
+                    created_by: 'Someone',
+                    created_at: '2020-01-01T00:00:00Z'
+                }
+            };
+            const existingSnapshot = JSON.parse(JSON.stringify(existingDoc));
+
+            const guardian = app.toGuardian(existingDoc, acceptUser);
+
+            expect(guardian.crew).to.deep.equal({
+                crew_position: 'Medical Team',
+                comms_username: 'Medic1'
+            });
+            expect(guardian.toJSON().crew).to.deep.equal({
+                crew_position: 'Medical Team',
+                comms_username: 'Medic1'
+            });
+            expect(guardian.flight.id).to.equal('SSHF-Nov2024');
+            expect(guardian.name.first).to.equal('John');
+            expect(existingDoc).to.deep.equal(existingSnapshot);
+        });
+
         it('should pass Guardian validate after prepareForSave for fixture data', () => {
             const app = GuardianApplication.fromCouchDoc(buildRawGuardianAppFixture());
             const guardian = app.toGuardian(null, acceptUser);

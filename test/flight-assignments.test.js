@@ -1685,6 +1685,60 @@ describe('Flight Assignments Route Handlers', () => {
             expect(response.added.guardians).to.equal(1);
             expect(response.errors).to.deep.equal([]);
         });
+
+        it('keeps an existing crew object when assigning a paired guardian to a flight', async () => {
+            const guardianId = 'guard-1'.padEnd(32, '0');
+            const storedCrew = { crew_position: 'Tour Lead', comms_username: 'TourLead1' };
+
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-1',
+                        value: '',
+                        doc: {
+                            _id: 'vet-1',
+                            _rev: '1-xyz',
+                            type: 'Veteran',
+                            flight: { id: 'None', history: [] },
+                            guardian: { id: guardianId },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+            global.fetch.onCall(2).resolves({
+                ok: true,
+                json: async () => ({ ok: true, id: 'vet-1', rev: '2-abc' })
+            });
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                json: async () => ({
+                    _id: guardianId,
+                    _rev: '1-grd',
+                    type: 'Guardian',
+                    crew: storedCrew,
+                    flight: { id: 'None', history: [] },
+                    metadata: {}
+                })
+            });
+            global.fetch.onCall(4).resolves({
+                ok: true,
+                json: async () => ({ ok: true, rev: '2-grd' })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            const response = res.json.firstCall.args[0];
+            expect(response.added.guardians).to.equal(1);
+            const savedGuardian = JSON.parse(global.fetch.getCall(4).args[1].body);
+            expect(savedGuardian.crew).to.deep.equal(storedCrew);
+            expect(savedGuardian.flight.id).to.equal('SSHF-Nov2024');
+        });
     });
 });
 

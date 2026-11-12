@@ -830,4 +830,87 @@ describe('Generic document writes', () => {
             expect(res.json.firstCall.args[0].error).to.include('Failed to delete document');
         });
     });
+
+    describe('guardian crew', () => {
+        const guardianId = 'guardian-crew-1';
+        const storedCrew = { crew_position: 'Medical Team', comms_username: 'Medic1' };
+
+        function guardianDocument(crew) {
+            const document = {
+                _id: guardianId,
+                type: 'Guardian',
+                name: { first: 'Jane', last: 'Doe' },
+                address: {
+                    street: '456 Oak St',
+                    city: 'Springfield',
+                    state: 'IL',
+                    zip: '62701',
+                    county: 'Sangamon',
+                    phone_day: '217-555-5678'
+                },
+                flight: {
+                    id: 'None',
+                    status: 'Active',
+                    history: [{ id: '2023-01-01T12:00:00Z', change: 'Original flight assignment' }]
+                }
+            };
+            if (crew !== undefined) {
+                document.crew = crew;
+            }
+            return document;
+        }
+
+        function crewChanges(history) {
+            const entries = Array.isArray(history) ? history : [];
+            return entries
+                .map((entry) => entry.change)
+                .filter((change) => change.includes('crew position') || change.includes('comms username'));
+        }
+
+        function crewChange(label, fromValue, toValue) {
+            return `changed ${label} from: ${fromValue} to: ${toValue} by: Admin User`;
+        }
+
+        beforeEach(() => {
+            req.params.id = guardianId;
+            global.fetch.reset();
+            global.fetch.onCall(1).resolves(mockResponse({ ok: true, id: guardianId, rev: '3-new' }));
+        });
+
+        it('keeps stored crew when PUT /docs/:id omits the crew key', async () => {
+            req.body = guardianDocument();
+            global.fetch.onCall(0).resolves(mockResponse({
+                ...guardianDocument({ ...storedCrew }),
+                _rev: '2-server-rev'
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = sentBody(1);
+            expect(written.crew).to.deep.equal(storedCrew);
+            expect(written._rev).to.equal('2-server-rev');
+            expect(crewChanges(written.flight.history)).to.deep.equal([]);
+            expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
+        });
+
+        it('replaces crew as a whole when PUT /docs/:id includes crew', async () => {
+            req.body = guardianDocument({ comms_username: '  OnlyName  ' });
+            global.fetch.onCall(0).resolves(mockResponse({
+                ...guardianDocument({ ...storedCrew }),
+                _rev: '2-server-rev'
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = sentBody(1);
+            expect(written.crew).to.deep.equal({ crew_position: '', comms_username: 'OnlyName' });
+            expect(crewChanges(written.flight.history)).to.have.members([
+                crewChange('crew position', 'Medical Team', ''),
+                crewChange('comms username', 'Medic1', 'OnlyName')
+            ]);
+            expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
+        });
+    });
 });

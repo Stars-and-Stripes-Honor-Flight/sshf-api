@@ -805,6 +805,33 @@ describe('Flight status routes', () => {
             expect(body().flight.completed).to.equal(false);
             expect(bulkBodies().some((parsed) => parsed.docs.some((doc) => doc.type === 'Flight'))).to.equal(false);
         });
+
+        it('keeps an existing crew object when completing a flight', async () => {
+            const guard = person({ id: 'guard-crew', type: 'Guardian' });
+            guard.crew = { crew_position: 'Bus Captain', comms_username: 'BusCap1' };
+            global.fetch.callsFake(async (url, options) => {
+                const href = String(url);
+                if (href.includes('_bulk_docs')) {
+                    return okBulk(JSON.parse(options.body));
+                }
+                if (href.includes('/_view/')) {
+                    return jsonResult({ rows: [viewRow(guard)] });
+                }
+                return jsonResult(flightDocument());
+            });
+
+            await completeFlight(req, res);
+
+            const saved = bulkBodies()
+                .flatMap((batch) => batch.docs)
+                .find((doc) => doc._id === 'guard-crew');
+            expect(saved, 'guardian was not saved').to.exist;
+            expect(saved.crew).to.deep.equal({
+                crew_position: 'Bus Captain',
+                comms_username: 'BusCap1'
+            });
+            expect(saved.flight.status).to.equal('Flown');
+        });
     });
 
     describe('POST /flights/future-status/activate', () => {
@@ -1140,6 +1167,39 @@ describe('Flight status routes', () => {
             } finally {
                 clock.restore();
             }
+        });
+
+        it('keeps an existing crew object when activating a future status', async () => {
+            req.body = { status: 'Future-Spring' };
+            const guard = person({
+                id: 'guard-crew',
+                type: 'Guardian',
+                status: 'Future-Spring',
+                flightId: 'None'
+            });
+            guard.crew = { crew_position: 'Medical Team', comms_username: 'Medic1' };
+            global.fetch.callsFake(async (url, options) => {
+                const href = String(url);
+                if (href.includes('_bulk_docs')) {
+                    return okBulk(JSON.parse(options.body));
+                }
+                if (href.includes('/_view/')) {
+                    return jsonResult({ rows: [viewRow(guard)] });
+                }
+                throw new Error(`unexpected ${href}`);
+            });
+
+            await activateFutureStatus(req, res);
+
+            const saved = bulkBodies()
+                .flatMap((batch) => batch.docs)
+                .find((doc) => doc._id === 'guard-crew');
+            expect(saved, 'guardian was not saved').to.exist;
+            expect(saved.crew).to.deep.equal({
+                crew_position: 'Medical Team',
+                comms_username: 'Medic1'
+            });
+            expect(saved.flight.status).to.equal('Active');
         });
     });
 });

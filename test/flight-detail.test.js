@@ -761,5 +761,78 @@ describe('Flight Detail Route Handlers', () => {
             expect(response.pairs[0].pairId).to.equal('v1');  // Unpaired veteran uses own ID
             expect(response.pairs[0].missingPairedPerson).to.equal(false);
         });
+
+        it('returns crew for paired and unpaired guardians', async () => {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [
+                        {
+                            key: ['SSHF-Nov2024', 'v-paired', 0],
+                            value: {
+                                type: 'Veteran',
+                                id: 'v-paired',
+                                name_first: 'John',
+                                name_last: 'Vet',
+                                bus: 'Alpha1',
+                                pairing: 'g-paired'
+                            },
+                            doc: { name: { middle: 'Q' } }
+                        },
+                        {
+                            key: ['SSHF-Nov2024', 'v-paired', 1],
+                            value: {
+                                type: 'Guardian',
+                                id: 'g-paired',
+                                name_first: 'Pat',
+                                name_last: 'Crew',
+                                bus: 'Alpha1',
+                                pairing: 'v-paired'
+                            },
+                            doc: {
+                                crew: { crew_position: 'Photographer', comms_username: 'Photo1' }
+                            }
+                        },
+                        {
+                            key: ['SSHF-Nov2024', 'g-unpaired', 1],
+                            value: {
+                                type: 'Guardian',
+                                id: 'g-unpaired',
+                                name_first: 'Ann',
+                                name_last: 'Solo',
+                                bus: 'Bravo1',
+                                pairing: ''
+                            },
+                            doc: { name: { middle: 'R' } }
+                        }
+                    ]
+                })
+            });
+
+            await getFlightDetail(req, res);
+
+            const response = res.json.firstCall.args[0];
+            const people = response.pairs.flatMap((pair) => pair.people);
+            const paired = people.find((person) => person.id === 'g-paired');
+            const unpaired = people.find((person) => person.id === 'g-unpaired');
+            const veteran = people.find((person) => person.id === 'v-paired');
+
+            expect(paired, 'paired guardian').to.exist;
+            expect(unpaired, 'unpaired guardian').to.exist;
+            expect(paired.crew).to.deep.equal({
+                crew_position: 'Photographer',
+                comms_username: 'Photo1'
+            });
+            expect(unpaired.crew).to.deep.equal({
+                crew_position: '',
+                comms_username: ''
+            });
+            expect(veteran).to.not.have.property('crew');
+        });
     });
 });

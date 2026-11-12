@@ -209,7 +209,7 @@ describe('Flight Detail Models', () => {
                 });
                 const json = person.toJSON();
                 expect(json.training).to.equal('Previous');
-                expect(json).to.have.all.keys([
+                expect(json).to.include.all.keys([
                     'type', 'id', 'name_first', 'name_last', 'name_middle', 'birth_date', 'gender',
                     'city', 'phone_mbl', 'bus', 'seat', 'shirt', 'fm_number', 'assigned_to',
                     'nofly', 'confirmed', 'medical_form', 'medical_level', 'flight_vaccinated',
@@ -221,6 +221,46 @@ describe('Flight Detail Models', () => {
                 expect(json.fm_number).to.equal('');
                 expect(json.assigned_to).to.equal('Caller D');
                 expect(json.training_complete).to.equal(true);
+            });
+
+            it('includes crew on guardian JSON and omits it for veterans', () => {
+                const guardian = new FlightDetailPerson({
+                    type: 'Guardian',
+                    id: 'guard-abc',
+                    name_first: 'Alice',
+                    name_last: 'Brown',
+                    fm_number: '',
+                    assigned_to: 'Caller D',
+                    med_exprnc: 'EMT',
+                    training: 'Previous',
+                    training_complete: true,
+                    crew: { crew_position: 'Fly Ahead', comms_username: 'Flyer1' }
+                }).toJSON();
+
+                expect(guardian.crew).to.deep.equal({
+                    crew_position: 'Fly Ahead',
+                    comms_username: 'Flyer1'
+                });
+                expect(guardian).to.have.all.keys([
+                    'type', 'id', 'name_first', 'name_last', 'name_middle', 'birth_date', 'gender',
+                    'city', 'phone_mbl', 'bus', 'seat', 'shirt', 'fm_number', 'assigned_to',
+                    'nofly', 'confirmed', 'medical_form', 'medical_level', 'flight_vaccinated',
+                    'apparel_shirt_size', 'apparel_jacket_size', 'apparel_notes',
+                    'med_exprnc', 'training', 'training_complete', 'flight_training_notes',
+                    'flight_waiver', 'flight_training_see_doc', 'flight_paid', 'flight_books_ordered',
+                    'crew'
+                ]);
+
+                const missing = new FlightDetailPerson({ type: 'Guardian', id: 'guard-old' }).toJSON();
+                expect(missing.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+
+                const veteran = new FlightDetailPerson({
+                    type: 'Veteran',
+                    id: 'vet-1',
+                    name_first: 'John',
+                    name_last: 'Vet'
+                }).toJSON();
+                expect(veteran).to.not.have.property('crew');
             });
         });
 
@@ -358,6 +398,36 @@ describe('Flight Detail Models', () => {
                 expect(json.apparel_shirt_size).to.equal('WM');
                 expect(json.apparel_jacket_size).to.equal('M');
                 expect(json.apparel_notes).to.equal('guardian apparel note');
+            });
+
+            it('reads crew from the guardian document and defaults missing crew to empty strings', () => {
+                const paired = FlightDetailPerson.fromViewRow({
+                    value: { type: 'Guardian', id: 'g-paired' },
+                    doc: { crew: { crew_position: 'Photographer', comms_username: 'Photo1' } }
+                }).toJSON();
+                expect(paired.crew).to.deep.equal({
+                    crew_position: 'Photographer',
+                    comms_username: 'Photo1'
+                });
+
+                const partial = FlightDetailPerson.fromViewRow({
+                    type: 'Guardian',
+                    id: 'g-partial',
+                    doc: { crew: { crew_position: 'PR' } }
+                }).toJSON();
+                expect(partial.crew).to.deep.equal({ crew_position: 'PR', comms_username: '' });
+
+                const unpaired = FlightDetailPerson.fromViewRow({
+                    value: { type: 'Guardian', id: 'g-unpaired' },
+                    doc: {}
+                }).toJSON();
+                expect(unpaired.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+
+                const veteran = FlightDetailPerson.fromViewRow({
+                    value: { type: 'Veteran', id: 'v-1' },
+                    doc: { crew: { crew_position: 'PR', comms_username: 'RadioOne' } }
+                }).toJSON();
+                expect(veteran).to.not.have.property('crew');
             });
 
             it('should handle missing properties with defaults', () => {
