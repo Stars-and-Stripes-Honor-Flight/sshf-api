@@ -1455,6 +1455,21 @@ describe('Guardian Model', () => {
             expect(guardian.toJSON().crew).to.deep.equal({ crew_position: '', comms_username: '' });
         });
 
+        it('treats a null crew the same as an omitted crew', () => {
+            const data = JSON.parse(JSON.stringify(sampleGuardianData));
+            data.crew = null;
+            const guardian = new Guardian(data);
+            const omitted = new Guardian(JSON.parse(JSON.stringify(sampleGuardianData)));
+
+            expect(guardian.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(guardian.crew).to.deep.equal(omitted.crew);
+            expect(guardian.toJSON().crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(guardian.validate()).to.equal(true);
+
+            guardian.updateHistory(omitted, historyUser);
+            expect(crewChanges(guardian.flight.history)).to.deep.equal([]);
+        });
+
         it('trims comms_username, preserves case, and treats a blank value as empty', () => {
             const mixedCase = withCrew({ crew_position: '', comms_username: '  Radio.One  ' });
             expect(mixedCase.crew).to.deep.equal({ crew_position: '', comms_username: 'Radio.One' });

@@ -2370,6 +2370,20 @@ describe('Guardians Route Handlers', () => {
             expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
         });
 
+        it('keeps stored crew when PUT /guardians/:id sends crew null', async () => {
+            mockGuardianUpdate(storedGuardian({ crew: { ...storedCrew } }));
+            req.body = validGuardian({ crew: null });
+
+            await updateGuardian(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = putBody();
+            expect(written.crew).to.deep.equal(storedCrew);
+            expect(res.json.firstCall.args[0].crew).to.deep.equal(storedCrew);
+            expect(crewChanges(written.flight.history)).to.deep.equal([]);
+            expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
+        });
+
         it('replaces crew as a whole when PUT /guardians/:id includes crew', async () => {
             mockGuardianUpdate(storedGuardian({ crew: { ...storedCrew } }));
             req.body = validGuardian({ crew: { comms_username: '  OnlyName  ' } });

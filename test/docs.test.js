@@ -894,6 +894,23 @@ describe('Generic document writes', () => {
             expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
         });
 
+        it('keeps stored crew when PUT /docs/:id sends crew null', async () => {
+            req.body = guardianDocument(null);
+            global.fetch.onCall(0).resolves(mockResponse({
+                ...guardianDocument({ ...storedCrew }),
+                _rev: '2-server-rev'
+            }));
+
+            await updateDocument(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = sentBody(1);
+            expect(written.crew).to.deep.equal(storedCrew);
+            expect(written._rev).to.equal('2-server-rev');
+            expect(crewChanges(written.flight.history)).to.deep.equal([]);
+            expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
+        });
+
         it('replaces crew as a whole when PUT /docs/:id includes crew', async () => {
             req.body = guardianDocument({ comms_username: '  OnlyName  ' });
             global.fetch.onCall(0).resolves(mockResponse({
