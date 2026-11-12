@@ -1,5 +1,64 @@
 import { trimStringValues } from '../utils/trim_strings.js';
 
+export const VALID_CREW_POSITIONS = Object.freeze([
+    '',
+    'Bus Captain',
+    'Tour Lead',
+    'Medical Team',
+    'PR',
+    'Fly Ahead',
+    'Photographer'
+]);
+
+const INVALID_CREW_POSITION = 'Invalid crew position';
+const CREW_USERNAME_REQUIRED = 'Comms username is required when a crew position is set';
+
+/**
+ * @param {unknown} crew
+ * @returns {{ crew_position: string, comms_username: string }}
+ */
+export function normalizeGuardianCrew(crew) {
+    if (crew === null || crew === undefined || typeof crew !== 'object' || Array.isArray(crew)) {
+        return { crew_position: '', comms_username: '' };
+    }
+    const crewPosition = crew.crew_position;
+    const commsUsername = crew.comms_username;
+    return {
+        crew_position: typeof crewPosition === 'string' ? crewPosition : '',
+        comms_username: typeof commsUsername === 'string' ? commsUsername : ''
+    };
+}
+
+/**
+ * True when the client sent `crew` as a non-null value (replace as a whole).
+ * Omitted `crew` and `crew: null` keep the stored crew on update.
+ *
+ * @param {unknown} body
+ * @returns {boolean}
+ */
+export function isCrewUpdateProvided(body) {
+    return body !== null
+        && typeof body === 'object'
+        && !Array.isArray(body)
+        && Object.prototype.hasOwnProperty.call(body, 'crew')
+        && body.crew !== null;
+}
+
+/**
+ * @param {Guardian} record
+ * @param {Guardian} current
+ * @param {unknown} body
+ */
+export function applyStoredCrewOnUpdate(record, current, body) {
+    if (record.type !== 'Guardian' || isCrewUpdateProvided(body)) {
+        return;
+    }
+    record.crew = {
+        crew_position: current.crew.crew_position,
+        comms_username: current.crew.comms_username
+    };
+}
+
 export class Guardian {
     constructor(data = {}) {
         data = trimStringValues(data);
@@ -135,6 +194,7 @@ export class Guardian {
             date: data.apparel?.date || '',
             by: data.apparel?.by || ''
         };
+        this.crew = normalizeGuardianCrew(data.crew);
     }
 
     // Enhanced validation with specific field rules
@@ -328,6 +388,13 @@ export class Guardian {
             });
         }
 
+        if (this.crew.crew_position && !VALID_CREW_POSITIONS.includes(this.crew.crew_position)) {
+            errors.push(INVALID_CREW_POSITION);
+        }
+        if (this.crew.crew_position && !this.crew.comms_username) {
+            errors.push(CREW_USERNAME_REQUIRED);
+        }
+
         if (errors.length > 0) {
             throw new Error('Validation failed: ' + errors.join('; '));
         }
@@ -378,6 +445,8 @@ export class Guardian {
      * | flight.booksOrdered    | books ordered            |
      * | medical.release        | medical release received |
      * | medical.form           | medical form received    |
+     * | crew.crew_position     | crew position            |
+     * | crew.comms_username    | comms username           |
      * 
      * call.history tracks changes to:
      * -------------------------------
@@ -425,7 +494,9 @@ export class Guardian {
                     { 'property': 'flight.exempt', 'name': 'exempt' },
                     { 'property': 'flight.booksOrdered', 'name': 'books ordered' },
                     { 'property': 'medical.release', 'name': 'medical release received' },
-                    { 'property': 'medical.form', 'name': 'medical form received' }
+                    { 'property': 'medical.form', 'name': 'medical form received' },
+                    { 'property': 'crew.crew_position', 'name': 'crew position' },
+                    { 'property': 'crew.comms_username', 'name': 'comms username' }
                 ]
             },
             {
@@ -493,7 +564,8 @@ export class Guardian {
             accommodations: this.accommodations,
             mail_call: this.mail_call,
             call: this.call,
-            apparel: this.apparel
+            apparel: this.apparel,
+            crew: this.crew
         };
     }
 

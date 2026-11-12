@@ -311,6 +311,25 @@ properties:
         default: 'None'
         enum: ['None', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
         description: 'Shirt size'
+  crew:
+    type: object
+    description: 'Crew position and comms username for roster and sync (#157).'
+    properties:
+      crew_position:
+        type: string
+        enum: ['', 'Bus Captain', 'Tour Lead', 'Medical Team', 'PR', 'Fly Ahead', 'Photographer']
+        default: ''
+        description: 'Crew role on the flight. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'crew position'
+      comms_username:
+        type: string
+        default: ''
+        description: 'Push-to-talk username. Required when crew_position is set. Changes are recorded in flight.history.'
+        x-historyTracked:
+          historyArray: 'flight.history'
+          displayName: 'comms username'
   metadata:
     type: object
     properties:

@@ -225,3 +225,13 @@ FlightDetailPerson:
     flight_books_ordered:
       type: integer
       description: Number of books ordered (Guardians only)
+    crew:
+      type: object
+      description: Crew position and comms username (Guardians only)
+      properties:
+        crew_position:
+          type: string
+          description: Crew role on the flight
+        comms_username:
+          type: string
+          description: Push-to-talk username

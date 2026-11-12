@@ -1,4 +1,4 @@
-import { Guardian } from '../models/guardian.js';
+import { Guardian, applyStoredCrewOnUpdate } from '../models/guardian.js';
 import { Veteran } from '../models/veteran.js';
 import { VALID_BUSES } from '../models/flight_detail.js';
 import { dbFetch, DatabaseSessionError, stableDatabaseError } from '../utils/db.js';
@@ -392,6 +392,8 @@ export async function updateGuardian(req, res) {
         updatedGuardian.flight.history = currentGuardian.flight.history;
         updatedGuardian.veteran.history = currentGuardian.veteran.history;
         updatedGuardian.call.history = currentGuardian.call.history;
+
+        applyStoredCrewOnUpdate(updatedGuardian, currentGuardian, req.body);
         
         // Validate the guardian data BEFORE making any database changes
         // This prevents leaving veteran records in an inconsistent state if validation fails

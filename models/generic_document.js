@@ -1,5 +1,5 @@
 import { Flight } from './flight.js';
-import { Guardian } from './guardian.js';
+import { Guardian, applyStoredCrewOnUpdate } from './guardian.js';
 import { Veteran } from './veteran.js';
 import { getEncodedDocumentIdSegment } from '../utils/document_id.js';
 
@@ -146,6 +146,7 @@ export function buildLogisticsDocument(body, { urlId, user, currentDoc } = {}) {
         record.metadata.created_at = current.metadata.created_at;
         record.metadata.created_by = current.metadata.created_by;
         preserveHistory(record, current);
+        applyStoredCrewOnUpdate(record, current, body);
         if (typeof record.updateHistory === 'function') {
             record.updateHistory(current, user);
         }
