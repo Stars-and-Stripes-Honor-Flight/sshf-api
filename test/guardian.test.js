@@ -1415,4 +1415,182 @@ describe('Guardian Model', () => {
             expect(guardian.medical.food_restriction).to.equal('None');
         });
     });
+
+    describe('crew', () => {
+        const CREW_POSITIONS = [
+            '',
+            'Bus Captain',
+            'Tour Lead',
+            'Medical Team',
+            'PR',
+            'Fly Ahead',
+            'Photographer'
+        ];
+        const INVALID_CREW_POSITION = 'Invalid crew position';
+        const CREW_USERNAME_REQUIRED = 'Comms username is required when a crew position is set';
+        const historyUser = { firstName: 'Admin', lastName: 'User' };
+
+        function withCrew(crew) {
+            return new Guardian({
+                ...JSON.parse(JSON.stringify(sampleGuardianData)),
+                crew
+            });
+        }
+
+        function crewChanges(history) {
+            const entries = Array.isArray(history) ? history : [];
+            return entries
+                .map((entry) => entry.change)
+                .filter((change) => change.includes('crew position') || change.includes('comms username'));
+        }
+
+        function crewChange(label, fromValue, toValue) {
+            return `changed ${label} from: ${fromValue} to: ${toValue} by: Admin User`;
+        }
+
+        it('defaults crew to empty strings when an old document has no crew', () => {
+            const guardian = new Guardian(JSON.parse(JSON.stringify(sampleGuardianData)));
+
+            expect(guardian.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(guardian.toJSON().crew).to.deep.equal({ crew_position: '', comms_username: '' });
+        });
+
+        it('treats a null crew the same as an omitted crew', () => {
+            const data = JSON.parse(JSON.stringify(sampleGuardianData));
+            data.crew = null;
+            const guardian = new Guardian(data);
+            const omitted = new Guardian(JSON.parse(JSON.stringify(sampleGuardianData)));
+
+            expect(guardian.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(guardian.crew).to.deep.equal(omitted.crew);
+            expect(guardian.toJSON().crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(guardian.validate()).to.equal(true);
+
+            guardian.updateHistory(omitted, historyUser);
+            expect(crewChanges(guardian.flight.history)).to.deep.equal([]);
+        });
+
+        it('trims comms_username, preserves case, and treats a blank value as empty', () => {
+            const mixedCase = withCrew({ crew_position: '', comms_username: '  Radio.One  ' });
+            expect(mixedCase.crew).to.deep.equal({ crew_position: '', comms_username: 'Radio.One' });
+            expect(mixedCase.validate()).to.equal(true);
+
+            const blank = withCrew({ crew_position: 'PR', comms_username: ' \t ' });
+            expect(blank.crew).to.deep.equal({ crew_position: 'PR', comms_username: '' });
+            expect(() => blank.validate()).to.throw(
+                new RegExp(CREW_USERNAME_REQUIRED)
+            );
+        });
+
+        it('includes crew in toJSON', () => {
+            const guardian = withCrew({ crew_position: 'Photographer', comms_username: 'Photo1' });
+
+            expect(guardian.toJSON().crew).to.deep.equal({
+                crew_position: 'Photographer',
+                comms_username: 'Photo1'
+            });
+        });
+
+        for (const crewPosition of CREW_POSITIONS) {
+            it(`accepts crew position ${JSON.stringify(crewPosition)}`, () => {
+                const guardian = withCrew({ crew_position: crewPosition, comms_username: 'RadioOne' });
+
+                expect(guardian.crew).to.deep.equal({
+                    crew_position: crewPosition,
+                    comms_username: 'RadioOne'
+                });
+                expect(guardian.validate()).to.equal(true);
+            });
+        }
+
+        it('rejects a crew position outside the enum', () => {
+            for (const crewPosition of ['Captain', 'BusCaptain', 'medical team', 'FlyAhead']) {
+                const guardian = withCrew({ crew_position: crewPosition, comms_username: 'RadioOne' });
+                expect(() => guardian.validate(), crewPosition).to.throw(
+                    new RegExp(INVALID_CREW_POSITION)
+                );
+            }
+        });
+
+        it('rejects a crew position without a comms username', () => {
+            const guardian = withCrew({ crew_position: 'Bus Captain' });
+
+            expect(() => guardian.validate()).to.throw(new RegExp(CREW_USERNAME_REQUIRED));
+        });
+
+        it('allows a comms username without a crew position', () => {
+            const guardian = withCrew({ comms_username: 'RadioOne' });
+
+            expect(guardian.crew).to.deep.equal({ crew_position: '', comms_username: 'RadioOne' });
+            expect(guardian.validate()).to.equal(true);
+            expect(guardian.toJSON().crew).to.deep.equal({
+                crew_position: '',
+                comms_username: 'RadioOne'
+            });
+        });
+
+        it('records a crew position change in flight history', () => {
+            const current = withCrew({ crew_position: 'PR', comms_username: 'RadioOne' });
+            const next = withCrew({ crew_position: 'Tour Lead', comms_username: 'RadioOne' });
+
+            next.updateHistory(current, historyUser);
+
+            expect(crewChanges(next.flight.history)).to.have.members([
+                crewChange('crew position', 'PR', 'Tour Lead')
+            ]);
+        });
+
+        it('records a comms username change in flight history', () => {
+            const current = withCrew({ crew_position: 'PR', comms_username: 'RadioOne' });
+            const next = withCrew({ crew_position: 'PR', comms_username: 'RadioTwo' });
+
+            next.updateHistory(current, historyUser);
+
+            expect(crewChanges(next.flight.history)).to.have.members([
+                crewChange('comms username', 'RadioOne', 'RadioTwo')
+            ]);
+        });
+
+        it('records crew history from empty defaults when an old document gains crew', () => {
+            const oldDoc = JSON.parse(JSON.stringify(sampleGuardianData));
+            delete oldDoc.crew;
+            const current = new Guardian(oldDoc);
+            const next = new Guardian({
+                ...JSON.parse(JSON.stringify(oldDoc)),
+                crew: { crew_position: 'Bus Captain', comms_username: 'BusCap1' }
+            });
+
+            next.updateHistory(current, historyUser);
+
+            expect(crewChanges(next.flight.history)).to.have.members([
+                crewChange('crew position', '', 'Bus Captain'),
+                crewChange('comms username', '', 'BusCap1')
+            ]);
+        });
+
+        it('does not record crew history when an old document and the save both omit crew', () => {
+            const oldDoc = JSON.parse(JSON.stringify(sampleGuardianData));
+            delete oldDoc.crew;
+            const current = new Guardian(oldDoc);
+            const next = new Guardian(JSON.parse(JSON.stringify(oldDoc)));
+
+            next.updateHistory(current, historyUser);
+
+            expect(current.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(next.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(crewChanges(next.flight.history)).to.deep.equal([]);
+        });
+
+        it('does not record a comms username change that is only surrounding whitespace', () => {
+            const current = withCrew({ crew_position: 'PR', comms_username: '  RadioOne  ' });
+            const next = withCrew({ crew_position: 'PR', comms_username: 'RadioOne' });
+
+            expect(current.crew).to.deep.equal({ crew_position: 'PR', comms_username: 'RadioOne' });
+            expect(next.crew).to.deep.equal({ crew_position: 'PR', comms_username: 'RadioOne' });
+
+            next.updateHistory(current, historyUser);
+
+            expect(crewChanges(next.flight.history)).to.deep.equal([]);
+        });
+    });
 }); 

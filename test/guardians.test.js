@@ -2146,4 +2146,409 @@ describe('Guardians Route Handlers', () => {
             expect(res.json.firstCall.args[0].error).to.equal('Failed to update guardian waiver');
         });
     });
+
+    describe('crew', () => {
+        const CREW_POSITIONS = [
+            '',
+            'Bus Captain',
+            'Tour Lead',
+            'Medical Team',
+            'PR',
+            'Fly Ahead',
+            'Photographer'
+        ];
+        const INVALID_CREW_POSITION = 'Invalid crew position';
+        const CREW_USERNAME_REQUIRED = 'Comms username is required when a crew position is set';
+        const storedCrew = { crew_position: 'Medical Team', comms_username: 'Medic1' };
+
+        function validGuardian(overrides = {}) {
+            return {
+                ...JSON.parse(JSON.stringify(baseSampleData)),
+                ...overrides
+            };
+        }
+
+        function storedGuardian(overrides = {}) {
+            return {
+                ...validGuardian(),
+                _id: 'test-id',
+                _rev: '1-abc',
+                type: 'Guardian',
+                flight: {
+                    id: 'None',
+                    status: 'Active',
+                    history: [{ id: '2023-01-01T12:00:00Z', change: 'Original flight assignment' }]
+                },
+                ...overrides
+            };
+        }
+
+        function crewChanges(history) {
+            const entries = Array.isArray(history) ? history : [];
+            return entries
+                .map((entry) => entry.change)
+                .filter((change) => change.includes('crew position') || change.includes('comms username'));
+        }
+
+        function crewChange(label, fromValue, toValue) {
+            return `changed ${label} from: ${fromValue} to: ${toValue} by: Admin User`;
+        }
+
+        function putBody() {
+            const call = global.fetch.getCalls().find((item) => item.args[1]?.method === 'PUT');
+            expect(call, 'expected a guardian PUT').to.exist;
+            return JSON.parse(call.args[1].body);
+        }
+
+        function mockGuardianUpdate(stored) {
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(stored))
+            });
+            global.fetch.onSecondCall().resolves({
+                ok: true,
+                json: async () => ({ id: stored._id, rev: '2-def' })
+            });
+        }
+
+        it('accepts every crew position and returns it from POST /guardians', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({ id: 'new-id', rev: '1-abc' })
+            });
+
+            for (const crewPosition of CREW_POSITIONS) {
+                const response = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+                global.fetch.resetHistory();
+                req.body = validGuardian({
+                    crew: { crew_position: crewPosition, comms_username: 'RadioOne' }
+                });
+
+                await createGuardian(req, response);
+
+                expect(response.status.calledWith(201), crewPosition).to.equal(true);
+                const body = response.json.firstCall.args[0];
+                expect(body.crew, crewPosition).to.deep.equal({
+                    crew_position: crewPosition,
+                    comms_username: 'RadioOne'
+                });
+                const written = JSON.parse(global.fetch.firstCall.args[1].body);
+                expect(written.crew, crewPosition).to.deep.equal({
+                    crew_position: crewPosition,
+                    comms_username: 'RadioOne'
+                });
+            }
+        });
+
+        it('round-trips a trimmed comms username and preserves its case', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({ id: 'new-id', rev: '1-abc' })
+            });
+            req.body = validGuardian({
+                crew: { crew_position: 'PR', comms_username: '  Radio.One  ' }
+            });
+
+            await createGuardian(req, res);
+
+            expect(res.status.calledWith(201), JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(true);
+            expect(res.json.firstCall.args[0].crew).to.deep.equal({
+                crew_position: 'PR',
+                comms_username: 'Radio.One'
+            });
+            expect(res.json.firstCall.args[0]._id).to.equal('new-id');
+        });
+
+        it('rejects an invalid crew position before writing', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({ id: 'new-id', rev: '1-abc' })
+            });
+
+            for (const crewPosition of ['Captain', 'BusCaptain', 'medical team', 'FlyAhead']) {
+                const response = { status: sinon.stub().returnsThis(), json: sinon.spy() };
+                global.fetch.resetHistory();
+                req.body = validGuardian({
+                    crew: { crew_position: crewPosition, comms_username: 'RadioOne' }
+                });
+
+                await createGuardian(req, response);
+
+                const detail = `${crewPosition} ${JSON.stringify(response.json.firstCall?.args?.[0])}`;
+                expect(response.status.firstCall?.args?.[0], detail).to.equal(400);
+                expect(response.json.firstCall.args[0].error, detail).to.include(INVALID_CREW_POSITION);
+                expect(global.fetch.called, detail).to.equal(false);
+            }
+        });
+
+        it('returns 400 when a crew position has no comms username', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({ id: 'new-id', rev: '1-abc' })
+            });
+            req.body = validGuardian({ crew: { crew_position: 'Bus Captain' } });
+
+            await createGuardian(req, res);
+
+            const detail = JSON.stringify(res.json.firstCall?.args?.[0]);
+            expect(res.status.firstCall?.args?.[0], detail).to.equal(400);
+            expect(res.json.firstCall.args[0].error).to.include(CREW_USERNAME_REQUIRED);
+            expect(global.fetch.called).to.equal(false);
+        });
+
+        it('returns 400 when the comms username is blank after trim', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({ id: 'new-id', rev: '1-abc' })
+            });
+            req.body = validGuardian({
+                crew: { crew_position: 'Tour Lead', comms_username: '   ' }
+            });
+
+            await createGuardian(req, res);
+
+            const detail = JSON.stringify(res.json.firstCall?.args?.[0]);
+            expect(res.status.firstCall?.args?.[0], detail).to.equal(400);
+            expect(res.json.firstCall.args[0].error).to.include(CREW_USERNAME_REQUIRED);
+            expect(global.fetch.called).to.equal(false);
+        });
+
+        it('allows a comms username without a crew position', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({ id: 'new-id', rev: '1-abc' })
+            });
+            req.body = validGuardian({ crew: { comms_username: 'RadioOne' } });
+
+            await createGuardian(req, res);
+
+            expect(res.status.calledWith(201), JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(true);
+            expect(res.json.firstCall.args[0].crew).to.deep.equal({
+                crew_position: '',
+                comms_username: 'RadioOne'
+            });
+        });
+
+        it('returns stored crew from GET /guardians/:id', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => storedGuardian({ crew: storedCrew })
+            });
+
+            await retrieveGuardian(req, res);
+
+            expect(res.json.firstCall.args[0].crew).to.deep.equal(storedCrew);
+        });
+
+        it('defaults missing crew to empty strings on GET /guardians/:id', async () => {
+            const stored = storedGuardian();
+            delete stored.crew;
+            global.fetch.resolves({
+                ok: true,
+                json: async () => stored
+            });
+
+            await retrieveGuardian(req, res);
+
+            expect(res.json.firstCall.args[0].crew).to.deep.equal({
+                crew_position: '',
+                comms_username: ''
+            });
+        });
+
+        it('keeps stored crew when PUT /guardians/:id omits the crew key', async () => {
+            mockGuardianUpdate(storedGuardian({ crew: { ...storedCrew } }));
+            req.body = validGuardian();
+
+            await updateGuardian(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = putBody();
+            expect(written.crew).to.deep.equal(storedCrew);
+            expect(res.json.firstCall.args[0].crew).to.deep.equal(storedCrew);
+            expect(crewChanges(written.flight.history)).to.deep.equal([]);
+            expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
+        });
+
+        it('keeps stored crew when PUT /guardians/:id sends crew null', async () => {
+            mockGuardianUpdate(storedGuardian({ crew: { ...storedCrew } }));
+            req.body = validGuardian({ crew: null });
+
+            await updateGuardian(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = putBody();
+            expect(written.crew).to.deep.equal(storedCrew);
+            expect(res.json.firstCall.args[0].crew).to.deep.equal(storedCrew);
+            expect(crewChanges(written.flight.history)).to.deep.equal([]);
+            expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
+        });
+
+        it('replaces crew as a whole when PUT /guardians/:id includes crew', async () => {
+            mockGuardianUpdate(storedGuardian({ crew: { ...storedCrew } }));
+            req.body = validGuardian({ crew: { comms_username: '  OnlyName  ' } });
+
+            await updateGuardian(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = putBody();
+            expect(written.crew).to.deep.equal({ crew_position: '', comms_username: 'OnlyName' });
+            expect(crewChanges(written.flight.history)).to.have.members([
+                crewChange('crew position', 'Medical Team', ''),
+                crewChange('comms username', 'Medic1', 'OnlyName')
+            ]);
+            expect(written.flight.history.some((entry) => entry.change === 'Original flight assignment')).to.equal(true);
+        });
+
+        it('returns 400 when PUT sets a crew position without a comms username', async () => {
+            mockGuardianUpdate(storedGuardian({ crew: { ...storedCrew } }));
+            req.body = validGuardian({ crew: { crew_position: 'PR' } });
+
+            await updateGuardian(req, res);
+
+            const detail = JSON.stringify(res.json.firstCall?.args?.[0]);
+            expect(res.status.firstCall?.args?.[0], detail).to.equal(400);
+            expect(res.json.firstCall.args[0].error).to.include(CREW_USERNAME_REQUIRED);
+            expect(global.fetch.calledOnce).to.equal(true);
+        });
+
+        it('writes empty crew and no crew history when an old document is saved without crew', async () => {
+            const stored = storedGuardian();
+            delete stored.crew;
+            mockGuardianUpdate(stored);
+            req.body = validGuardian();
+
+            await updateGuardian(req, res);
+
+            expect(res.status.called, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(false);
+            const written = putBody();
+            expect(written.crew).to.deep.equal({ crew_position: '', comms_username: '' });
+            expect(res.json.firstCall.args[0].crew).to.deep.equal({
+                crew_position: '',
+                comms_username: ''
+            });
+            expect(crewChanges(written.flight.history)).to.deep.equal([]);
+        });
+
+        it('keeps the comms username on a copied guardian payload', async () => {
+            global.fetch.resolves({
+                ok: true,
+                json: async () => ({ id: 'copied-id', rev: '1-abc' })
+            });
+            req.body = {
+                ...validGuardian(),
+                birth_date: '1965-05-15',
+                gender: 'F',
+                app_date: '2026-11-12',
+                flight: {
+                    id: 'None',
+                    status: 'Copied',
+                    group: '',
+                    bus: 'None',
+                    seat: '',
+                    confirmed_date: '',
+                    confirmed_by: '',
+                    status_note: '',
+                    nofly: false,
+                    vaccinated: false,
+                    mediaWaiver: false,
+                    infection_test: false,
+                    waiver: false,
+                    training: 'None',
+                    training_notes: '',
+                    training_see_doc: false,
+                    training_complete: false,
+                    paid: false,
+                    exempt: false,
+                    booksOrdered: 0,
+                    history: [{
+                        id: '2026-11-12T02:00:00Z',
+                        change: 'copied guardian from doc id: source-id rev: 3-abc by: Admin User'
+                    }]
+                },
+                call: {
+                    assigned_to: '',
+                    notes: '',
+                    fm_number: '',
+                    email_sent: false,
+                    mail_sent: false,
+                    how_heard_about: 'Unknown'
+                },
+                veteran: { pref_notes: '', pairings: [] },
+                medical: { release: false, limitations: '', food_restriction: 'None' },
+                apparel: {
+                    item: 'None',
+                    jacket_size: 'None',
+                    shirt_size: 'None',
+                    delivery: 'None',
+                    date: '',
+                    by: '',
+                    notes: ''
+                },
+                crew: { crew_position: '', comms_username: 'BusCap1' }
+            };
+
+            await createGuardian(req, res);
+
+            expect(res.status.calledWith(201), JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(true);
+            expect(res.json.firstCall.args[0].flight.status).to.equal('Copied');
+            expect(res.json.firstCall.args[0].crew).to.deep.equal({
+                crew_position: '',
+                comms_username: 'BusCap1'
+            });
+            const written = JSON.parse(global.fetch.firstCall.args[1].body);
+            expect(written.crew).to.deep.equal({
+                crew_position: '',
+                comms_username: 'BusCap1'
+            });
+        });
+
+        async function expectPatchKeepsCrew(handler, body) {
+            const doc = {
+                _id: 'guard-123',
+                _rev: '1-abc',
+                type: 'Guardian',
+                crew: { ...storedCrew },
+                flight: {
+                    id: 'SSHF-Nov2024',
+                    bus: 'Alpha1',
+                    seat: '10A',
+                    training_notes: 'old notes',
+                    history: []
+                },
+                metadata: {}
+            };
+            req.params.id = 'guard-123';
+            req.body = body;
+            global.fetch.onFirstCall().resolves({
+                ok: true,
+                json: async () => JSON.parse(JSON.stringify(doc))
+            });
+            let saved = null;
+            global.fetch.onSecondCall().callsFake(async (url, options) => {
+                saved = JSON.parse(options.body);
+                return { ok: true, json: async () => ({ id: 'guard-123', rev: '2-xyz' }) };
+            });
+
+            await handler(req, res);
+
+            expect(res.json.firstCall.args[0].ok, JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(true);
+            expect(saved.crew).to.deep.equal(storedCrew);
+        }
+
+        it('keeps an existing crew object when the seat is patched', async () => {
+            await expectPatchKeepsCrew(updateGuardianSeat, { value: '14B' });
+            expect(putBody().flight.seat).to.equal('14B');
+        });
+
+        it('keeps an existing crew object when the bus is patched', async () => {
+            await expectPatchKeepsCrew(updateGuardianBus, { value: 'Bravo1' });
+            expect(putBody().flight.bus).to.equal('Bravo1');
+        });
+
+        it('keeps an existing crew object when a guardian field is patched', async () => {
+            await expectPatchKeepsCrew(updateGuardianTrainingNotes, { value: 'updated training notes' });
+            expect(putBody().flight.training_notes).to.equal('updated training notes');
+        });
+    });
 }); 

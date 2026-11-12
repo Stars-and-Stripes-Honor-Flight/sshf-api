@@ -366,4 +366,38 @@ describe('OpenAPI spec generation', () => {
         expect(notes.requestBody).to.deep.equal(apparel.requestBody);
         expect(notes.responses).to.deep.equal(apparel.responses);
     });
+
+    it('documents guardian crew and flight-detail crew', () => {
+        const crewPositions = [
+            '',
+            'Bus Captain',
+            'Tour Lead',
+            'Medical Team',
+            'PR',
+            'Fly Ahead',
+            'Photographer'
+        ];
+        const guardianCrew = specs.components.schemas.Guardian.properties.crew;
+        expect(guardianCrew, 'Guardian.crew').to.be.an('object');
+        expect(guardianCrew.type).to.equal('object');
+        expect(guardianCrew.properties.crew_position.type).to.equal('string');
+        expect(guardianCrew.properties.crew_position.enum).to.deep.equal(crewPositions);
+        expect(guardianCrew.properties.crew_position.default).to.equal('');
+        expect(guardianCrew.properties.crew_position['x-historyTracked']).to.deep.equal({
+            historyArray: 'flight.history',
+            displayName: 'crew position'
+        });
+        expect(guardianCrew.properties.comms_username.type).to.equal('string');
+        expect(guardianCrew.properties.comms_username.default).to.equal('');
+        expect(guardianCrew.properties.comms_username['x-historyTracked']).to.deep.equal({
+            historyArray: 'flight.history',
+            displayName: 'comms username'
+        });
+
+        const detailCrew = specs.components.schemas.FlightDetailPerson.properties.crew;
+        expect(detailCrew, 'FlightDetailPerson.crew').to.be.an('object');
+        expect(detailCrew.type).to.equal('object');
+        expect(detailCrew.properties.crew_position.type).to.equal('string');
+        expect(detailCrew.properties.comms_username.type).to.equal('string');
+    });
 });

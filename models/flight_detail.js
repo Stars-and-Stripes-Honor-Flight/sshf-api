@@ -1,3 +1,5 @@
+import { normalizeGuardianCrew } from './guardian.js';
+
 /**
  * Valid bus assignments
  */
@@ -143,6 +145,7 @@ export class FlightDetailPerson {
             this.flight_training_see_doc = parseBoolean(data.flight_training_see_doc);
             this.flight_paid = parseBoolean(data.flight_paid);
             this.flight_books_ordered = parseBooksOrdered(data.flight_books_ordered);
+            this.crew = normalizeGuardianCrew(data.crew);
         }
     }
 
@@ -195,6 +198,7 @@ export class FlightDetailPerson {
             result.flight_training_see_doc = this.flight_training_see_doc;
             result.flight_paid = this.flight_paid;
             result.flight_books_ordered = this.flight_books_ordered;
+            result.crew = this.crew;
         }
         
         return result;
@@ -247,7 +251,8 @@ export class FlightDetailPerson {
             flight_waiver: doc.flight?.waiver,
             flight_training_see_doc: doc.flight?.training_see_doc,
             flight_paid: doc.flight?.paid,
-            flight_books_ordered: doc.flight?.booksOrdered
+            flight_books_ordered: doc.flight?.booksOrdered,
+            crew: (value.type || '') === 'Guardian' ? normalizeGuardianCrew(doc.crew) : undefined
         });
     }
 }

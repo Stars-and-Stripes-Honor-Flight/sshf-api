@@ -1070,6 +1070,59 @@ describe('Review Applications Route Handlers', () => {
             expect(res.status.calledWith(200)).to.be.true;
         });
 
+        it('keeps crew when re-accepting an existing guardian', async () => {
+            const reviewDoc = buildGuardianAppFixture({
+                app_status: 'Accepted',
+                acceptedAsRev: '1-main'
+            });
+            const existingMainDoc = {
+                _id: 'app-1',
+                _rev: '1-main',
+                type: 'Guardian',
+                crew: { crew_position: 'Tour Lead', comms_username: 'TourLead1' },
+                flight: { id: 'SSHF-Nov2024', status: 'Active', history: [] },
+                metadata: { created_by: 'Someone', created_at: '2020-01-01T00:00:00Z' }
+            };
+            let mainPutBody = null;
+
+            global.fetch.withArgs(sinon.match('http://review:5984/hf_apps/app-1'))
+                .onFirstCall().resolves({ ok: true, status: 200, json: async () => reviewDoc })
+                .onSecondCall().resolves({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({ id: 'app-1', rev: '4-rev' })
+                });
+
+            global.fetch.withArgs(sinon.match('http://main:5984/hf/app-1'))
+                .onFirstCall().resolves({
+                    ok: true,
+                    status: 200,
+                    json: async () => existingMainDoc
+                })
+                .onSecondCall().callsFake(async (url, options) => {
+                    mainPutBody = JSON.parse(options.body);
+                    return {
+                        ok: true,
+                        status: 200,
+                        json: async () => ({ id: 'app-1', rev: '2-main' })
+                    };
+                });
+
+            await acceptReviewApplication(req, res);
+
+            expect(res.status.calledWith(200), JSON.stringify(res.json.firstCall?.args?.[0])).to.equal(true);
+            expect(mainPutBody.crew).to.deep.equal({
+                crew_position: 'Tour Lead',
+                comms_username: 'TourLead1'
+            });
+            expect(mainPutBody.flight.id).to.equal('SSHF-Nov2024');
+            expect(mainPutBody.type).to.equal('Guardian');
+            expect(res.json.firstCall.args[0].record.crew).to.deep.equal({
+                crew_position: 'Tour Lead',
+                comms_username: 'TourLead1'
+            });
+        });
+
         it('should return 409 when main record revision changed since acceptance', async () => {
             const reviewDoc = buildVeteranAppFixture({
                 app_status: 'Accepted',
