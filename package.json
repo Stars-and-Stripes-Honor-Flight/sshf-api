@@ -15,7 +15,8 @@
     "deps:audit:all": "npm audit",
     "deps:update": "npm update",
     "deps:verify": "npm test && npm run coverage",
-    "maint": "node scripts/maintenance/runner.mjs"
+    "maint": "node scripts/maintenance/runner.mjs",
+    "deploy-design": "node scripts/design/deploy-basic.mjs"
   },
   "keywords": [],
   "author": "",

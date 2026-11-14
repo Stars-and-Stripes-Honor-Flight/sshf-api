@@ -1,0 +1,115 @@
+function normalizeNewlines(text) {
+    return String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function sorted(values) {
+    return [...values].sort();
+}
+
+function viewsEqual(repoView, liveView) {
+    const repoKeys = new Set(Object.keys(repoView || {}));
+    const liveKeys = new Set(Object.keys(liveView || {}));
+    if (repoKeys.size !== liveKeys.size) {
+        return false;
+    }
+    for (const key of repoKeys) {
+        if (!liveKeys.has(key)) {
+            return false;
+        }
+        if (key === 'map' || key === 'reduce') {
+            if (normalizeNewlines(repoView[key]) !== normalizeNewlines(liveView[key])) {
+                return false;
+            }
+        } else if (JSON.stringify(repoView[key]) !== JSON.stringify(liveView[key])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function listSignature(source) {
+    return normalizeNewlines(source ?? '');
+}
+
+function compareViewNames(repoViews, liveViews) {
+    const repoNames = new Set(Object.keys(repoViews || {}));
+    const liveNames = new Set(Object.keys(liveViews || {}));
+    const viewsAdded = sorted([...repoNames].filter((name) => !liveNames.has(name)));
+    const viewsRemoved = sorted([...liveNames].filter((name) => !repoNames.has(name)));
+    const viewsKept = [];
+    const viewsChanged = [];
+    for (const name of sorted([...repoNames].filter((name) => liveNames.has(name)))) {
+        if (viewsEqual(repoViews[name], liveViews[name])) {
+            viewsKept.push(name);
+        } else {
+            viewsChanged.push(name);
+        }
+    }
+    return { viewsAdded, viewsChanged, viewsKept, viewsRemoved };
+}
+
+function compareListNames(repoLists, liveLists) {
+    const repoNames = new Set(Object.keys(repoLists || {}));
+    const liveNames = new Set(Object.keys(liveLists || {}));
+    const listsAdded = sorted([...repoNames].filter((name) => !liveNames.has(name)));
+    const listsRemoved = sorted([...liveNames].filter((name) => !repoNames.has(name)));
+    const listsKept = [];
+    const listsChanged = [];
+    for (const name of sorted([...repoNames].filter((name) => liveNames.has(name)))) {
+        if (listSignature(repoLists[name]) === listSignature(liveLists[name])) {
+            listsKept.push(name);
+        } else {
+            listsChanged.push(name);
+        }
+    }
+    return { listsAdded, listsChanged, listsKept, listsRemoved };
+}
+
+const REPO_KEYS = new Set(['_id', 'language', 'views', 'lists']);
+
+export function diffDesignDocs(repoDoc, liveDoc) {
+    if (liveDoc == null) {
+        const views = compareViewNames(repoDoc.views, {});
+        const lists = compareListNames(repoDoc.lists, {});
+        return {
+            equivalent: false,
+            languageChanged: false,
+            ...views,
+            ...lists,
+            keysRemoved: [],
+            attachmentsRemoved: []
+        };
+    }
+
+    const languageChanged = liveDoc.language !== 'javascript';
+    const views = compareViewNames(repoDoc.views, liveDoc.views);
+    const lists = compareListNames(repoDoc.lists, liveDoc.lists);
+
+    const keysRemoved = sorted(
+        Object.keys(liveDoc).filter((key) => !REPO_KEYS.has(key) && key !== '_rev')
+    );
+    const attachmentsRemoved = sorted(
+        liveDoc._attachments && typeof liveDoc._attachments === 'object'
+            ? Object.keys(liveDoc._attachments)
+            : []
+    );
+
+    const equivalent = !languageChanged
+        && views.viewsAdded.length === 0
+        && views.viewsChanged.length === 0
+        && views.viewsRemoved.length === 0
+        && lists.listsAdded.length === 0
+        && lists.listsChanged.length === 0
+        && lists.listsRemoved.length === 0
+        && keysRemoved.length === 0
+        && attachmentsRemoved.length === 0;
+
+    return {
+        equivalent,
+        languageChanged,
+        ...views,
+        ...lists,
+        keysRemoved,
+        attachmentsRemoved
+    };
+}
