@@ -5,13 +5,22 @@ Scripts under `scripts/maintenance/` apply reviewed, one-off CouchDB changes thr
 ## Command
 
 ```bash
-npm run maint -- <script-name> [--env dev|prd] [--apply]
+npm run maint -- <script> [--env dev|prd] [--apply]
 ```
+
+`<script>` can be:
+
+- the script id: `2026-11-14-remove-loc-zipcode-docs`
+- the same with extension: `2026-11-14-remove-loc-zipcode-docs.mjs`
+- a relative or absolute path to that file under `scripts/maintenance/` (forward or backslashes on Windows)
 
 Examples:
 
 ```bash
 npm run maint -- 2026-11-14-remove-loc-zipcode-docs
+npm run maint -- 2026-11-14-remove-loc-zipcode-docs.mjs
+npm run maint -- scripts/maintenance/2026-11-14-remove-loc-zipcode-docs.mjs
+npm run maint -- .\scripts\maintenance\2026-11-14-remove-loc-zipcode-docs.mjs
 npm run maint -- 2026-11-14-remove-loc-zipcode-docs --env dev --apply
 npm run maint -- 2026-11-14-remove-loc-zipcode-docs --env prd --apply
 ```

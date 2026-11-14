@@ -174,11 +174,13 @@ describe('maintenance runner', () => {
         it('reads the script name, --apply, and --env prd from argv tokens', async () => {
             const { parseMaintArgs } = await import(runnerHref);
             expect(parseMaintArgs([SCRIPT_NAME, '--apply', '--env', 'prd'])).to.deep.equal({
+                scriptRef: SCRIPT_NAME,
                 scriptName: SCRIPT_NAME,
                 apply: true,
                 env: 'prd'
             });
             expect(parseMaintArgs(['--env', 'dev', '--apply', SCRIPT_NAME])).to.deep.equal({
+                scriptRef: SCRIPT_NAME,
                 scriptName: SCRIPT_NAME,
                 apply: true,
                 env: 'dev'
@@ -188,6 +190,7 @@ describe('maintenance runner', () => {
         it('defaults to a dev dry run when --apply and --env are omitted', async () => {
             const { parseMaintArgs } = await import(runnerHref);
             expect(parseMaintArgs([SCRIPT_NAME])).to.deep.equal({
+                scriptRef: SCRIPT_NAME,
                 scriptName: SCRIPT_NAME,
                 apply: false,
                 env: 'dev'
@@ -204,6 +207,7 @@ describe('maintenance runner', () => {
         it('accepts --env=dev and --env=prd as a single argv token', async () => {
             const { parseMaintArgs } = await import(runnerHref);
             expect(parseMaintArgs([SCRIPT_NAME, '--env=prd'])).to.deep.equal({
+                scriptRef: SCRIPT_NAME,
                 scriptName: SCRIPT_NAME,
                 apply: false,
                 env: 'prd'
@@ -217,6 +221,7 @@ describe('maintenance runner', () => {
             try {
                 const { parseMaintArgs } = await import(runnerHref);
                 expect(parseMaintArgs([SCRIPT_NAME])).to.deep.equal({
+                    scriptRef: SCRIPT_NAME,
                     scriptName: SCRIPT_NAME,
                     apply: false,
                     env: 'dev'
@@ -256,7 +261,6 @@ describe('maintenance runner', () => {
             const { parseMaintArgs } = await import(runnerHref);
             const names = [
                 '../utils/db',
-                'scripts/maintenance/2026-11-14-remove-loc-zipcode-docs',
                 '2026-11-14-remove-loc-zipcode-docs\\extra',
                 '2026-11-14-Remove-Loc',
                 '2026-11-14',
@@ -270,6 +274,102 @@ describe('maintenance runner', () => {
                 expectSyncCode(() => parseMaintArgs([name]), 'USAGE');
             }
             expectSyncCode(() => parseMaintArgs([SCRIPT_NAME, 'extra']), 'USAGE');
+        });
+
+        it('accepts a bare name, .mjs, relative paths, and an absolute path to scripts/maintenance', async () => {
+            const { parseMaintArgs } = await import(runnerHref);
+            const scriptsDir = join(repoRoot, 'scripts', 'maintenance');
+            const common = { cwd: repoRoot, scriptsDir };
+            const absolute = join(scriptsDir, `${SCRIPT_NAME}.mjs`);
+
+            expect(parseMaintArgs([SCRIPT_NAME], common)).to.include({
+                scriptName: SCRIPT_NAME,
+                scriptRef: SCRIPT_NAME,
+                apply: false,
+                env: 'dev'
+            });
+            expect(parseMaintArgs([`${SCRIPT_NAME}.mjs`], common).scriptName).to.equal(SCRIPT_NAME);
+            expect(parseMaintArgs([`scripts/maintenance/${SCRIPT_NAME}.mjs`], common).scriptName)
+                .to.equal(SCRIPT_NAME);
+            expect(parseMaintArgs([`scripts\\maintenance\\${SCRIPT_NAME}.mjs`], {
+                ...common,
+                pathImpl: path.win32
+            }).scriptName).to.equal(SCRIPT_NAME);
+            expect(parseMaintArgs([`.\\scripts\\maintenance\\${SCRIPT_NAME}.mjs`], {
+                ...common,
+                pathImpl: path.win32
+            }).scriptName).to.equal(SCRIPT_NAME);
+            expect(parseMaintArgs([absolute], { ...common, pathImpl: path.posix }).scriptName)
+                .to.equal(SCRIPT_NAME);
+        });
+    });
+
+    describe('resolveScriptInput', () => {
+        const scriptsDir = join(repoRoot, 'scripts', 'maintenance');
+
+        it('lists available scripts in the error text for unknown and invalid paths', async () => {
+            const { resolveScriptInput, formatMaintenanceScriptHelp } = await import(runnerHref);
+            const help = formatMaintenanceScriptHelp(scriptsDir);
+            expect(help).to.include('npm run maint --');
+            expect(help).to.include(SCRIPT_NAME);
+
+            const missing = expectSyncCode(() => resolveScriptInput('2099-01-01-missing', {
+                scriptsDir,
+                cwd: repoRoot,
+                requireExists: true
+            }), 'UNKNOWN_SCRIPT');
+            expect(missing.message).to.include('Available scripts:');
+            expect(missing.message).to.include(SCRIPT_NAME);
+
+            try {
+                resolveScriptInput('../routes/docs.js', {
+                    scriptsDir,
+                    cwd: repoRoot,
+                    requireExists: false
+                });
+                expect.fail('expected traversal to be rejected');
+            } catch (error) {
+                expect(error.code).to.equal('USAGE');
+                expect(error.message).to.include('scripts/maintenance/');
+                expect(error.message).to.include(SCRIPT_NAME);
+            }
+        });
+
+        it('rejects runner and couch helpers, nested paths, and files outside scripts/maintenance', () => {
+            const reject = async () => {
+                const { resolveScriptInput } = await import(runnerHref);
+                const cases = [
+                    'runner.mjs',
+                    'couch.mjs',
+                    'errors.mjs',
+                    join('scripts', 'maintenance', 'nested', `${SCRIPT_NAME}.mjs`),
+                    join(repoRoot, 'index.js')
+                ];
+                for (const scriptRef of cases) {
+                    expectSyncCode(() => resolveScriptInput(scriptRef, {
+                        scriptsDir,
+                        cwd: repoRoot,
+                        requireExists: false
+                    }), 'USAGE');
+                }
+            };
+            return reject();
+        });
+
+        it('resolves Steve’s Windows-style relative path from the repo root', async () => {
+            const { resolveScriptInput } = await import(runnerHref);
+            const winRepo = 'C:\\Users\\steve\\Repos\\sshf-api';
+            const winScriptsDir = path.win32.join(winRepo, 'scripts', 'maintenance');
+            const resolved = resolveScriptInput(`.\\scripts\\maintenance\\${SCRIPT_NAME}.mjs`, {
+                scriptsDir: winScriptsDir,
+                cwd: winRepo,
+                pathImpl: path.win32,
+                requireExists: false
+            });
+            expect(resolved.scriptName).to.equal(SCRIPT_NAME);
+            expect(resolved.filePath).to.equal(
+                path.win32.join(winScriptsDir, `${SCRIPT_NAME}.mjs`)
+            );
         });
     });
 

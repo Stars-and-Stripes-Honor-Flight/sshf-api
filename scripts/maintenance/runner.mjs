@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -8,13 +9,115 @@ import { createCouchMaintenanceDb } from './couch.mjs';
 import { MaintenanceError } from './errors.mjs';
 
 const SCRIPT_PATTERN = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAINTENANCE_HELPERS = new Set(['runner.mjs', 'couch.mjs', 'errors.mjs']);
+const SCRIPT_USAGE_HINT = [
+    'Use:',
+    '  npm run maint -- <script> [--env dev|prd] [--apply]',
+    '',
+    '<script> can be the script id (YYYY-MM-DD-short-name), the same with .mjs,',
+    'or a path to a .mjs file directly in scripts/maintenance/ (relative or absolute).'
+].join('\n');
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const defaultScriptsDir = path.join(repoRoot, 'scripts', 'maintenance');
 
 export const MAINT_BULK_BATCH_SIZE = BULK_BATCH_SIZE;
 
-export function parseMaintArgs(argv = []) {
-    let scriptName;
+function scriptNameFromBasename(basename) {
+    if (basename.endsWith('.mjs')) {
+        return basename.slice(0, -4);
+    }
+    return basename;
+}
+
+export function listMaintenanceScriptNames(
+    scriptsDir = defaultScriptsDir,
+    fs = { readdirSync }
+) {
+    try {
+        return fs.readdirSync(scriptsDir)
+            .filter((entry) => (
+                entry.endsWith('.mjs')
+                && !MAINTENANCE_HELPERS.has(entry)
+                && SCRIPT_PATTERN.test(scriptNameFromBasename(entry))
+            ))
+            .map((entry) => scriptNameFromBasename(entry))
+            .sort();
+    } catch {
+        return [];
+    }
+}
+
+export function formatMaintenanceScriptHelp(scriptsDir = defaultScriptsDir, fs = { readdirSync }) {
+    const names = listMaintenanceScriptNames(scriptsDir, fs);
+    const available = names.length > 0
+        ? `Available scripts:\n${names.map((name) => `  - ${name}`).join('\n')}`
+        : 'Available scripts: (none found)';
+    return `${SCRIPT_USAGE_HINT}\n\n${available}`;
+}
+
+export function resolveScriptInput(scriptRef, {
+    scriptsDir = defaultScriptsDir,
+    cwd = process.cwd(),
+    pathImpl = path,
+    fs = { existsSync, readdirSync },
+    requireExists = false
+} = {}) {
+    const trimmed = String(scriptRef ?? '').trim();
+    if (!trimmed) {
+        throw new MaintenanceError(`A script name is required.\n\n${formatMaintenanceScriptHelp(scriptsDir, fs)}`, {
+            code: 'USAGE'
+        });
+    }
+
+    const scriptsDirResolved = pathImpl.resolve(scriptsDir);
+    let filePath;
+    const looksLikePath = trimmed.startsWith('.') || /[\\/]/.test(trimmed);
+
+    if (pathImpl.isAbsolute(trimmed)) {
+        filePath = pathImpl.resolve(trimmed);
+    } else if (looksLikePath) {
+        filePath = pathImpl.resolve(cwd, trimmed);
+    } else {
+        const withExtension = trimmed.endsWith('.mjs') ? trimmed : `${trimmed}.mjs`;
+        filePath = pathImpl.join(scriptsDirResolved, withExtension);
+    }
+
+    const basename = pathImpl.basename(filePath);
+    const parent = pathImpl.resolve(pathImpl.dirname(filePath));
+    const help = formatMaintenanceScriptHelp(scriptsDir, fs);
+
+    if (basename.endsWith('.js') && !basename.endsWith('.mjs')) {
+        throw new MaintenanceError(`Invalid script name.\n\n${help}`, { code: 'USAGE' });
+    }
+    if (parent !== scriptsDirResolved) {
+        throw new MaintenanceError(
+            'Script must be a file directly in scripts/maintenance/.\n\n'
+            + help,
+            { code: 'USAGE' }
+        );
+    }
+    if (MAINTENANCE_HELPERS.has(basename)) {
+        throw new MaintenanceError(
+            'That path is a maintenance runner module, not a script.\n\n'
+            + help,
+            { code: 'USAGE' }
+        );
+    }
+
+    const scriptName = scriptNameFromBasename(basename);
+    if (basename.endsWith('.mjs.mjs') || !SCRIPT_PATTERN.test(scriptName)) {
+        throw new MaintenanceError(`Invalid script name.\n\n${help}`, { code: 'USAGE' });
+    }
+
+    if (requireExists && !fs.existsSync(filePath)) {
+        throw new MaintenanceError(`Unknown maintenance script.\n\n${help}`, { code: 'UNKNOWN_SCRIPT' });
+    }
+
+    return { scriptName, filePath };
+}
+
+export function parseMaintArgs(argv = [], options = {}) {
+    let scriptRef;
     let apply = false;
     let env;
     let envSpecified = false;
@@ -46,35 +149,33 @@ export function parseMaintArgs(argv = []) {
         if (token.startsWith('--')) {
             throw new MaintenanceError(`Unknown flag ${token}.`, { code: 'USAGE' });
         }
-        if (scriptName) {
+        if (scriptRef) {
             throw new MaintenanceError('Too many arguments.', { code: 'USAGE' });
         }
-        scriptName = normalizeScriptName(token);
+        scriptRef = token;
     }
 
-    if (!scriptName) {
+    if (!scriptRef) {
         throw new MaintenanceError('A script name is required.', { code: 'USAGE' });
     }
     if (apply && !envSpecified) {
         throw new MaintenanceError('--apply requires --env dev or --env prd.', { code: 'USAGE' });
     }
-  return {
-    scriptName,
-    apply,
-    env: env || 'dev'
-  };
-}
 
-function normalizeScriptName(token) {
-    const trimmed = String(token || '').trim();
-    const withoutMjs = trimmed.endsWith('.mjs') ? trimmed.slice(0, -4) : trimmed;
-    if (!SCRIPT_PATTERN.test(withoutMjs) || withoutMjs.endsWith('.js')) {
-        throw new MaintenanceError('Invalid script name.', { code: 'USAGE' });
-    }
-    if (/[\\/]/.test(withoutMjs) || withoutMjs.includes('..')) {
-        throw new MaintenanceError('Invalid script name.', { code: 'USAGE' });
-    }
-    return withoutMjs;
+    const { scriptName } = resolveScriptInput(scriptRef, {
+        scriptsDir: options.scriptsDir,
+        cwd: options.cwd,
+        pathImpl: options.pathImpl,
+        fs: options.fs,
+        requireExists: false
+    });
+
+    return {
+        scriptRef,
+        scriptName,
+        apply,
+        env: env || 'dev'
+    };
 }
 
 function databaseForEnv(envName, env) {
@@ -200,26 +301,38 @@ export async function writeBulkDocs({ docs, bulkDocs, batchSize = MAINT_BULK_BAT
     return { saved, conflicts, failed };
 }
 
-export function resolveScriptPath(scriptsDir, scriptName, pathImpl = path) {
-    const name = normalizeScriptName(scriptName);
-    if (name.includes('..') || /[\\/]/.test(scriptName)) {
-        throw new MaintenanceError('Invalid script name.', { code: 'USAGE' });
-    }
-    return pathImpl.join(scriptsDir, `${name}.mjs`);
+export function resolveScriptPath(scriptsDir, scriptRef, pathImpl = path, fs = { existsSync, readdirSync }) {
+    return resolveScriptInput(scriptRef, {
+        scriptsDir,
+        pathImpl,
+        fs,
+        requireExists: false
+    }).filePath;
 }
 
-export async function loadMaintenanceScript(scriptName, {
+export async function loadMaintenanceScript(scriptRef, {
     scriptsDir = defaultScriptsDir,
+    cwd = process.cwd(),
     importModule = (url) => import(url),
-    pathImpl = path
+    pathImpl = path,
+    fs = { existsSync, readdirSync }
 } = {}) {
-    const filePath = resolveScriptPath(scriptsDir, scriptName, pathImpl);
+    const { scriptName, filePath } = resolveScriptInput(scriptRef, {
+        scriptsDir,
+        cwd,
+        pathImpl,
+        fs,
+        requireExists: true
+    });
     let module;
     try {
         module = await importModule(pathToFileURL(filePath).href);
     } catch (error) {
         if (error?.code === 'ERR_MODULE_NOT_FOUND') {
-            throw new MaintenanceError('Unknown maintenance script.', { code: 'UNKNOWN_SCRIPT' });
+            throw new MaintenanceError(
+                `Unknown maintenance script.\n\n${formatMaintenanceScriptHelp(scriptsDir, fs)}`,
+                { code: 'UNKNOWN_SCRIPT' }
+            );
         }
         throw error;
     }
@@ -276,11 +389,21 @@ export async function runMaintenance(argv, deps = {}) {
     const log = deps.log || (() => {});
     const now = deps.now || (() => new Date());
     const env = deps.env || process.env;
-    const parsed = parseMaintArgs(argv);
+    const parsed = parseMaintArgs(argv, {
+        scriptsDir: deps.scriptsDir,
+        cwd: deps.cwd,
+        pathImpl: deps.pathImpl,
+        fs: deps.fs
+    });
     const target = resolveMaintTarget({ envName: parsed.env, env });
     const script = deps.loadScript
         ? await deps.loadScript(parsed.scriptName)
-        : await loadMaintenanceScript(parsed.scriptName);
+        : await loadMaintenanceScript(parsed.scriptRef, {
+            scriptsDir: deps.scriptsDir,
+            cwd: deps.cwd,
+            pathImpl: deps.pathImpl,
+            fs: deps.fs
+        });
     const dryRun = !parsed.apply;
 
     log(`Target host=${target.host} database=${target.database} env=${target.envName}`);
