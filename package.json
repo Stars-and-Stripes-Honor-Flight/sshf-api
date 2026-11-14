@@ -14,7 +14,8 @@
     "deps:audit": "npm audit --omit=dev",
     "deps:audit:all": "npm audit",
     "deps:update": "npm update",
-    "deps:verify": "npm test && npm run coverage"
+    "deps:verify": "npm test && npm run coverage",
+    "maint": "node scripts/maintenance/runner.mjs"
   },
   "keywords": [],
   "author": "",

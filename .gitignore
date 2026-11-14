@@ -39,6 +39,9 @@ coverage/
 *.swp
 *~
 
+# Maintenance script backups
+maintenance-backups/
+
 # AI Tools
 .cursor/skills/
 

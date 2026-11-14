@@ -21,10 +21,16 @@ const FIXED_DATE = new Date('2026-11-14T18:22:00.123Z');
 
 const targetEnv = {
     DB_URL: 'http://127.0.0.1:5984',
-    DB_NAME: 'hf',
+    DB_NAME: 'hf-default',
+    DEV_DB_NAME: 'hf-dev',
+    PRD_DB_NAME: 'hf',
     DB_USER: 'maint-user',
     DB_PASS: 'maint-secret'
 };
+
+function locationDoc(id, extra = {}, rev = '1-a') {
+    return doc(id, { type: 'Location', ...extra }, rev);
+}
 
 function doc(id, extra = {}, rev = '1-a') {
     return { _id: id, _rev: rev, ...extra };
@@ -67,19 +73,27 @@ describe('remove loc- zip code docs', () => {
         expect(mod.default.plan).to.equal(mod.plan);
     });
 
-    it('treats loc- plus five digits and no type field as a zip code document', async () => {
+    it('treats loc- plus five digits and type Location as a zip code document', async () => {
         const { looksLikeZipCodeDoc } = await import(locHref);
         const zipCases = [
-            doc('loc-10001', { city: 'New York', state: 'NY' }),
-            doc('loc-02101', { zip: '02101' }),
-            doc('loc-00000'),
-            { _id: 'loc-10001', _rev: '1-a' }
+            locationDoc('loc-54981', {
+                city: 'Waupaca',
+                zip: '54981',
+                long: '-089.046680',
+                county: 'Waupaca',
+                state: 'WI',
+                lat: '+44.429163'
+            }),
+            locationDoc('loc-02101', { zip: '02101' }),
+            locationDoc('loc-00000'),
+            { _id: 'loc-10001', _rev: '1-a', type: 'Location' }
         ];
         for (const zip of zipCases) {
             expect(looksLikeZipCodeDoc(zip), zip._id).to.equal(true);
         }
 
         const rejected = [
+            doc('loc-10001', { city: 'New York', state: 'NY' }),
             doc('loc-10001', { type: 'ZipCode' }),
             doc('loc-10001', { type: '' }),
             doc('loc-10001', { type: null }),
@@ -113,7 +127,7 @@ describe('remove loc- zip code docs', () => {
 
     it('requests the loc- _all_docs range and ignores every other id', async () => {
         const { plan, LOC_START_KEY, LOC_END_KEY } = await import(locHref);
-        const zip = doc('loc-10001', { city: 'New York' });
+        const zip = locationDoc('loc-10001', { city: 'New York' });
         const pages = [[
             row(doc('veteran-1', { type: 'Veteran' })),
             row(doc('LOC-10001')),
@@ -148,7 +162,7 @@ describe('remove loc- zip code docs', () => {
     it('pages _all_docs with limit and skip until a short page', async () => {
         const { plan } = await import(locHref);
         const ids = ['loc-10001', 'loc-10002', 'loc-10003', 'loc-10004', 'loc-10005'];
-        const docs = ids.map((id) => doc(id, { city: id }));
+        const docs = ids.map((id) => locationDoc(id, { city: id }));
         const db = pagingAllDocs([
             [row(docs[0]), row(docs[1])],
             [row(docs[2]), row(docs[3])],
@@ -173,7 +187,7 @@ describe('remove loc- zip code docs', () => {
 
     it('requests another page when a page is exactly full, then stops', async () => {
         const { plan } = await import(locHref);
-        const docs = ['loc-10001', 'loc-10002', 'loc-10003', 'loc-10004'].map((id) => doc(id));
+        const docs = ['loc-10001', 'loc-10002', 'loc-10003', 'loc-10004'].map((id) => locationDoc(id));
         const db = pagingAllDocs([
             [row(docs[0]), row(docs[1])],
             [row(docs[2]), row(docs[3])]
@@ -190,14 +204,15 @@ describe('remove loc- zip code docs', () => {
         expect(result.writes.map((item) => item._id)).to.deep.equal(docs.map((item) => item._id));
     });
 
-    it('flags unexpected ids and documents with a type field, and does not delete them', async () => {
+    it('flags unexpected ids and non-Location loc- docs, and does not delete them', async () => {
         const { plan } = await import(locHref);
-        const keepCity = doc('loc-10001', { city: 'New York', state: 'NY', zip: '10001' });
-        const leadingZero = doc('loc-02101', { state: 'MA' });
+        const keepCity = locationDoc('loc-10001', { city: 'New York', state: 'NY', zip: '10001' });
+        const leadingZero = locationDoc('loc-02101', { state: 'MA' });
         const typed = doc('loc-10002', { type: 'ZipCode', city: 'New York' });
         const volunteerShaped = doc('loc-10003', { type: 'Volounteer' });
         const emptyType = doc('loc-10004', { type: '' });
         const nullType = doc('loc-10005', { type: null });
+        const missingType = doc('loc-10006', { city: 'Chicago' });
         const badId = doc('loc-abc', { city: 'X' });
         const shortId = doc('loc-1234');
         const longId = doc('loc-123456');
@@ -211,6 +226,7 @@ describe('remove loc- zip code docs', () => {
             row(volunteerShaped),
             row(emptyType),
             row(nullType),
+            row(missingType),
             row(badId),
             row(shortId),
             row(longId),
@@ -227,10 +243,11 @@ describe('remove loc- zip code docs', () => {
         ]);
         expect(result.originals).to.deep.equal([keepCity, leadingZero]);
         expect(result.flagged).to.deep.equal([
-            { id: 'loc-10002', reason: 'has-type' },
-            { id: 'loc-10003', reason: 'has-type' },
-            { id: 'loc-10004', reason: 'has-type' },
-            { id: 'loc-10005', reason: 'has-type' },
+            { id: 'loc-10002', reason: 'not-location' },
+            { id: 'loc-10003', reason: 'not-location' },
+            { id: 'loc-10004', reason: 'not-location' },
+            { id: 'loc-10005', reason: 'not-location' },
+            { id: 'loc-10006', reason: 'not-location' },
             { id: 'loc-abc', reason: 'unexpected-id' },
             { id: 'loc-1234', reason: 'unexpected-id' },
             { id: 'loc-123456', reason: 'unexpected-id' },
@@ -264,7 +281,7 @@ describe('remove loc- zip code docs', () => {
 
     it('keeps deletion payloads free of source fields and leaves the source document unchanged', async () => {
         const { plan } = await import(locHref);
-        const source = doc('loc-10001', { city: 'New York', note: 'keep me' }, '4-rev');
+        const source = locationDoc('loc-10001', { city: 'New York', note: 'keep me' }, '4-rev');
         const db = pagingAllDocs([[row(source)]]);
         const result = await plan({ allDocs: db.allDocs, pageSize: 10 });
         expect(result.writes).to.deep.equal([{
@@ -274,13 +291,13 @@ describe('remove loc- zip code docs', () => {
         }]);
         expect(result.writes[0]).to.not.equal(source);
         expect(result.originals[0]).to.deep.equal(source);
-        expect(source).to.deep.equal(doc('loc-10001', { city: 'New York', note: 'keep me' }, '4-rev'));
+        expect(source).to.deep.equal(locationDoc('loc-10001', { city: 'New York', note: 'keep me' }, '4-rev'));
         expect(source).to.not.have.property('_deleted');
     });
 
     it('returns a before-and-after sample capped at SAMPLE_SIZE', async () => {
         const { plan, SAMPLE_SIZE } = await import(locHref);
-        const docs = Array.from({ length: 7 }, (_, index) => doc(
+        const docs = Array.from({ length: 7 }, (_, index) => locationDoc(
             `loc-${String(10001 + index)}`,
             { city: `City ${index}` }
         ));
@@ -301,7 +318,7 @@ describe('remove loc- zip code docs', () => {
 
     it('includes flagged rows in the sample with no deletion payload', async () => {
         const { plan } = await import(locHref);
-        const zip = doc('loc-10001', { city: 'New York' });
+        const zip = locationDoc('loc-10001', { city: 'New York' });
         const flagged = doc('loc-abc', { type: 'Other' });
         const db = pagingAllDocs([[row(zip), row(flagged)]]);
         const result = await plan({ allDocs: db.allDocs, pageSize: 10, sampleSize: 2 });
@@ -324,7 +341,7 @@ describe('remove loc- zip code docs', () => {
     it('does not write while planning, including when bulkDocs is provided', async () => {
         const { plan } = await import(locHref);
         let writes = 0;
-        const db = pagingAllDocs([[row(doc('loc-10001'))]]);
+        const db = pagingAllDocs([[row(locationDoc('loc-10001'))]]);
         await plan({
             allDocs: db.allDocs,
             bulkDocs: async () => {
@@ -343,8 +360,8 @@ describe('remove loc- zip code docs', () => {
             const { runMaintenance } = await import(runnerHref);
             const queries = [];
             const events = [];
-            const zip = doc('loc-10001', { city: 'New York' });
-            const flagged = doc('loc-10002', { type: 'ZipCode' });
+            const zip = locationDoc('loc-10001', { city: 'New York' });
+            const flagged = doc('loc-10002', { type: 'ZipCode', city: 'Nope' });
             const result = await runMaintenance([SCRIPT_NAME, '--env', 'dev'], {
                 env: targetEnv,
                 log: () => {},
@@ -393,7 +410,7 @@ describe('remove loc- zip code docs', () => {
             const { runMaintenance } = await import(runnerHref);
             const events = [];
             let written;
-            const zip = doc('loc-02101', { city: 'Boston', state: 'MA' }, '7-live');
+            const zip = locationDoc('loc-02101', { city: 'Boston', state: 'MA' }, '7-live');
             const flagged = doc('loc-99999', { type: 'Veteran' });
             const result = await runMaintenance([SCRIPT_NAME, '--apply', '--env', 'dev'], {
                 env: targetEnv,
@@ -436,7 +453,7 @@ describe('remove loc- zip code docs', () => {
                 createdAt: FIXED_DATE.toISOString(),
                 env: 'dev',
                 host: '127.0.0.1:5984',
-                database: 'hf'
+                database: 'hf-dev'
             });
             expect(JSON.stringify(payload)).to.not.include('maint-secret');
             expect(events[3][1]).to.deep.equal([{

@@ -31,7 +31,9 @@ const BACKUP_FILENAME = `${SCRIPT_NAME}-2026-11-14T182200.123Z.json`;
 
 const targetEnv = {
     DB_URL: 'http://127.0.0.1:5984',
-    DB_NAME: 'hf',
+    DB_NAME: 'hf-default',
+    DEV_DB_NAME: 'hf-dev',
+    PRD_DB_NAME: 'hf',
     DB_USER: 'maint-user',
     DB_PASS: 'maint-secret'
 };
@@ -193,6 +195,12 @@ describe('maintenance runner', () => {
             expect(parseMaintArgs([`${SCRIPT_NAME}.mjs`]).scriptName).to.equal(SCRIPT_NAME);
         });
 
+        it('rejects --apply when --env is missing', async () => {
+            const { parseMaintArgs } = await import(runnerHref);
+            expectSyncCode(() => parseMaintArgs([SCRIPT_NAME, '--apply']), 'USAGE');
+            expectSyncCode(() => parseMaintArgs(['--apply', SCRIPT_NAME]), 'USAGE');
+        });
+
         it('accepts --env=dev and --env=prd as a single argv token', async () => {
             const { parseMaintArgs } = await import(runnerHref);
             expect(parseMaintArgs([SCRIPT_NAME, '--env=prd'])).to.deep.equal({
@@ -283,7 +291,7 @@ describe('maintenance runner', () => {
                 expect(target).to.include({
                     envName: 'dev',
                     host: '127.0.0.1:5984',
-                    database: 'hf',
+                    database: 'hf-dev',
                     url: 'http://127.0.0.1:5984',
                     user: 'maint-user',
                     pass: 'maint-secret'
@@ -304,25 +312,31 @@ describe('maintenance runner', () => {
             expect(target.database).to.equal('hf');
         });
 
-        it('keeps DB_NAME for both dev and prd when prefixed names are also present', async () => {
+        it('selects DEV_DB_NAME and PRD_DB_NAME for each --env mode with shared credentials', async () => {
             const { resolveMaintTarget } = await import(runnerHref);
             const env = {
                 ...targetEnv,
                 DEV_DB_NAME: 'dev-db',
                 PRD_DB_NAME: 'prd-db'
             };
-            expect(resolveMaintTarget({ envName: 'dev', env }).database).to.equal('hf');
-            expect(resolveMaintTarget({ envName: 'prd', env }).database).to.equal('hf');
+            expect(resolveMaintTarget({ envName: 'dev', env }).database).to.equal('dev-db');
+            expect(resolveMaintTarget({ envName: 'prd', env }).database).to.equal('prd-db');
+            expect(resolveMaintTarget({ envName: 'dev', env }).user).to.equal(env.DB_USER);
+            expect(resolveMaintTarget({ envName: 'prd', env }).pass).to.equal(env.DB_PASS);
         });
 
         it('rejects incomplete database settings and an invalid DB_URL', async () => {
             const { resolveMaintTarget } = await import(runnerHref);
-            const keys = ['DB_URL', 'DB_NAME', 'DB_USER', 'DB_PASS'];
+            const keys = ['DB_URL', 'DB_USER', 'DB_PASS'];
             for (const key of keys) {
                 const env = { ...targetEnv };
                 delete env[key];
                 expectSyncCode(() => resolveMaintTarget({ envName: 'dev', env }), 'CONFIG');
             }
+            expectSyncCode(() => resolveMaintTarget({
+                envName: 'dev',
+                env: { ...targetEnv, DEV_DB_NAME: undefined, DB_NAME: undefined }
+            }), 'CONFIG');
             expectSyncCode(() => resolveMaintTarget({
                 envName: 'dev',
                 env: { ...targetEnv, DB_URL: 'not-a-url' }
@@ -383,9 +397,9 @@ describe('maintenance runner', () => {
                 calls += 1;
                 return 'hf';
             };
-            await confirmApply({ envName: 'dev', apply: true, database: 'hf', prompt });
+            await confirmApply({ envName: 'dev', apply: true, database: 'hf-dev', prompt });
             await confirmApply({ envName: 'prd', apply: false, database: 'hf', prompt });
-            await confirmApply({ envName: 'dev', apply: false, database: 'hf', prompt });
+            await confirmApply({ envName: 'dev', apply: false, database: 'hf-dev', prompt });
             expect(calls).to.equal(0);
         });
     });
@@ -789,7 +803,7 @@ describe('maintenance runner', () => {
                 script: SCRIPT_NAME,
                 env: 'dev',
                 host: '127.0.0.1:5984',
-                database: 'hf',
+                database: 'hf-dev',
                 matched: 2,
                 changed: 0,
                 skipped: 1,
@@ -800,7 +814,7 @@ describe('maintenance runner', () => {
             });
             expect(result.flaggedIds).to.deep.equal(['loc-abc']);
             expect(result.sample).to.deep.equal(sample);
-            expect(logs[0]).to.equal('Target host=127.0.0.1:5984 database=hf env=dev');
+            expect(logs[0]).to.equal('Target host=127.0.0.1:5984 database=hf-dev env=dev');
             expect(logs.at(-1)).to.equal(formatSummary(result));
             expect(logs.join('\n')).to.not.include('maint-secret');
         });
@@ -853,7 +867,7 @@ describe('maintenance runner', () => {
             expect(backupArgs.meta).to.include({
                 env: 'dev',
                 host: '127.0.0.1:5984',
-                database: 'hf'
+                database: 'hf-dev'
             });
             expect(JSON.stringify(backupArgs.meta)).to.not.include('maint-secret');
             expect(result.changed).to.equal(1);
@@ -1206,7 +1220,7 @@ describe('maintenance runner', () => {
             });
             expect(seen).to.include({
                 host: '127.0.0.1:5984',
-                database: 'hf',
+                database: 'hf-dev',
                 url: 'http://127.0.0.1:5984',
                 user: 'maint-user',
                 pass: 'maint-secret'
