@@ -178,12 +178,31 @@ export function parseMaintArgs(argv = [], options = {}) {
     };
 }
 
+function assertDistinctMaintDatabases(env) {
+    const devName = typeof env.DEV_DB_NAME === 'string' ? env.DEV_DB_NAME.trim() : '';
+    const prdName = typeof env.PRD_DB_NAME === 'string' ? env.PRD_DB_NAME.trim() : '';
+    if (devName && prdName && devName === prdName) {
+        throw new MaintenanceError(
+            'DEV_DB_NAME and PRD_DB_NAME must name different databases.',
+            { code: 'CONFIG' }
+        );
+    }
+}
+
 function databaseForEnv(envName, env) {
     if (envName === 'dev') {
-        return env.DEV_DB_NAME || env.DB_NAME;
+        const database = typeof env.DEV_DB_NAME === 'string' ? env.DEV_DB_NAME.trim() : '';
+        if (!database) {
+            throw new MaintenanceError('DEV_DB_NAME is required for maintenance --env dev.', { code: 'CONFIG' });
+        }
+        return database;
     }
     if (envName === 'prd') {
-        return env.PRD_DB_NAME || env.DB_NAME;
+        const database = typeof env.PRD_DB_NAME === 'string' ? env.PRD_DB_NAME.trim() : '';
+        if (!database) {
+            throw new MaintenanceError('PRD_DB_NAME is required for maintenance --env prd.', { code: 'CONFIG' });
+        }
+        return database;
     }
     throw new MaintenanceError('Invalid --env value.', { code: 'USAGE' });
 }
@@ -192,11 +211,12 @@ export function resolveMaintTarget({ envName, env = process.env } = {}) {
     if (envName !== 'dev' && envName !== 'prd') {
         throw new MaintenanceError('Invalid --env value.', { code: 'USAGE' });
     }
+    assertDistinctMaintDatabases(env);
     const url = env.DB_URL;
     const user = env.DB_USER;
     const pass = env.DB_PASS;
     const database = databaseForEnv(envName, env);
-    if (!url || !user || !pass || !database) {
+    if (!url || !user || !pass) {
         throw new MaintenanceError('Database configuration is incomplete.', { code: 'CONFIG' });
     }
     let parsed;

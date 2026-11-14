@@ -434,17 +434,52 @@ describe('maintenance runner', () => {
                 expectSyncCode(() => resolveMaintTarget({ envName: 'dev', env }), 'CONFIG');
             }
             expectSyncCode(() => resolveMaintTarget({
+                envName: 'staging',
+                env: targetEnv
+            }), 'USAGE');
+            const missingDev = expectSyncCode(() => resolveMaintTarget({
                 envName: 'dev',
-                env: { ...targetEnv, DEV_DB_NAME: undefined, DB_NAME: undefined }
+                env: { ...targetEnv, DEV_DB_NAME: undefined }
             }), 'CONFIG');
+            expect(missingDev.message).to.include('DEV_DB_NAME');
+            const missingPrd = expectSyncCode(() => resolveMaintTarget({
+                envName: 'prd',
+                env: { ...targetEnv, PRD_DB_NAME: '' }
+            }), 'CONFIG');
+            expect(missingPrd.message).to.include('PRD_DB_NAME');
             expectSyncCode(() => resolveMaintTarget({
                 envName: 'dev',
                 env: { ...targetEnv, DB_URL: 'not-a-url' }
             }), 'CONFIG');
-            expectSyncCode(() => resolveMaintTarget({
-                envName: 'staging',
-                env: targetEnv
-            }), 'USAGE');
+        });
+
+        it('ignores DB_NAME and requires DEV_DB_NAME or PRD_DB_NAME for the selected --env', async () => {
+            const { resolveMaintTarget } = await import(runnerHref);
+            const env = {
+                ...targetEnv,
+                DB_NAME: 'accidental-production',
+                DEV_DB_NAME: 'hf-dev',
+                PRD_DB_NAME: 'hf'
+            };
+            expect(resolveMaintTarget({ envName: 'dev', env }).database).to.equal('hf-dev');
+            expect(resolveMaintTarget({ envName: 'prd', env }).database).to.equal('hf');
+        });
+
+        it('rejects identical DEV_DB_NAME and PRD_DB_NAME before any database access', async () => {
+            const { resolveMaintTarget } = await import(runnerHref);
+            const env = {
+                ...targetEnv,
+                DB_NAME: 'hf',
+                DEV_DB_NAME: 'hf',
+                PRD_DB_NAME: 'hf'
+            };
+            const error = expectSyncCode(
+                () => resolveMaintTarget({ envName: 'dev', env }),
+                'CONFIG'
+            );
+            expect(error.message).to.match(/DEV_DB_NAME/);
+            expect(error.message).to.match(/PRD_DB_NAME/);
+            expectSyncCode(() => resolveMaintTarget({ envName: 'prd', env }), 'CONFIG');
         });
     });
 

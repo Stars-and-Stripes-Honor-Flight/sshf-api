@@ -27,7 +27,8 @@ npm run maint -- 2026-11-14-remove-loc-zipcode-docs --env prd --apply
 
 - **Dry run by default.** Without `--apply`, the script only reports what it would change.
 - **`--apply` requires `--env`.** Choose `dev` or `prd` so the runner picks the correct database name from configuration.
-- **Shared credentials.** `DB_URL`, `DB_USER`, and `DB_PASS` come from `.env`. Dev vs prod is selected by database name: `DEV_DB_NAME` or `PRD_DB_NAME` (each falls back to `DB_NAME` when unset).
+- **Shared credentials.** `DB_URL`, `DB_USER`, and `DB_PASS` come from `.env`.
+- **Separate database names.** `--env dev` uses `DEV_DB_NAME` only; `--env prd` uses `PRD_DB_NAME` only. The maintenance runner never reads `DB_NAME`. Both variables are required in `.env`, must be non-empty, and must differ so a dev dry run cannot target prod if `DB_NAME` is repointed.
 - **Production confirmation.** For `prd` with `--apply`, the runner prints the host and database name, then asks you to type the database name before any read or write.
 - **Backups.** Before an apply that changes documents, every touched document is written to `maintenance-backups/<script>-<timestamp>.json` (gitignored).
 - **Writes.** Updates use CouchDB `_bulk_docs` with each document's current `_rev`. Conflicts are reported, not forced.
