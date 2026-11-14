@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { createInterface } from 'node:readline/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { BULK_BATCH_SIZE } from '../../utils/bulk_docs.js';
@@ -235,6 +236,59 @@ export function resolveMaintTarget({ envName, env = process.env } = {}) {
     };
 }
 
+export function createMaintenancePrompt({
+    input = process.stdin,
+    output = process.stdout,
+    isTTY = input?.isTTY === true && output?.isTTY === true
+} = {}) {
+    return async function prompt(question) {
+        if (!isTTY) {
+            throw new MaintenanceError(
+                'Production apply requires an interactive terminal (stdin and stdout must be a TTY). '
+                + 'Run from PowerShell, cmd, or a Linux shell instead of a piped or detached process.',
+                { code: 'CONFIRMATION_REQUIRED' }
+            );
+        }
+        if (input?.readableEnded) {
+            throw new MaintenanceError('Confirmation was missing.', { code: 'CONFIRMATION_REQUIRED' });
+        }
+        const rl = createInterface({ input, output });
+        try {
+            const answer = await new Promise((resolve, reject) => {
+                let settled = false;
+                const settle = (fn, value) => {
+                    if (!settled) {
+                        settled = true;
+                        fn(value);
+                    }
+                };
+                const onClose = () => {
+                    settle(
+                        reject,
+                        new MaintenanceError('Confirmation was missing.', { code: 'CONFIRMATION_REQUIRED' })
+                    );
+                };
+                input.once('end', onClose);
+                input.once('close', onClose);
+                rl.question(question)
+                    .then((line) => {
+                        input.off('end', onClose);
+                        input.off('close', onClose);
+                        settle(resolve, line);
+                    })
+                    .catch((error) => {
+                        input.off('end', onClose);
+                        input.off('close', onClose);
+                        settle(reject, error);
+                    });
+            });
+            return answer;
+        } finally {
+            rl.close();
+        }
+    };
+}
+
 export async function confirmApply({ envName, apply, database, prompt } = {}) {
     if (!apply || envName !== 'prd') {
         return;
@@ -428,11 +482,21 @@ export async function runMaintenance(argv, deps = {}) {
 
     log(`Target host=${target.host} database=${target.database} env=${target.envName}`);
 
+    const prompt = deps.prompt ?? (
+        parsed.apply && target.envName === 'prd'
+            ? createMaintenancePrompt({
+                input: deps.stdin,
+                output: deps.stdout,
+                isTTY: deps.isTTY
+            })
+            : undefined
+    );
+
     await confirmApply({
         envName: target.envName,
         apply: parsed.apply,
         database: target.database,
-        prompt: deps.prompt
+        prompt
     });
 
     const db = deps.db || (deps.createDb
