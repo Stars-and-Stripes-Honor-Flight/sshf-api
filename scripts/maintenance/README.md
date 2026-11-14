@@ -14,6 +14,13 @@ npm run maint -- <script> [--env dev|prd] [--apply]
 - the same with extension: `2026-11-14-remove-loc-zipcode-docs.mjs`
 - a relative or absolute path to that file under `scripts/maintenance/` (forward or backslashes on Windows)
 
+## Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `2026-11-14-remove-loc-zipcode-docs` | Remove unused zip-code `loc-#####` documents (`type: Location`) in the `loc-` id range |
+| `2026-11-14-remove-volunteer-docs` | Remove legacy documents with `type: Volunteer` (exact match) |
+
 Examples:
 
 ```bash
@@ -23,6 +30,8 @@ npm run maint -- scripts/maintenance/2026-11-14-remove-loc-zipcode-docs.mjs
 npm run maint -- .\scripts\maintenance\2026-11-14-remove-loc-zipcode-docs.mjs
 npm run maint -- 2026-11-14-remove-loc-zipcode-docs --env dev --apply
 npm run maint -- 2026-11-14-remove-loc-zipcode-docs --env prd --apply
+npm run maint -- 2026-11-14-remove-volunteer-docs --env dev
+npm run maint -- 2026-11-14-remove-volunteer-docs --env dev --apply
 ```
 
 - **Dry run by default.** Without `--apply`, the script only reports what it would change.
