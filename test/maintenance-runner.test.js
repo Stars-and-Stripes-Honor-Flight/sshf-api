@@ -497,8 +497,26 @@ describe('maintenance runner', () => {
                 }
             });
             expect(questions).to.have.length(1);
-            expect(questions[0]).to.include('hf');
+            const { PRD_CONFIRM_PROMPT } = await import(runnerHref);
+            expect(questions[0]).to.equal(PRD_CONFIRM_PROMPT);
             expect(questions[0]).to.not.include('maint-secret');
+        });
+
+        it('does not reveal the database name in the confirmation prompt text', async () => {
+            const { confirmApply, PRD_CONFIRM_PROMPT } = await import(runnerHref);
+            const database = 'super-secret-db';
+            const questions = [];
+            await confirmApply({
+                envName: 'prd',
+                apply: true,
+                database,
+                prompt: async (question) => {
+                    questions.push(question);
+                    return database;
+                }
+            });
+            expect(questions[0]).to.equal(PRD_CONFIRM_PROMPT);
+            expect(questions[0]).to.not.include(database);
         });
 
         it('aborts prd --apply when the confirmation is wrong or missing', async () => {
@@ -1066,7 +1084,8 @@ describe('maintenance runner', () => {
                 if (prompt) {
                     deps.prompt = async (question) => {
                         expect(sawTarget).to.equal(true);
-                        expect(question).to.include('hf');
+                        const { PRD_CONFIRM_PROMPT } = await import(runnerHref);
+                        expect(question).to.equal(PRD_CONFIRM_PROMPT);
                         events.push('prompt');
                         return prompt();
                     };

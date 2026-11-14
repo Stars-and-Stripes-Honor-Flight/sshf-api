@@ -33,7 +33,8 @@ describe('createMaintenancePrompt', () => {
         const { createMaintenancePrompt } = await import(runnerHref);
         const { input, output, writes } = mockTerminal({ tty: true });
         const prompt = createMaintenancePrompt({ input, output, isTTY: true });
-        const question = 'Type the database name to confirm apply to production: hf';
+        const { PRD_CONFIRM_PROMPT } = await import(runnerHref);
+        const question = PRD_CONFIRM_PROMPT;
         const pending = prompt(question);
         setImmediate(() => {
             input.push('hf\r\n');

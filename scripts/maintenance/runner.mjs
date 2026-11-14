@@ -289,6 +289,8 @@ export function createMaintenancePrompt({
     };
 }
 
+export const PRD_CONFIRM_PROMPT = 'Type the database name to confirm apply to production: ';
+
 export async function confirmApply({ envName, apply, database, prompt } = {}) {
     if (!apply || envName !== 'prd') {
         return;
@@ -296,7 +298,7 @@ export async function confirmApply({ envName, apply, database, prompt } = {}) {
     if (typeof prompt !== 'function') {
         throw new MaintenanceError('Confirmation was missing.', { code: 'CONFIRMATION_REQUIRED' });
     }
-    const answer = await prompt(`Type the database name to confirm apply to production: ${database}`);
+    const answer = await prompt(PRD_CONFIRM_PROMPT);
     const normalized = typeof answer === 'string' ? answer.trim() : '';
     if (normalized !== database) {
         throw new MaintenanceError('Confirmation did not match the database name.', {
