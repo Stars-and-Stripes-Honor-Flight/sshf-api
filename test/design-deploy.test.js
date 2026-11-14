@@ -31,6 +31,8 @@
  *   backups use writeBackup from scripts/maintenance/runner.mjs
  *     script name deploy-design-basic, directory maintenance-backups/
  *   the entry file uses isDirectRun so importing it does not deploy
+ *   every dry run starts with a DRY RUN header and ends with a count
+ *     summary plus an `--apply --env <env>` hint (substring checks)
  *
  * Apply replaces _design/basic with the repo document plus the live _rev.
  * The PUT body keys are only _id, _rev (when the doc exists), language,
@@ -513,11 +515,76 @@ describe('design deploy', () => {
                 'style/app.css',
                 'vendor/couchapp/jquery.js'
             ]);
-            expect(logs[0]).to.equal('Target host=127.0.0.1:5984 database=hf-dev env=dev');
-            expect(logs.at(-1)).to.equal(formatDesignDeployReport(result));
-            expect(logs.at(-1)).to.equal(expectedReport(result));
-            expect(logs.join('\n')).to.not.include('maint-secret');
-            expect(logs.join('\n')).to.not.include('\r');
+            const printed = logs.join('\n');
+            expect(printed).to.include('Target host=127.0.0.1:5984 database=hf-dev env=dev');
+            expect(printed).to.include(formatDesignDeployReport(result));
+            expect(printed).to.include(expectedReport(result));
+            expect(printed).to.not.include('maint-secret');
+            expect(printed).to.not.include('\r');
+        });
+
+        it('prints a dry-run header, a one-line count summary, and an apply hint', async () => {
+            const { runDesignDeploy } = await loadDeploy();
+            const cases = [
+                { argv: [], envName: 'dev', database: 'hf-dev', defaulted: true },
+                { argv: ['--env', 'dev'], envName: 'dev', database: 'hf-dev', defaulted: false },
+                { argv: ['--env', 'prd'], envName: 'prd', database: 'hf', defaulted: false }
+            ];
+
+            for (const spec of cases) {
+                const logs = [];
+                const db = recordingDb(couchappLive());
+                let backedUp = false;
+                let prompted = false;
+                await runDesignDeploy(spec.argv, deployDeps({
+                    log: (line) => logs.push(String(line)),
+                    prompt: async () => {
+                        prompted = true;
+                        return spec.database;
+                    },
+                    writeBackup: async () => {
+                        backedUp = true;
+                        return 'backup.json';
+                    },
+                    db
+                }));
+
+                expect(prompted, spec.argv.join(' ')).to.equal(false);
+                expect(backedUp, spec.argv.join(' ')).to.equal(false);
+                expect(db.puts, spec.argv.join(' ')).to.deep.equal([]);
+
+                const text = logs.join('\n');
+                const label = spec.argv.join(' ') || '(no flags)';
+                expect(text, label).to.match(/^\s*DRY RUN\b/);
+                expect(text, label).to.not.include('\r');
+                const targetAt = text.indexOf('Target host=');
+                expect(targetAt, label).to.be.greaterThan(0);
+                const header = text.slice(0, targetAt);
+                expect(header, label).to.include('DRY RUN');
+                expect(header, label).to.include('nothing will be written');
+                expect(header, label).to.include('_design/basic');
+                expect(header, label).to.include(spec.envName);
+                expect(header, label).to.include(spec.database);
+                if (spec.envName === 'prd') {
+                    expect(header, label).to.not.include('hf-dev');
+                }
+                if (spec.defaulted) {
+                    expect(header, label).to.include('defaulted to dev');
+                } else {
+                    expect(header, label).to.not.include('defaulted to dev');
+                }
+
+                const contentLines = text.split('\n').filter((line) => line.trim() !== '');
+                const summary = contentLines[contentLines.length - 2];
+                const hint = contentLines[contentLines.length - 1];
+                expect(summary, label).to.match(/views\D+1\D+1\D+2/i);
+                expect(summary, label).to.match(/lists\D+1\D+1\D+2/i);
+                expect(summary, label).to.match(/top-level keys\D+12/i);
+                expect(summary, label).to.match(/attachments\D+4/i);
+                expect(summary, label).to.not.include('--apply');
+                expect(hint, label).to.match(/re-?run/i);
+                expect(hint, label).to.include(`--apply --env ${spec.envName}`);
+            }
         });
 
         it('uses DEV_DB_NAME or PRD_DB_NAME for the selected --env', async () => {
