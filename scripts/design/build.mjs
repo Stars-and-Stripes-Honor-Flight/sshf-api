@@ -90,12 +90,15 @@ function readViews(sourceDir, fs, pathImpl) {
     return views;
 }
 
-function readLists(sourceDir, fs, pathImpl) {
+function readLists(sourceDir, fs, pathImpl, { required = true } = {}) {
     const listsDir = pathImpl.join(sourceDir, 'lists');
     let listFiles;
     try {
         listFiles = fs.readdirSync(listsDir).sort();
     } catch {
+        if (!required) {
+            return undefined;
+        }
         throw new MaintenanceError('Design source lists directory is missing.', { code: 'INVALID_SOURCE' });
     }
     if (listFiles.length === 0) {
@@ -116,14 +119,25 @@ function readLists(sourceDir, fs, pathImpl) {
     return lists;
 }
 
-export function buildDesignDoc(sourceDir, { fs = { readdirSync, statSync, readFileSync }, pathImpl = path } = {}) {
+function designDocId(design) {
+    return design === 'hf-app-review' ? '_design/hf-app-review' : DESIGN_DOC_ID;
+}
+
+export function buildDesignDoc(
+    sourceDir,
+    { fs = { readdirSync, statSync, readFileSync }, pathImpl = path, design = 'basic' } = {}
+) {
     inspectRoot(sourceDir, fs, pathImpl);
     const views = readViews(sourceDir, fs, pathImpl);
-    const lists = readLists(sourceDir, fs, pathImpl);
-    return {
-        _id: DESIGN_DOC_ID,
+    const listsRequired = design !== 'hf-app-review';
+    const lists = readLists(sourceDir, fs, pathImpl, { required: listsRequired });
+    const doc = {
+        _id: designDocId(design),
         language: 'javascript',
-        views,
-        lists
+        views
     };
+    if (lists !== undefined) {
+        doc.lists = lists;
+    }
+    return doc;
 }

@@ -18,7 +18,20 @@ import { diffDesignDocs, formatDesignFunctionDiffs } from './diff.mjs';
 export const DEPLOY_SCRIPT_NAME = 'deploy-design-basic';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const defaultSourceDir = path.join(repoRoot, 'couchdb', 'design', 'basic');
+
+const KNOWN_DESIGNS = new Set(['basic', 'hf-app-review']);
+const DESIGN_DOC_IDS = {
+    basic: '_design/basic',
+    'hf-app-review': '_design/hf-app-review'
+};
+const DESIGN_SOURCE_DIRS = {
+    basic: path.join(repoRoot, 'couchdb', 'design', 'basic'),
+    'hf-app-review': path.join(repoRoot, 'couchdb', 'design', 'hf-app-review')
+};
+const BACKUP_SCRIPT_NAMES = {
+    basic: 'deploy-design-basic',
+    'hf-app-review': 'deploy-design-hf-app-review'
+};
 
 const REJECTED_FLAGS = new Set([
     '--yes',
@@ -28,18 +41,25 @@ const REJECTED_FLAGS = new Set([
     '--assume-yes',
     '-y',
     '--confirm',
-    '--db',
-    '--design'
+    '--db'
 ]);
+
+const DESIGN_EXPECTED = 'Unknown design. Expected --design basic or --design hf-app-review.';
 
 function joinNames(names) {
     return names.length > 0 ? names.join(', ') : 'none';
+}
+
+function unknownDesignMessage(value) {
+    return `Unknown design ${value}. Expected --design basic or --design hf-app-review.`;
 }
 
 export function parseDesignDeployArgs(argv = []) {
     let apply = false;
     let env;
     let envSpecified = false;
+    let design;
+    let designSpecified = false;
 
     for (let index = 0; index < argv.length; index += 1) {
         const token = argv[index];
@@ -65,6 +85,24 @@ export function parseDesignDeployArgs(argv = []) {
             envSpecified = true;
             continue;
         }
+        if (token === '--design' || token.startsWith('--design=')) {
+            if (designSpecified) {
+                throw new MaintenanceError('Duplicate --design flag.', { code: 'USAGE' });
+            }
+            const value = token.startsWith('--design=') ? token.slice('--design='.length) : argv[index + 1];
+            if (token === '--design') {
+                index += 1;
+            }
+            if (!value) {
+                throw new MaintenanceError(DESIGN_EXPECTED, { code: 'USAGE' });
+            }
+            if (!KNOWN_DESIGNS.has(value)) {
+                throw new MaintenanceError(unknownDesignMessage(value), { code: 'USAGE' });
+            }
+            design = value;
+            designSpecified = true;
+            continue;
+        }
         if (token.startsWith('--')) {
             if (REJECTED_FLAGS.has(token)) {
                 throw new MaintenanceError(`Unknown flag ${token}.`, { code: 'USAGE' });
@@ -78,9 +116,77 @@ export function parseDesignDeployArgs(argv = []) {
         throw new MaintenanceError('--apply requires --env dev or --env prd.', { code: 'USAGE' });
     }
 
-    return {
+    const result = {
         apply: apply === true,
         env: env || 'dev'
+    };
+    if (designSpecified) {
+        result.design = design;
+    }
+    return result;
+}
+
+function assertDistinctReviewDatabases(env) {
+    const devName = typeof env.DEV_REVIEW_DB_NAME === 'string' ? env.DEV_REVIEW_DB_NAME.trim() : '';
+    const prdName = typeof env.PRD_REVIEW_DB_NAME === 'string' ? env.PRD_REVIEW_DB_NAME.trim() : '';
+    if (devName && prdName && devName === prdName) {
+        throw new MaintenanceError(
+            'DEV_REVIEW_DB_NAME and PRD_REVIEW_DB_NAME must name different databases.',
+            { code: 'CONFIG' }
+        );
+    }
+}
+
+function reviewDatabaseForEnv(envName, env) {
+    if (envName === 'dev') {
+        const database = typeof env.DEV_REVIEW_DB_NAME === 'string' ? env.DEV_REVIEW_DB_NAME.trim() : '';
+        if (!database) {
+            throw new MaintenanceError(
+                'DEV_REVIEW_DB_NAME is required for --design hf-app-review --env dev.',
+                { code: 'CONFIG' }
+            );
+        }
+        return database;
+    }
+    if (envName === 'prd') {
+        const database = typeof env.PRD_REVIEW_DB_NAME === 'string' ? env.PRD_REVIEW_DB_NAME.trim() : '';
+        if (!database) {
+            throw new MaintenanceError(
+                'PRD_REVIEW_DB_NAME is required for --design hf-app-review --env prd.',
+                { code: 'CONFIG' }
+            );
+        }
+        return database;
+    }
+    throw new MaintenanceError('Invalid --env value.', { code: 'USAGE' });
+}
+
+export function resolveReviewTarget({ envName, env = process.env } = {}) {
+    if (envName !== 'dev' && envName !== 'prd') {
+        throw new MaintenanceError('Invalid --env value.', { code: 'USAGE' });
+    }
+    assertDistinctReviewDatabases(env);
+    const rawUrl = env.REVIEW_DB_URL || env.DB_URL;
+    const url = typeof rawUrl === 'string' ? rawUrl.replace(/\/+$/, '') : '';
+    const user = env.REVIEW_DB_USER || env.DB_USER;
+    const pass = env.REVIEW_DB_PASS || env.DB_PASS;
+    const database = reviewDatabaseForEnv(envName, env);
+    if (!url || !user || !pass) {
+        throw new MaintenanceError('Database configuration is incomplete.', { code: 'CONFIG' });
+    }
+    let parsed;
+    try {
+        parsed = new URL(url);
+    } catch {
+        throw new MaintenanceError('Database configuration is incomplete.', { code: 'CONFIG' });
+    }
+    return {
+        envName,
+        host: parsed.host,
+        database,
+        url,
+        user,
+        pass
     };
 }
 
@@ -109,10 +215,10 @@ export function formatDesignDeployReport(result) {
     ].join('\n');
 }
 
-function formatDryRunHeader({ envName, database, defaulted }) {
+function formatDryRunHeader({ designDocId, envName, database, defaulted }) {
     const lines = [
         'DRY RUN — nothing will be written.',
-        `Design document: ${DESIGN_DOC_ID}`,
+        `Design document: ${designDocId}`,
         `Environment: ${envName}`,
         `Database: ${database}`
     ];
@@ -152,9 +258,11 @@ function buildPutBody(repoDoc, liveDoc) {
     const body = {
         _id: repoDoc._id,
         language: repoDoc.language,
-        views: repoDoc.views,
-        lists: repoDoc.lists
+        views: repoDoc.views
     };
+    if (repoDoc.lists !== undefined) {
+        body.lists = repoDoc.lists;
+    }
     if (liveDoc?._rev) {
         body._rev = liveDoc._rev;
     }
@@ -167,14 +275,19 @@ export async function runDesignDeploy(argv, deps = {}) {
     const env = deps.env || process.env;
     const pathImpl = deps.pathImpl || path;
     const rootDir = deps.rootDir ?? repoRoot;
-    const sourceDir = deps.sourceDir ?? defaultSourceDir;
-    const sourceFs = deps.sourceFs ?? { readdirSync, statSync, readFileSync, existsSync };
     const parsed = parseDesignDeployArgs(argv);
+    const designKey = parsed.design ?? 'basic';
+    const designDocId = DESIGN_DOC_IDS[designKey];
+    const backupScriptName = BACKUP_SCRIPT_NAMES[designKey];
+    const sourceDir = deps.sourceDir ?? DESIGN_SOURCE_DIRS[designKey];
+    const sourceFs = deps.sourceFs ?? { readdirSync, statSync, readFileSync, existsSync };
     const envSpecified = argv.some((token) => token === '--env' || token.startsWith('--env='));
-    const target = resolveMaintTarget({ envName: parsed.env, env });
+    const target = designKey === 'hf-app-review'
+        ? resolveReviewTarget({ envName: parsed.env, env })
+        : resolveMaintTarget({ envName: parsed.env, env });
 
     const builder = deps.buildDesignDoc
-        ?? ((dir) => buildDesignDoc(dir, { fs: sourceFs, pathImpl }));
+        ?? ((dir) => buildDesignDoc(dir, { fs: sourceFs, pathImpl, design: designKey }));
     let repoDoc;
     try {
         repoDoc = builder(sourceDir);
@@ -212,12 +325,13 @@ export async function runDesignDeploy(argv, deps = {}) {
             fetchImpl: deps.fetchImpl
         }));
 
-    const liveDoc = await db.getDesignDoc(DESIGN_DOC_ID);
+    const liveDoc = await db.getDesignDoc(designDocId);
     const diff = diffDesignDocs(repoDoc, liveDoc);
 
     const dryRun = !parsed.apply;
     if (dryRun) {
         log(formatDryRunHeader({
+            designDocId,
             envName: target.envName,
             database: target.database,
             defaulted: !envSpecified
@@ -245,7 +359,7 @@ export async function runDesignDeploy(argv, deps = {}) {
                 backupPath = deps.writeBackup
                     ? await deps.writeBackup({
                         rootDir,
-                        scriptName: DEPLOY_SCRIPT_NAME,
+                        scriptName: backupScriptName,
                         date: now(),
                         documents: [liveDoc],
                         meta: {
@@ -258,7 +372,7 @@ export async function runDesignDeploy(argv, deps = {}) {
                     })
                     : await writeBackup({
                         rootDir,
-                        scriptName: DEPLOY_SCRIPT_NAME,
+                        scriptName: backupScriptName,
                         date: now(),
                         documents: [liveDoc],
                         meta: {
@@ -277,14 +391,14 @@ export async function runDesignDeploy(argv, deps = {}) {
         const putResult = await db.putDesignDoc(buildPutBody(repoDoc, liveDoc));
         if (putResult?.ok === false && putResult.error === 'conflict') {
             conflicts = 1;
-            conflictIds = [DESIGN_DOC_ID];
+            conflictIds = [designDocId];
         } else if (putResult?.ok) {
             changed = 1;
         }
     }
 
     const result = {
-        design: DESIGN_DOC_ID,
+        design: designDocId,
         dryRun,
         env: target.envName,
         host: target.host,
