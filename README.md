@@ -96,6 +96,10 @@ npm test
 
 Parity comparer and deny-list tests are included in `npm test`. They do not contact CouchDB.
 
+### CouchDB design document (`_design/basic`)
+
+View and list source for the production design document is versioned under `couchdb/design/basic/`. Deploy with `npm run deploy-design` (dry run by default). Use `--apply --env dev` or `--apply --env prd` to write; see `scripts/design/README.md`. **Changing a view rebuilds its index** in CouchDB after deploy.
+
 ### Data parity harness (optional, live databases)
 
 Compares write-path results between hf-basic on living `test` and the new API on the sshf-db-prd copy. Never points at production `hf`. Not part of default CI. The `parity` and `parity:align` scripts load `.env` from the repo root the same way the API does.
