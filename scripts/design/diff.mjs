@@ -67,6 +67,70 @@ function compareListNames(repoLists, liveLists) {
 
 const REPO_KEYS = new Set(['_id', 'language', 'views', 'lists']);
 
+const MAX_DIFF_SNIPPET = 120;
+
+function truncateSnippet(text) {
+    if (text === undefined) {
+        return '(missing)';
+    }
+    const flattened = String(text).replace(/\t/g, ' ');
+    if (flattened.length <= MAX_DIFF_SNIPPET) {
+        return flattened;
+    }
+    return `${flattened.slice(0, MAX_DIFF_SNIPPET - 1)}…`;
+}
+
+function firstLineDifference(left, right) {
+    const a = normalizeNewlines(left ?? '');
+    const b = normalizeNewlines(right ?? '');
+    const aLines = a.split('\n');
+    const bLines = b.split('\n');
+    const lineCount = Math.max(aLines.length, bLines.length);
+    for (let index = 0; index < lineCount; index += 1) {
+        if (aLines[index] !== bLines[index]) {
+            return {
+                line: index + 1,
+                repo: aLines[index],
+                live: bLines[index]
+            };
+        }
+    }
+    return null;
+}
+
+export function formatDesignFunctionDiffs(repoDoc, liveDoc, diff) {
+    if (!liveDoc) {
+        return [];
+    }
+    const lines = [];
+    for (const name of diff.viewsChanged) {
+        const repoView = repoDoc.views?.[name] ?? {};
+        const liveView = liveDoc.views?.[name] ?? {};
+        for (const field of ['map', 'reduce']) {
+            if (repoView[field] === undefined && liveView[field] === undefined) {
+                continue;
+            }
+            const delta = firstLineDifference(repoView[field], liveView[field]);
+            if (delta) {
+                lines.push(
+                    `view ${name} ${field} line ${delta.line}: `
+                    + `repo: ${truncateSnippet(delta.repo)} | live: ${truncateSnippet(delta.live)}`
+                );
+            }
+        }
+    }
+    for (const name of diff.listsChanged) {
+        const delta = firstLineDifference(repoDoc.lists?.[name], liveDoc.lists?.[name]);
+        if (delta) {
+            lines.push(
+                `list ${name} line ${delta.line}: `
+                + `repo: ${truncateSnippet(delta.repo)} | live: ${truncateSnippet(delta.live)}`
+            );
+        }
+    }
+    return lines;
+}
+
 export function diffDesignDocs(repoDoc, liveDoc) {
     if (liveDoc == null) {
         const views = compareViewNames(repoDoc.views, {});

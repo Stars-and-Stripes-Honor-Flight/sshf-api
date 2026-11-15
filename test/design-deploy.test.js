@@ -62,6 +62,10 @@ const LIST_LF = 'function(head, req) {\n  send("ok\\n");\n}\n';
 const LIST_CRLF = 'function(head, req) {\r\n  send("ok\\n");\r\n}\r\n';
 const LIST_OLD = 'function(head, req) {\n  send("old\\n");\n}\n';
 
+function couchappText(text) {
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+}
+
 const targetEnv = {
     DB_URL: 'http://127.0.0.1:5984',
     DB_NAME: 'accidental-production',
@@ -587,6 +591,29 @@ describe('design deploy', () => {
             }
         });
 
+        it('prints the first differing line for each changed view and list between the report and summary', async () => {
+            const { runDesignDeploy, formatDesignDeployReport } = await loadDeploy();
+            const logs = [];
+            const result = await runDesignDeploy([], deployDeps({
+                log: (line) => logs.push(String(line)),
+                db: recordingDb(couchappLive())
+            }));
+            const text = logs.join('\n');
+            const report = formatDesignDeployReport(result);
+            expect(text).to.include(report);
+            const afterReport = text.slice(text.indexOf(report) + report.length);
+            const summaryAt = afterReport.indexOf('Summary:');
+            expect(summaryAt).to.be.greaterThan(0);
+            const detail = afterReport.slice(0, summaryAt);
+            expect(detail).to.include('view all_by_name map line');
+            expect(detail).to.match(/repo:.*\| live:/);
+            expect(detail).to.include('emit(doc.name');
+            expect(detail).to.include('emit(doc.city');
+            expect(detail).to.include('list flight-csv line');
+            expect(detail).to.match(/repo:.*send\("new/i);
+            expect(detail).to.match(/live:.*send\("old/i);
+        });
+
         it('uses DEV_DB_NAME or PRD_DB_NAME for the selected --env', async () => {
             const { runDesignDeploy } = await loadDeploy();
             for (const [envName, database] of [['dev', 'hf-dev'], ['prd', 'hf']]) {
@@ -1038,9 +1065,9 @@ describe('design deploy', () => {
                 _rev: '3-same',
                 language: 'javascript',
                 views: {
-                    flights: { map: MAP_LF, reduce: '_count\n' }
+                    flights: { map: couchappText(MAP_LF), reduce: couchappText('_count\n') }
                 },
-                lists: { 'flight-csv': LIST_LF }
+                lists: { 'flight-csv': couchappText(LIST_LF) }
             };
             const db = recordingDb(live);
             let backedUp = false;

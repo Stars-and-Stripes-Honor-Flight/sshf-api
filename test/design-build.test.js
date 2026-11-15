@@ -20,8 +20,9 @@
  *
  * The returned document is exactly:
  *   { _id: '_design/basic', language: 'javascript', views, lists }
- * View and list sources are the file text with CR LF and lone CR normalized
- * to LF. No other trimming. A map-only view has no reduce property.
+ * View and list sources are normalized (CR LF and lone CR to LF), then trimmed
+ * the way couchapp 0.7.5 push does (str.strip). Interior whitespace is kept.
+ * A map-only view has no reduce property.
  */
 import { expect } from 'chai';
 import path from 'node:path';
@@ -37,6 +38,10 @@ const REDUCE_LF = '_count\n';
 const LIST_LF = 'function(head, req) {\n  send("a,b\\n");\n}\n';
 const LIST_CRLF = 'function(head, req) {\r\n  send("a,b\\n");\r\n}\r\n';
 const QUOTED_MAP = 'function(doc) {\n  emit(doc.name.last.replace(/[\'\\. ]/g, ""), null);\n}\n';
+
+function couchappSource(text) {
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+}
 
 function memoryFs(root, pathImpl, files) {
     const full = new Map();
@@ -160,13 +165,16 @@ describe('buildDesignDoc', () => {
             _id: '_design/basic',
             language: 'javascript',
             views: {
-                active_by_flight: { map: QUOTED_MAP },
-                admin_duplicates: { map: MAP_NORMALIZED_CR, reduce: REDUCE_LF },
-                flights: { map: MAP_LF }
+                active_by_flight: { map: couchappSource(QUOTED_MAP) },
+                admin_duplicates: {
+                    map: couchappSource(MAP_NORMALIZED_CR),
+                    reduce: couchappSource(REDUCE_LF)
+                },
+                flights: { map: couchappSource(MAP_LF) }
             },
             lists: {
-                'callcenterfollowup-csv': LIST_LF,
-                'flight-csv': LIST_LF
+                'callcenterfollowup-csv': couchappSource(LIST_LF),
+                'flight-csv': couchappSource(LIST_CRLF)
             }
         });
         expect(Object.keys(doc.views.flights)).to.deep.equal(['map']);
@@ -181,14 +189,14 @@ describe('buildDesignDoc', () => {
         expect(JSON.stringify(doc)).to.not.include('\r');
     });
 
-    it('keeps trailing newlines and other whitespace after normalizing line endings', async () => {
+    it('trims leading and trailing whitespace like couchapp push after normalizing line endings', async () => {
         const paddedMap = 'function(doc) {\r\n  emit(doc._id, null);  \r\n}\r\n';
         const { doc } = await buildFrom(posixRoot, path.posix, {
             'views/flights/map.js': paddedMap,
             'lists/flight-csv.js': 'function(head, req) {\r\n  \r\n}\r\n'
         });
-        expect(doc.views.flights.map).to.equal('function(doc) {\n  emit(doc._id, null);  \n}\n');
-        expect(doc.lists['flight-csv']).to.equal('function(head, req) {\n  \n}\n');
+        expect(doc.views.flights.map).to.equal('function(doc) {\n  emit(doc._id, null);  \n}');
+        expect(doc.lists['flight-csv']).to.equal('function(head, req) {\n  \n}');
         expect(doc.views.flights).to.not.have.property('reduce');
     });
 
@@ -266,5 +274,26 @@ describe('buildDesignDoc', () => {
             'lists/flight-csv.js': LIST_LF
         });
         expectInvalid(buildDesignDoc, path.posix.join(root, 'missing'), absent, path.posix);
+    });
+
+    it('reports kept when live matches couchapp-pushed text and the file only adds a trailing newline', async () => {
+        const { diffDesignDocs } = await import('../scripts/design/diff.mjs');
+        const liveMap = 'function(doc) {\n  if (doc.type === "Flight") emit(doc._id, null);\n}';
+        const { doc } = await buildFrom(posixRoot, path.posix, {
+            'views/flights/map.js': `${MAP_LF}\n`,
+            'lists/flight-csv.js': LIST_LF
+        });
+        expect(doc.views.flights.map).to.equal(liveMap);
+        const live = {
+            _id: '_design/basic',
+            _rev: '1',
+            language: 'javascript',
+            views: { flights: { map: liveMap } },
+            lists: { 'flight-csv': couchappSource(LIST_LF) }
+        };
+        const diff = diffDesignDocs(doc, live);
+        expect(diff.viewsKept).to.deep.equal(['flights']);
+        expect(diff.viewsChanged).to.deep.equal([]);
+        expect(diff.listsKept).to.deep.equal(['flight-csv']);
     });
 });

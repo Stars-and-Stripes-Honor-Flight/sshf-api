@@ -13,7 +13,7 @@ import {
 import { MaintenanceError } from '../maintenance/errors.mjs';
 import { buildDesignDoc, DESIGN_DOC_ID } from './build.mjs';
 import { createDesignDeployDb } from './couch.mjs';
-import { diffDesignDocs } from './diff.mjs';
+import { diffDesignDocs, formatDesignFunctionDiffs } from './diff.mjs';
 
 export const DEPLOY_SCRIPT_NAME = 'deploy-design-basic';
 
@@ -310,6 +310,9 @@ export async function runDesignDeploy(argv, deps = {}) {
     log(formatDesignDeployReport(result));
 
     if (dryRun) {
+        for (const line of formatDesignFunctionDiffs(repoDoc, liveDoc, diff)) {
+            log(line);
+        }
         log(formatDryRunSummary(diff));
         log(formatDryRunHint(target.envName));
     }

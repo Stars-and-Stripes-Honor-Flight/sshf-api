@@ -10,6 +10,10 @@ function normalizeNewlines(text) {
     return String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
+function prepareSource(text) {
+    return normalizeNewlines(text).trim();
+}
+
 function assertNonEmpty(text, label) {
     if (typeof text !== 'string' || text.length === 0 || !/\S/.test(text)) {
         throw new MaintenanceError(`Design source ${label} is empty.`, { code: 'INVALID_SOURCE' });
@@ -23,9 +27,9 @@ function readSource(fs, filePath, label) {
     } catch {
         throw new MaintenanceError(`Design source ${label} is missing.`, { code: 'INVALID_SOURCE' });
     }
-    const normalized = normalizeNewlines(raw);
-    assertNonEmpty(normalized, label);
-    return normalized;
+    const prepared = prepareSource(raw);
+    assertNonEmpty(prepared, label);
+    return prepared;
 }
 
 function readdirOrMissing(fs, dir) {
