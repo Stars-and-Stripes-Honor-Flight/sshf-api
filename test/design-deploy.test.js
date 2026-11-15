@@ -389,7 +389,16 @@ describe('design deploy', () => {
                 ['--apply', '--apply', '--env', 'dev'],
                 ['basic'],
                 ['--db', 'hf'],
-                ['--design', 'hf-app-review']
+                ['--design'],
+                ['--design='],
+                ['--design', 'not-a-design'],
+                ['--design', 'BASIC'],
+                ['--design', 'hf_app_review'],
+                ['--design=not-a-design'],
+                ['--design', 'hf-app-review', '--apply'],
+                ['--design', 'hf-app-review', '--env', 'staging'],
+                ['--design', 'basic', '--design', 'hf-app-review'],
+                ['--design=hf-app-review', '--design', 'basic']
             ];
             for (const argv of cases) {
                 expectSyncCode(() => parseDesignDeployArgs(argv), 'USAGE');
