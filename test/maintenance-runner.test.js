@@ -280,7 +280,6 @@ describe('maintenance runner', () => {
             const { parseMaintArgs } = await import(runnerHref);
             const scriptsDir = join(repoRoot, 'scripts', 'maintenance');
             const common = { cwd: repoRoot, scriptsDir };
-            const absolute = join(scriptsDir, `${SCRIPT_NAME}.mjs`);
 
             expect(parseMaintArgs([SCRIPT_NAME], common)).to.include({
                 scriptName: SCRIPT_NAME,
@@ -299,8 +298,19 @@ describe('maintenance runner', () => {
                 ...common,
                 pathImpl: path.win32
             }).scriptName).to.equal(SCRIPT_NAME);
-            expect(parseMaintArgs([absolute], { ...common, pathImpl: path.posix }).scriptName)
-                .to.equal(SCRIPT_NAME);
+            const pathImplForAbsolute = process.platform === 'win32' ? path.win32 : path.posix;
+            const scriptsDirForAbsolute = pathImplForAbsolute.join(
+                pathImplForAbsolute.resolve(repoRoot),
+                'scripts',
+                'maintenance'
+            );
+            const absoluteForPlatform = pathImplForAbsolute.join(scriptsDirForAbsolute, `${SCRIPT_NAME}.mjs`);
+            expect(parseMaintArgs([absoluteForPlatform], {
+                cwd: pathImplForAbsolute.resolve(repoRoot),
+                scriptsDir: scriptsDirForAbsolute,
+                pathImpl: pathImplForAbsolute
+            }).scriptName).to.equal(SCRIPT_NAME);
+            expect(pathImplForAbsolute.isAbsolute(absoluteForPlatform)).to.equal(true);
         });
     });
 
@@ -1051,7 +1061,12 @@ describe('maintenance runner', () => {
 
         it('aborts a prd apply before any read or write when confirmation is wrong or missing', async () => {
             const { runMaintenance } = await import(runnerHref);
-            for (const prompt of [async () => 'nope', async () => '', undefined]) {
+            const cases = [
+                { prompt: async () => 'nope' },
+                { prompt: async () => '' },
+                { prompt: undefined, isTTY: false }
+            ];
+            for (const spec of cases) {
                 const events = [];
                 let sawTarget = false;
                 const deps = {
@@ -1081,20 +1096,22 @@ describe('maintenance runner', () => {
                         }
                     }
                 };
-                if (prompt) {
+                if (spec.prompt) {
                     deps.prompt = async (question) => {
                         expect(sawTarget).to.equal(true);
                         const { PRD_CONFIRM_PROMPT } = await import(runnerHref);
                         expect(question).to.equal(PRD_CONFIRM_PROMPT);
                         events.push('prompt');
-                        return prompt();
+                        return spec.prompt();
                     };
+                } else {
+                    deps.isTTY = false;
                 }
                 await expectCode(
                     runMaintenance([SCRIPT_NAME, '--apply', '--env', 'prd'], deps),
                     'CONFIRMATION_REQUIRED'
                 );
-                expect(events).to.deep.equal(prompt ? ['load', 'prompt'] : ['load']);
+                expect(events).to.deep.equal(spec.prompt ? ['load', 'prompt'] : ['load']);
                 expect(sawTarget).to.equal(true);
             }
         });

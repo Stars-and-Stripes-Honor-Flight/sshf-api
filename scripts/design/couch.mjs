@@ -78,7 +78,7 @@ export function createDesignDeployDb({
 
     return {
         async getDesignDoc(id) {
-            const targetUrl = `${databaseBase(url, name)}/_design/basic?attachments=true`;
+            const targetUrl = `${databaseBase(url, name)}/${id}?attachments=true`;
             const response = await performFetch(targetUrl, { method: 'GET' });
             if (response.status === 404) {
                 return null;
@@ -92,7 +92,7 @@ export function createDesignDeployDb({
 
         async putDesignDoc(doc) {
             const docId = doc._id;
-            const targetUrl = `${databaseBase(url, name)}/_design/basic`;
+            const targetUrl = `${databaseBase(url, name)}/${docId}`;
             const response = await performFetch(targetUrl, {
                 method: 'PUT',
                 headers: {
