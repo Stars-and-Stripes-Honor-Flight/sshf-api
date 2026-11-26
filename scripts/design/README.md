@@ -40,4 +40,4 @@ Before a replace, the full live design document (including attachment bytes) is 
 
 ## Editing views and lists
 
-After you change `map.js`, `reduce.js`, or a list file, run a dry run, then apply when the diff looks right. **Changing a view rebuilds its index** in CouchDB; allow time for the index to catch up after deploy.
+After you change `map.js`, `reduce.js`, or a list file, run a dry run, then apply when the diff looks right. **Changing a view rebuilds its index** in CouchDB; allow time for the index to catch up after deploy. The `waitlist_veterans` and `waitlist_veterans_active` views order veterans in four tiers (WWII, Korea, Vietnam, then all others by application date); deploying changes to those maps requires a full view reindex before flight loading or the Waitlist page reflect the new order.

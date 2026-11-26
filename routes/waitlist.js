@@ -13,9 +13,11 @@ const dbName = process.env.DB_NAME;
  *     summary: Retrieve waitlist entries for veterans or guardians
  *     description: |
  *       Retrieves paginated waitlist entries from the database.
- *       The veteran waitlist shows veterans waiting to be assigned to a flight.
+ *       The veteran waitlist shows veterans waiting to be assigned to a flight,
+ *       ordered as WWII, then Korea, then Vietnam, then all other conflicts by
+ *       application date as defined by the database views.
  *       The guardian waitlist shows unpaired guardians waiting to be matched with a veteran.
- *       Results are returned in waitlist order as defined by the database views.
+ *       Guardian results are returned in waitlist order as defined by the database views.
  *     tags: [Waitlist]
  *     security:
  *       - GoogleAuth: []

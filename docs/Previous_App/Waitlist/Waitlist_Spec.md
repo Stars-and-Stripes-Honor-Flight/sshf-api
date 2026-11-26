@@ -4,7 +4,7 @@ This feature provides the ability to view veterans and unpaired guardians to see
 The veteran wait list is the most important as any guardians paired with veterans are added to the flight when their veteran is. 
 Only volunteer guardians that are not yet paired to a veteran are shown on the guardian waitlist.
 
-There are database views for each of the lists that return the results in the proper order:
+There are database views for each of the lists that return the results in the proper order. The veteran waitlist orders WWII first, then Korea, then Vietnam, then all other conflicts by application date.
 
 - basic/waitlist_veterans
 - basic/waitlist_guardians

@@ -2,6 +2,15 @@ import { expect } from 'chai';
 import { specs } from '../swagger/swagger.js';
 import { ROUTE_PERMISSIONS } from '../utils/permissions.js';
 
+function expectFourTierWaitlistWording(description, label) {
+    expect(description, `${label} description`).to.be.a('string');
+    expect(description, label).to.include('WWII');
+    expect(description, label).to.include('Korea');
+    expect(description, label).to.include('Vietnam');
+    expect(description, label).to.match(/application date/i);
+    expect(description, label).to.match(/others?\b|everyone else/i);
+}
+
 describe('OpenAPI spec generation', () => {
     it('loads a valid OpenAPI 3 document with API metadata', () => {
         expect(specs).to.be.an('object');
@@ -399,5 +408,17 @@ describe('OpenAPI spec generation', () => {
         expect(detailCrew.type).to.equal('object');
         expect(detailCrew.properties.crew_position.type).to.equal('string');
         expect(detailCrew.properties.comms_username.type).to.equal('string');
+    });
+
+    it('describes flight assignment selection as WWII, Korea, Vietnam, then others by application date', () => {
+        const post = specs.paths['/flights/{id}/assignments']?.post;
+        expect(post, 'missing POST /flights/{id}/assignments').to.be.an('object');
+        expectFourTierWaitlistWording(post.description, 'POST /flights/{id}/assignments');
+    });
+
+    it('describes the veteran waitlist order as WWII, Korea, Vietnam, then others by application date', () => {
+        const waitlist = specs.paths['/waitlist']?.get;
+        expect(waitlist, 'missing GET /waitlist').to.be.an('object');
+        expectFourTierWaitlistWording(waitlist.description, 'GET /waitlist');
     });
 });

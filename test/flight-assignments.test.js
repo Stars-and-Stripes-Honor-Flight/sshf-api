@@ -1739,6 +1739,99 @@ describe('Flight Assignments Route Handlers', () => {
             expect(savedGuardian.crew).to.deep.equal(storedCrew);
             expect(savedGuardian.flight.id).to.equal('SSHF-Nov2024');
         });
+
+        it('reads waitlist_veterans_active with the current limit, descending, and include_docs parameters', async () => {
+            req.body.veteranCount = 12;
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({ rows: [] })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            expect(res.status.called).to.equal(false);
+            expect(global.fetch.callCount).to.equal(2);
+            const url = String(global.fetch.getCall(1).args[0]);
+            expect(url).to.include('/_design/basic/_view/waitlist_veterans_active?');
+            const query = new URLSearchParams(url.slice(url.indexOf('?') + 1));
+            expect(Object.fromEntries(query.entries())).to.deep.equal({
+                limit: '12',
+                descending: 'false',
+                include_docs: 'true'
+            });
+        });
+
+        it('adds flight-group mates of a selected veteran regardless of tier', async () => {
+            req.body.veteranCount = 1;
+            global.fetch.onCall(0).resolves({
+                ok: true,
+                json: async () => mockFlightDoc
+            });
+            global.fetch.onCall(1).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        id: 'vet-wwii',
+                        value: 'GroupA',
+                        doc: {
+                            _id: 'vet-wwii',
+                            _rev: '1-xyz',
+                            type: 'Veteran',
+                            vet_type: 'WWII',
+                            app_date: '2020-01-01',
+                            flight: { id: 'None', group: 'GroupA', history: [] },
+                            guardian: { id: '' },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+            global.fetch.onCall(2).resolves({
+                ok: true,
+                json: async () => ({
+                    rows: [{
+                        key: 'GroupA',
+                        id: 'vet-gulf',
+                        doc: {
+                            _id: 'vet-gulf',
+                            _rev: '1-gulf',
+                            type: 'Veteran',
+                            vet_type: 'Gulf War',
+                            app_date: '2024-06-01',
+                            flight: { id: 'None', group: 'GroupA', history: [] },
+                            guardian: { id: '' },
+                            metadata: {}
+                        }
+                    }]
+                })
+            });
+            global.fetch.onCall(3).resolves({
+                ok: true,
+                json: async () => ({ ok: true })
+            });
+            global.fetch.onCall(4).resolves({
+                ok: true,
+                json: async () => ({ ok: true })
+            });
+
+            await addVeteransToFlight(req, res);
+
+            const response = res.json.firstCall.args[0];
+            expect(response.added.veterans).to.equal(2);
+            expect(response.errors).to.deep.equal([]);
+            const waitlistUrl = String(global.fetch.getCall(1).args[0]);
+            expect(waitlistUrl).to.include('/_design/basic/_view/waitlist_veterans_active?');
+            expect(waitlistUrl).to.include('limit=1');
+            expect(String(global.fetch.getCall(2).args[0])).to.include('/_design/basic/_view/waitlist_veteran_groups');
+            const saved = [3, 4].map((index) => JSON.parse(global.fetch.getCall(index).args[1].body));
+            expect(saved.map((doc) => doc._id)).to.deep.equal(['vet-wwii', 'vet-gulf']);
+            expect(saved[1].vet_type).to.equal('Gulf War');
+            expect(saved[1].flight.id).to.equal('SSHF-Nov2024');
+        });
     });
 });
 
