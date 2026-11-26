@@ -4,7 +4,7 @@ This feature provides the ability to view assignments for a specified flight and
 
 It takes into account the capacity of the flight and begins adding veterans to the flight while updating statistics on how many veterans and guardians are currently present.
 
-It will take veterans from the wait list in the order of their application date, while prioritizing earlier conflicts over later conflicts. When selecting veterans, it will take any veterans that are in the same veteran group as soon as the first veteran in that group is selected. It will always add paired guardians with their veterans.
+It will take veterans from the wait list in four tiers: WWII, then Korea, then Vietnam, then everyone else (Cold War, Gulf War, Afghanistan, Iraq, Other, and unrecognized vet_type values), with application date within each tier. When selecting veterans, it will take any veterans that are in the same veteran group as soon as the first veteran in that group is selected, regardless of tier. It will always add paired guardians with their veterans.
 
 Note: We will drop the functionality of importing bulk guardians as that is no longer used.
 

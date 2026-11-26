@@ -221,8 +221,9 @@ export async function getFlightAssignments(req, res) {
  *       Adds a specified number of veterans from the waitlist to the flight.
  *       
  *       The selection follows these rules:
- *       - Veterans are taken in order of application date
- *       - When a veteran in a group is selected, all group members are added
+ *       - Veterans are taken in waitlist order: WWII, then Korea, then Vietnam,
+ *         then all other conflicts by application date. When a veteran in a
+ *         group is selected, all group members are added regardless of tier.
  *       - Veterans with paired guardians have their guardian added automatically
  *       - Flight history entries are recorded for each assignment
  *       
